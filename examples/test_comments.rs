@@ -23,7 +23,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if let Some(count) = meta.count {
                     println!("   - Total comments in batch: {}", count);
                 }
-                if let Some(cursor) = &meta.cursor {
+                if let Some(_cursor) = &meta.cursor {
                     println!("   - Has more results: yes (cursor available)");
                 }
             }

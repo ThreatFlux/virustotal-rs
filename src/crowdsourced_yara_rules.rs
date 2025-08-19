@@ -290,7 +290,7 @@ mod tests {
         assert_eq!(attrs.name.unwrap(), "PK_AXA_fun");
         assert_eq!(attrs.tags.unwrap().len(), 2);
         assert_eq!(attrs.matches.unwrap(), 42);
-        assert_eq!(attrs.enabled.unwrap(), true);
+        assert!(attrs.enabled.unwrap());
     }
 
     #[test]

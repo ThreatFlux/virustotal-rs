@@ -16,7 +16,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 1. File Behaviours API
     println!("1. FILE BEHAVIOURS API");
     println!("----------------------");
-    let file_behaviours = client.file_behaviours();
+    let _file_behaviours = client.file_behaviours();
     println!("   ✓ FileBehaviourClient initialized");
     println!("   - Get sandbox reports: get_report(sandbox_id)");
     println!("   - Get HTML report: get_html_report(sandbox_id)");
@@ -27,7 +27,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 2. URLs API
     println!("\n2. URLs API");
     println!("-----------");
-    let urls = client.urls();
+    let _urls = client.urls();
     println!("   ✓ UrlClient initialized");
     println!("   - URL ID generation: generate_url_id(url)");
     println!("   - URL ID from SHA256: generate_url_id_from_sha256(url)");
@@ -43,7 +43,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 3. Comments API (Enhanced)
     println!("\n3. COMMENTS API (Enhanced)");
     println!("--------------------------");
-    let comments = client.comments();
+    let _comments = client.comments();
     println!("   ✓ CommentsClient initialized");
     println!("   - Get latest comments: get_latest(filter, limit)");
     println!("   - Vote on comment: vote(comment_id, verdict)");
@@ -62,8 +62,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 4. MITRE ATT&CK APIs
     println!("\n4. MITRE ATT&CK APIs");
     println!("--------------------");
-    let tactics = client.attack_tactics();
-    let techniques = client.attack_techniques();
+    let _tactics = client.attack_tactics();
+    let _techniques = client.attack_techniques();
     println!("   ✓ AttackTacticClient initialized");
     println!("   ✓ AttackTechniqueClient initialized");
     println!("   - Get tactic: get(tactic_id)");
@@ -81,7 +81,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 6. Search API
     println!("\n6. SEARCH API");
     println!("-------------");
-    let search = client.search();
+    let _search = client.search();
     println!("   ✓ SearchClient initialized");
     println!("   - General search: search(query)");
     println!(

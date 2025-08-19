@@ -159,7 +159,7 @@ mod tests {
 
         assert_eq!(engine.name.unwrap(), "TestEngine");
         assert_eq!(engine.category.unwrap(), "antivirus");
-        assert_eq!(engine.enabled.unwrap(), true);
+        assert!(engine.enabled.unwrap());
         assert_eq!(engine.version.unwrap(), "1.2.3");
     }
 

@@ -8,6 +8,7 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 #[cfg(test)]
 mod files_async_tests {
     use super::*;
+    #[allow(unused_imports)]
     use crate::files::FileClient;
     // Removed unused imports
 
@@ -93,6 +94,7 @@ mod files_async_tests {
 #[cfg(test)]
 mod domains_async_tests {
     use super::*;
+    #[allow(unused_imports)]
     use crate::domains::DomainClient;
 
     #[tokio::test]
@@ -366,6 +368,7 @@ mod domains_async_tests {
 #[cfg(test)]
 mod ip_addresses_async_tests {
     use super::*;
+    #[allow(unused_imports)]
     use crate::ip_addresses::IpAddressClient;
 
     #[tokio::test]
@@ -663,6 +666,7 @@ mod collection_iterator_tests {
 #[cfg(test)]
 mod file_behaviours_async_tests {
     use super::*;
+    #[allow(unused_imports)]
     use crate::file_behaviours::FileBehaviourClient;
 
     #[tokio::test]

@@ -1,6 +1,6 @@
 use std::env;
 use tokio::time::{sleep, Duration};
-use virustotal_rs::{ApiTier, ClientBuilder, VoteVerdict};
+use virustotal_rs::{ApiTier, ClientBuilder};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

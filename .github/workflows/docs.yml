@@ -40,11 +40,6 @@ jobs:
     - name: Install cargo-deadlinks
       run: cargo install cargo-deadlinks
 
-    - name: Generate documentation
-      run: |
-        RUSTDOCFLAGS="-D warnings --html-in-header docs-header.html" cargo doc --all-features --no-deps --document-private-items
-        echo '<meta http-equiv="refresh" content="0; url=virustotal_rs">' > target/doc/index.html
-
     - name: Create docs header
       run: |
         cat > docs-header.html << 'EOF'
@@ -55,6 +50,11 @@ jobs:
           .sidebar-title { color: #d2991d; font-weight: bold; }
         </style>
         EOF
+
+    - name: Generate documentation
+      run: |
+        RUSTDOCFLAGS="-D warnings --html-in-header docs-header.html" cargo doc --all-features --no-deps --document-private-items
+        echo '<meta http-equiv="refresh" content="0; url=virustotal_rs">' > target/doc/index.html
 
     - name: Check for broken links
       run: |
@@ -188,11 +188,6 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y pkg-config libssl-dev
 
-    - name: Generate documentation for publishing
-      run: |
-        RUSTDOCFLAGS="--html-in-header docs-header.html" cargo doc --all-features --no-deps
-        echo '<meta http-equiv="refresh" content="0; url=virustotal_rs">' > target/doc/index.html
-
     - name: Create docs header
       run: |
         cat > docs-header.html << 'EOF'
@@ -207,6 +202,11 @@ jobs:
           // Add any custom JavaScript for docs here
         </script>
         EOF
+
+    - name: Generate documentation for publishing
+      run: |
+        RUSTDOCFLAGS="--html-in-header docs-header.html" cargo doc --all-features --no-deps
+        echo '<meta http-equiv="refresh" content="0; url=virustotal_rs">' > target/doc/index.html
 
     - name: Prepare docs for deployment
       run: |

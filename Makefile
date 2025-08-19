@@ -1,8 +1,12 @@
 .PHONY: all clean build test fmt clippy doc audit security coverage bench check install-tools help
 
 # Default target
-all: install-tools fmt clippy build test doc audit security
+all: install-tools fmt clippy build test test-no-features test-mcp-features build-examples test-doc doc audit security
 	@echo "✅ All checks passed!"
+
+# CI simulation - matches GitHub Actions CI workflow
+ci: fmt-check clippy build test test-no-features test-mcp-features build-examples test-doc
+	@echo "✅ CI checks passed!"
 
 # Install required tools
 install-tools:
@@ -30,7 +34,7 @@ fmt-check:
 # Run clippy linter
 clippy:
 	@echo "📎 Running clippy..."
-	@cargo clippy --all-features -- -D warnings
+	@cargo clippy --all-features --all-targets -- -D warnings
 	@echo "✅ Clippy passed"
 
 # Build the project
@@ -44,6 +48,26 @@ test:
 	@echo "🧪 Running tests..."
 	@cargo test --all-features
 	@echo "✅ Tests passed"
+
+# Test without features
+test-no-features:
+	@echo "🧪 Running tests without features..."
+	@cargo test --no-default-features
+	@echo "✅ Tests without features passed"
+
+# Test with individual MCP features
+test-mcp-features:
+	@echo "🧪 Testing MCP features..."
+	@cargo test --features mcp
+	@cargo test --features mcp-jwt
+	@cargo test --features mcp-oauth
+	@echo "✅ MCP feature tests passed"
+
+# Build examples
+build-examples:
+	@echo "🔨 Building examples..."
+	@cargo build --examples --all-features
+	@echo "✅ Examples built successfully"
 
 # Test documentation examples
 test-doc:
@@ -131,9 +155,6 @@ examples:
 		echo "✅ Examples ran successfully"; \
 	fi
 
-# CI simulation - runs what CI would run
-ci: fmt-check clippy build test doc-check audit
-	@echo "✅ CI checks passed!"
 
 # Release preparation
 release-prep: fmt test doc audit security

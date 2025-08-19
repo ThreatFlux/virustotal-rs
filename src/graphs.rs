@@ -955,9 +955,9 @@ mod tests {
     #[test]
     fn test_permission_check_response() {
         let response = GraphPermissionCheckResponse { data: true };
-        assert_eq!(response.data, true);
+        assert!(response.data);
 
         let response_false = GraphPermissionCheckResponse { data: false };
-        assert_eq!(response_false.data, false);
+        assert!(!response_false.data);
     }
 }

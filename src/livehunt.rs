@@ -734,7 +734,7 @@ mod tests {
         };
 
         assert_eq!(attrs.name.unwrap(), "Test Ruleset");
-        assert_eq!(attrs.enabled.unwrap(), true);
+        assert!(attrs.enabled.unwrap());
         assert_eq!(attrs.limit.unwrap(), 100);
         assert!(attrs.rules.unwrap().contains("rule test"));
     }
@@ -751,7 +751,7 @@ mod tests {
         .with_match_object_type(MatchObjectType::File);
 
         assert_eq!(request.data.attributes.name, "My Ruleset");
-        assert_eq!(request.data.attributes.enabled.unwrap(), true);
+        assert!(request.data.attributes.enabled.unwrap());
         assert_eq!(request.data.attributes.limit.unwrap(), 50);
         assert_eq!(
             request.data.attributes.notification_emails.unwrap().len(),
@@ -821,7 +821,7 @@ mod tests {
             rule_tags: Some(vec!["test".to_string()]),
         };
 
-        assert_eq!(context.match_in_subfile, false);
+        assert!(!context.match_in_subfile);
         assert_eq!(context.notification_id, "notif_123");
         assert_eq!(context.ruleset_name, "Test Ruleset");
         assert_eq!(context.rule_name, "TestRule");

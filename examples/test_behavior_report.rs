@@ -45,6 +45,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             if let Some(date) = attrs.analysis_date {
+                #[allow(deprecated)]
                 let dt = chrono::NaiveDateTime::from_timestamp_opt(date, 0)
                     .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
                     .unwrap_or_else(|| date.to_string());

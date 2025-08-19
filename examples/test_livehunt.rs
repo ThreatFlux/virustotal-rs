@@ -294,7 +294,7 @@ rule TestMalware {
     println!("\n10. OWNERSHIP TRANSFER");
     println!("----------------------");
 
-    let transfer_request = TransferOwnershipRequest {
+    let _transfer_request = TransferOwnershipRequest {
         data: EditorDescriptor {
             object_type: "user".to_string(),
             id: "new_owner_id".to_string(),

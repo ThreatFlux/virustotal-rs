@@ -307,6 +307,7 @@ mod objects_coverage_tests {
     use crate::ip_addresses::IpAddress;
     use crate::objects::ObjectOperations;
     use crate::objects::{Collection, CollectionMeta, Links};
+    #[allow(unused_imports)]
     use std::collections::HashMap;
 
     #[test]

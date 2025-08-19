@@ -1,4 +1,4 @@
-use virustotal_rs::{ApiTier, ClientBuilder, DomainFeedItem, FeedsClient, IpFeedItem, UrlFeedItem};
+use virustotal_rs::{ApiTier, ClientBuilder, FeedsClient};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

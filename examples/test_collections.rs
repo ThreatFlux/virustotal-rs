@@ -1,7 +1,6 @@
 use virustotal_rs::{
     ApiTier, ClientBuilder, CollectionItemsRequest, CollectionOrder, CreateCollectionRequest,
-    DomainDescriptor, ExportFormat, FileDescriptor, IpAddressDescriptor, UpdateCollectionRequest,
-    UrlDescriptor,
+    DomainDescriptor, ExportFormat, UpdateCollectionRequest, UrlDescriptor,
 };
 
 #[tokio::main]

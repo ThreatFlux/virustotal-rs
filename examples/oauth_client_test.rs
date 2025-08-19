@@ -97,7 +97,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     let mcp_response = client
-        .post(&format!("{}/", server_base))
+        .post(format!("{}/", server_base))
         .header("Authorization", format!("Bearer {}", access_token))
         .header("Content-Type", "application/json")
         .json(&mcp_request)
@@ -130,7 +130,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     let search_response = client
-        .post(&format!("{}/", server_base))
+        .post(format!("{}/", server_base))
         .header("Authorization", format!("Bearer {}", access_token))
         .header("Content-Type", "application/json")
         .json(&search_request)

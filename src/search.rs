@@ -307,7 +307,7 @@ mod tests {
         };
 
         assert_eq!(attrs.confidence.unwrap(), 0.95);
-        assert_eq!(attrs.match_in_subfile.unwrap(), false);
+        assert!(!attrs.match_in_subfile.unwrap());
         assert_eq!(attrs.snippet.unwrap(), "snippet_id_123");
         assert_eq!(attrs.similarity_score.unwrap(), 0.85);
     }

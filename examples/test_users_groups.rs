@@ -1,3 +1,4 @@
+#[allow(unused_imports)]
 use std::collections::HashMap;
 use virustotal_rs::{ApiTier, ClientBuilder, GroupUpdateAttributes, UserUpdateAttributes};
 
@@ -135,7 +136,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         Ok(api_keys) => {
             println!("✓ Retrieved {} API keys", api_keys.data.len());
-            for (i, key) in api_keys.data.iter().enumerate() {
+            for (i, _key) in api_keys.data.iter().enumerate() {
                 println!("  {}. Key data available", i + 1);
             }
         }

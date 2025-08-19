@@ -48,6 +48,7 @@ impl TestUtils {
     }
 
     /// Setup a mock with common VirusTotal response headers
+    #[allow(dead_code)]
     pub fn setup_mock_with_headers() -> ResponseTemplate {
         ResponseTemplate::new(200)
             .append_header("Content-Type", "application/json")
@@ -62,12 +63,12 @@ macro_rules! test_mock_response {
     ($test_name:ident, $method:expr, $endpoint:expr, $expected_status:expr) => {
         #[tokio::test]
         async fn $test_name() {
-            use crate::tests::test_utils::TestUtils;
             use wiremock::{
                 matchers::{header, method, path},
                 Mock,
             };
             use $crate::tests::mock_data::{sample_error_response, MockResponseBuilder};
+            use $crate::tests::test_utils::TestUtils;
 
             let mock_server = TestUtils::create_mock_server().await;
             let client = TestUtils::create_test_client(&mock_server).await.unwrap();
@@ -117,12 +118,12 @@ macro_rules! test_success_response {
     ($test_name:ident, $method:expr, $endpoint:expr, $sample_data_fn:expr) => {
         #[tokio::test]
         async fn $test_name() {
-            use crate::tests::test_utils::TestUtils;
             use wiremock::{
                 matchers::{header, method, path},
                 Mock,
             };
             use $crate::tests::mock_data::MockResponseBuilder;
+            use $crate::tests::test_utils::TestUtils;
 
             let mock_server = TestUtils::create_mock_server().await;
             let client = TestUtils::create_test_client(&mock_server).await.unwrap();
@@ -160,12 +161,12 @@ macro_rules! test_collection_response {
     ($test_name:ident, $endpoint:expr, $sample_item_fn:expr) => {
         #[tokio::test]
         async fn $test_name() {
-            use crate::tests::test_utils::TestUtils;
             use wiremock::{
                 matchers::{header, method, path},
                 Mock,
             };
             use $crate::tests::mock_data::{sample_collection_data, MockResponseBuilder};
+            use $crate::tests::test_utils::TestUtils;
 
             let mock_server = TestUtils::create_mock_server().await;
             let client = TestUtils::create_test_client(&mock_server).await.unwrap();

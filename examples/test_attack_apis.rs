@@ -1,4 +1,4 @@
-use virustotal_rs::{ApiTier, AttackTacticClient, AttackTechniqueClient, ClientBuilder};
+use virustotal_rs::{ApiTier, ClientBuilder};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

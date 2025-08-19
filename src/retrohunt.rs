@@ -507,7 +507,7 @@ mod tests {
         assert_eq!(context.rule_name.unwrap(), "TestRule");
         assert_eq!(context.match_offset.unwrap(), 1024);
         assert_eq!(context.match_snippet.unwrap(), "4D 5A 90 00");
-        assert_eq!(context.match_in_subfile.unwrap(), false);
+        assert!(!context.match_in_subfile.unwrap());
     }
 
     #[test]

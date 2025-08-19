@@ -262,7 +262,7 @@ mod tests {
 
         assert_eq!(attrs.name.unwrap(), "Process Injection");
         assert_eq!(attrs.external_id.unwrap(), "T1055");
-        assert_eq!(attrs.is_subtechnique.unwrap(), false);
+        assert!(!attrs.is_subtechnique.unwrap());
         assert_eq!(attrs.subtechniques_count.unwrap(), 12);
     }
 
@@ -278,6 +278,6 @@ mod tests {
 
         assert_eq!(attrs.external_id.unwrap(), "T1055.001");
         assert_eq!(attrs.parent_technique.unwrap(), "T1055");
-        assert_eq!(attrs.is_subtechnique.unwrap(), true);
+        assert!(attrs.is_subtechnique.unwrap());
     }
 }

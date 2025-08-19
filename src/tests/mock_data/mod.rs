@@ -26,6 +26,7 @@ impl MockResponseBuilder {
         self
     }
 
+    #[allow(dead_code)]
     pub fn with_error(mut self, error_code: &str, message: &str) -> Self {
         self.response_data = json!({
             "error": {
@@ -41,6 +42,7 @@ impl MockResponseBuilder {
         self
     }
 
+    #[allow(dead_code)]
     pub fn with_header(mut self, name: &str, value: &str) -> Self {
         self.headers.insert(name.to_string(), value.to_string());
         self
@@ -90,6 +92,7 @@ pub fn with_api_key(mock: MockBuilder, api_key: &str) -> MockBuilder {
 }
 
 /// Helper to add query parameter matcher
+#[allow(dead_code)]
 pub fn with_query_param(mock: MockBuilder, key: &str, value: &str) -> MockBuilder {
     mock.and(query_param(key, value))
 }
