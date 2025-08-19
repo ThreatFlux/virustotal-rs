@@ -58,7 +58,7 @@ struct Args {
 async fn main() -> Result<()> {
     #[cfg(feature = "clap")]
     let args = Args::parse();
-    
+
     #[cfg(not(feature = "clap"))]
     let args = parse_args();
 
@@ -227,4 +227,3 @@ fn parse_args() -> Args {
 
     parsed_args
 }
-
