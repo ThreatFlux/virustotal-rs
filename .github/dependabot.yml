@@ -1,0 +1,69 @@
+version: 2
+updates:
+  # Enable version updates for Cargo
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "02:00"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "ThreatFlux"
+    assignees:
+      - "ThreatFlux"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "rust"
+    groups:
+      development-dependencies:
+        patterns:
+          - "tokio-test"
+          - "mockito"
+          - "wiremock"
+          - "clap"
+        update-types:
+          - "minor"
+          - "patch"
+      security-dependencies:
+        patterns:
+          - "reqwest"
+          - "rustls*"
+          - "openssl*"
+          - "ring"
+        update-types:
+          - "patch"
+      async-dependencies:
+        patterns:
+          - "tokio*"
+          - "async-*"
+          - "futures*"
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      # Ignore major version updates for now
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  # Enable version updates for GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "02:00"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "ThreatFlux"
+    assignees:
+      - "ThreatFlux"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "github-actions"

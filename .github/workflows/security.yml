@@ -1,0 +1,326 @@
+name: Security
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    - cron: '0 2 * * 1'  # Weekly on Monday at 2 AM UTC
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-audit-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Install cargo-audit
+      run: cargo install cargo-audit
+
+    - name: Run security audit
+      run: cargo audit --format json --output audit-results.json
+
+    - name: Upload audit results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: security-audit-results
+        path: audit-results.json
+
+  security-clippy:
+    name: Security Clippy
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        components: clippy
+
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-security-clippy-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y pkg-config libssl-dev
+
+    - name: Run security-focused clippy
+      run: |
+        cargo clippy --all-features --all-targets -- \
+          -W clippy::integer_overflow \
+          -W clippy::panic \
+          -W clippy::unreachable \
+          -W clippy::await_holding_lock \
+          -W clippy::char_lit_as_u8 \
+          -W clippy::debug_assert_with_mut_call \
+          -W clippy::doc_markdown \
+          -W clippy::empty_enum \
+          -W clippy::enum_glob_use \
+          -W clippy::exit \
+          -W clippy::expl_impl_clone_on_copy \
+          -W clippy::explicit_deref_methods \
+          -W clippy::fallible_impl_from \
+          -W clippy::filter_map_next \
+          -W clippy::float_cmp_const \
+          -W clippy::fn_params_excessive_bools \
+          -W clippy::if_let_mutex \
+          -W clippy::implicit_clone \
+          -W clippy::imprecise_flops \
+          -W clippy::inefficient_to_string \
+          -W clippy::invalid_upcast_comparisons \
+          -W clippy::large_types_passed_by_value \
+          -W clippy::let_unit_value \
+          -W clippy::linkedlist \
+          -W clippy::lossy_float_literal \
+          -W clippy::macro_use_imports \
+          -W clippy::manual_ok_or \
+          -W clippy::map_err_ignore \
+          -W clippy::map_flatten \
+          -W clippy::map_unwrap_or \
+          -W clippy::match_on_vec_items \
+          -W clippy::match_same_arms \
+          -W clippy::match_wildcard_for_single_variants \
+          -W clippy::mem_forget \
+          -W clippy::mismatched_target_os \
+          -W clippy::mut_mut \
+          -W clippy::mutex_integer \
+          -W clippy::needless_borrow \
+          -W clippy::needless_continue \
+          -W clippy::option_option \
+          -W clippy::path_buf_push_overwrite \
+          -W clippy::ptr_as_ptr \
+          -W clippy::rc_mutex \
+          -W clippy::ref_option_ref \
+          -W clippy::rest_pat_in_fully_bound_structs \
+          -W clippy::same_functions_in_if_condition \
+          -W clippy::semicolon_if_nothing_returned \
+          -W clippy::string_add_assign \
+          -W clippy::string_add \
+          -W clippy::string_lit_as_bytes \
+          -W clippy::string_to_string \
+          -W clippy::todo \
+          -W clippy::trait_duplication_in_bounds \
+          -W clippy::unimplemented \
+          -W clippy::unnested_or_patterns \
+          -W clippy::unused_self \
+          -W clippy::useless_transmute \
+          -W clippy::verbose_file_reads \
+          -W clippy::zero_sized_map_values
+
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Dependency Review
+      uses: actions/dependency-review-action@v4
+      with:
+        fail-on-severity: moderate
+
+  cargo-deny:
+    name: Cargo Deny
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install cargo-deny
+      run: cargo install cargo-deny
+
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-deny-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Run cargo-deny
+      run: cargo deny check
+
+  semver-checks:
+    name: Semantic Versioning
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Install cargo-semver-checks
+      run: cargo install cargo-semver-checks
+
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-semver-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y pkg-config libssl-dev
+
+    - name: Check semantic versioning
+      run: cargo semver-checks check-release
+
+  unsafe-code-review:
+    name: Unsafe Code Review
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Install cargo-geiger
+      run: cargo install cargo-geiger
+
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-geiger-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y pkg-config libssl-dev
+
+    - name: Analyze unsafe code usage
+      run: |
+        cargo geiger --output-format GitHubMarkdown > unsafe-report.md || true
+        echo "## Unsafe Code Analysis" >> $GITHUB_STEP_SUMMARY
+        cat unsafe-report.md >> $GITHUB_STEP_SUMMARY
+
+    - name: Upload unsafe code report
+      uses: actions/upload-artifact@v4
+      with:
+        name: unsafe-code-report
+        path: unsafe-report.md
+
+  supply-chain:
+    name: Supply Chain Security
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-supply-chain-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Install cargo-supply-chain
+      run: cargo install cargo-supply-chain
+
+    - name: Analyze supply chain
+      run: |
+        cargo supply-chain crates > supply-chain-report.txt 2>&1 || true
+        echo "## Supply Chain Analysis" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        head -50 supply-chain-report.txt >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+    - name: Upload supply chain report
+      uses: actions/upload-artifact@v4
+      with:
+        name: supply-chain-report
+        path: supply-chain-report.txt
+
+  security-summary:
+    name: Security Summary
+    needs: [security-audit, security-clippy, cargo-deny, unsafe-code-review, supply-chain]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Security Summary
+      run: |
+        echo "## Security Check Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ needs.security-audit.result }}" = "success" ]; then
+          echo "✅ Security Audit: Passed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ Security Audit: Failed" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ "${{ needs.security-clippy.result }}" = "success" ]; then
+          echo "✅ Security Clippy: Passed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ Security Clippy: Failed" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ "${{ needs.cargo-deny.result }}" = "success" ]; then
+          echo "✅ Cargo Deny: Passed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ Cargo Deny: Failed" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ "${{ needs.unsafe-code-review.result }}" = "success" ]; then
+          echo "✅ Unsafe Code Review: Passed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ Unsafe Code Review: Failed" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ "${{ needs.supply-chain.result }}" = "success" ]; then
+          echo "✅ Supply Chain Security: Passed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ Supply Chain Security: Failed" >> $GITHUB_STEP_SUMMARY
+        fi

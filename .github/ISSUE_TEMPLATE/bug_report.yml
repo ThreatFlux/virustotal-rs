@@ -1,0 +1,152 @@
+name: 🐛 Bug Report
+description: Report a bug in the VirusTotal Rust SDK
+title: "[BUG] "
+labels: ["bug", "needs-triage"]
+assignees: ["ThreatFlux"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting a bug! Please provide as much detail as possible to help us resolve the issue quickly.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
+      placeholder: Describe the bug...
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Steps to reproduce the behavior
+      placeholder: |
+        1. Create client with...
+        2. Call method...
+        3. See error...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: A clear and concise description of what you expected to happen.
+      placeholder: What should have happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: A clear and concise description of what actually happened.
+      placeholder: What actually happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: code
+    attributes:
+      label: Code Sample
+      description: Please provide a minimal code sample that demonstrates the issue
+      render: rust
+      placeholder: |
+        use virustotal_rs::*;
+        
+        #[tokio::main]
+        async fn main() {
+            // Your code here
+        }
+    validations:
+      required: false
+
+  - type: textarea
+    id: error-output
+    attributes:
+      label: Error Output
+      description: If applicable, paste the full error output or stack trace
+      render: text
+      placeholder: Paste error output here...
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: SDK Version
+      description: What version of virustotal-rs are you using?
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: input
+    id: rust-version
+    attributes:
+      label: Rust Version
+      description: What version of Rust are you using? (run `rustc --version`)
+      placeholder: "rustc 1.89.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      description: What operating system are you using?
+      options:
+        - Linux
+        - macOS
+        - Windows
+        - Other (please specify in additional context)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: api-tier
+    attributes:
+      label: VirusTotal API Tier
+      description: What VirusTotal API tier are you using?
+      options:
+        - Public API
+        - Premium API
+        - Not applicable
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: features
+    attributes:
+      label: Enabled Features
+      description: Which optional features are you using?
+      options:
+        - label: Default features only
+        - label: MCP (Model Context Protocol)
+        - label: MCP with JWT authentication
+        - label: MCP with OAuth authentication
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Add any other context about the problem here.
+      placeholder: Any additional information that might be helpful...
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      description: Please confirm the following
+      options:
+        - label: I have searched for existing issues before creating this bug report
+          required: true
+        - label: I have provided all the requested information
+          required: true
+        - label: I have tested with the latest version of the SDK
+          required: true
