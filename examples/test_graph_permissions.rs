@@ -215,17 +215,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("✓ Successfully revoked edit permission from 'dinesh'");
 
             // Verify it was revoked
-            match graph_client
+            if let Ok(response) = graph_client
                 .check_edit_permission(&graph_id, "dinesh")
                 .await
             {
-                Ok(response) => {
-                    println!(
-                        "  Verification: 'dinesh' {} has edit access",
-                        if response.data { "still" } else { "no longer" }
-                    );
-                }
-                Err(_) => {}
+                println!(
+                    "  Verification: 'dinesh' {} has edit access",
+                    if response.data { "still" } else { "no longer" }
+                );
             }
         }
         Err(e) => {
@@ -243,14 +240,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("✓ Successfully revoked view permission from 'jared'");
 
             // Verify it was revoked
-            match graph_client.check_view_permission(&graph_id, "jared").await {
-                Ok(response) => {
-                    println!(
-                        "  Verification: 'jared' {} has view access",
-                        if response.data { "still" } else { "no longer" }
-                    );
-                }
-                Err(_) => {}
+            if let Ok(response) = graph_client.check_view_permission(&graph_id, "jared").await {
+                println!(
+                    "  Verification: 'jared' {} has view access",
+                    if response.data { "still" } else { "no longer" }
+                );
             }
         }
         Err(e) => {

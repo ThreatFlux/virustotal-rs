@@ -119,7 +119,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Getting MITRE ATT&CK tactics and techniques...");
 
     match private_client.get_mitre_attack_data(eicar_hash).await {
-        Ok(mitre_data) => {
+        Ok(_mitre_data) => {
             println!("✓ Retrieved MITRE ATT&CK data");
 
             // The data structure is different for private files - it's organized by sandbox

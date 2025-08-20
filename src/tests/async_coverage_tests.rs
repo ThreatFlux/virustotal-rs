@@ -2,7 +2,7 @@
 
 use crate::*;
 use serde_json::json;
-use wiremock::matchers::{header, method, path};
+use wiremock::matchers::{header, method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 #[cfg(test)]
@@ -641,17 +641,22 @@ mod collection_iterator_tests {
             }
         });
 
+        // Mock for second request (with cursor parameter) - mount this first to avoid conflicts
+        Mock::given(method("GET"))
+            .and(path("/test_url"))
+            .and(query_param("cursor", "cursor1"))
+            .and(header("x-apikey", "test_key"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(&response2))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        // Mock for first request (no cursor parameter)
         Mock::given(method("GET"))
             .and(path("/test_url"))
             .and(header("x-apikey", "test_key"))
             .respond_with(ResponseTemplate::new(200).set_body_json(&response1))
-            .mount(&mock_server)
-            .await;
-
-        Mock::given(method("GET"))
-            .and(path("/test_url"))
-            .and(header("x-apikey", "test_key"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(&response2))
+            .expect(1)
             .mount(&mock_server)
             .await;
 
@@ -660,6 +665,9 @@ mod collection_iterator_tests {
 
         let all_items = iterator.collect_all().await;
         assert!(all_items.is_ok());
+        let items = all_items.unwrap();
+        assert_eq!(items.len(), 3);
+        assert_eq!(items, vec!["item1", "item2", "item3"]);
     }
 }
 

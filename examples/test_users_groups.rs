@@ -103,8 +103,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n2. UPDATE USER ATTRIBUTES");
     println!("-------------------------");
 
-    let mut update_attrs = UserUpdateAttributes::default();
-    update_attrs.bio = Some("VirusTotal SDK Test User".to_string());
+    let update_attrs = UserUpdateAttributes {
+        bio: Some("VirusTotal SDK Test User".to_string()),
+        ..Default::default()
+    };
 
     let update_request = virustotal_rs::UserUpdateRequest {
         data: virustotal_rs::UserUpdate::new(update_attrs),
@@ -213,8 +215,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n5. UPDATE GROUP ATTRIBUTES");
     println!("--------------------------");
 
-    let mut group_update_attrs = GroupUpdateAttributes::default();
-    group_update_attrs.description = Some("Updated via VirusTotal SDK".to_string());
+    let group_update_attrs = GroupUpdateAttributes {
+        description: Some("Updated via VirusTotal SDK".to_string()),
+        ..Default::default()
+    };
 
     let group_update_request = virustotal_rs::GroupUpdateRequest {
         data: virustotal_rs::GroupUpdate::new(group_update_attrs),

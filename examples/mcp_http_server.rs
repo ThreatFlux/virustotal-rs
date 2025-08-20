@@ -16,8 +16,11 @@
 //! For JWT-enabled version:
 //!   cargo run --example mcp_http_server_jwt --features mcp-jwt
 
+#[cfg(feature = "mcp")]
 use std::env;
+#[cfg(feature = "mcp")]
 use std::net::SocketAddr;
+#[cfg(feature = "mcp")]
 use virustotal_rs::{ApiTier, ClientBuilder};
 
 #[cfg(feature = "mcp")]

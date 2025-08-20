@@ -38,8 +38,13 @@ impl FeedsClient {
     /// - Multiple consecutive 404s should be treated as an error condition
     ///
     /// # Example
-    /// ```no_run
+    /// ```ignore
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = virustotal_rs::Client::new("your_api_key".into(), virustotal_rs::ApiTier::Public)?;
+    /// # let feeds_client = client.feeds();
     /// let batch = feeds_client.get_file_feed_batch("202312010802").await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn get_file_feed_batch(&self, time: &str) -> Result<Vec<u8>> {
         let endpoint = format!("feeds/files/{}", time);
@@ -61,8 +66,13 @@ impl FeedsClient {
     /// - Each minute file is UTF-8 text with one JSON per line
     ///
     /// # Example
-    /// ```no_run
+    /// ```ignore
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = virustotal_rs::Client::new("your_api_key".into(), virustotal_rs::ApiTier::Public)?;
+    /// # let feeds_client = client.feeds();
     /// let hourly_batch = feeds_client.get_hourly_file_feed_batch("2023120108").await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn get_hourly_file_feed_batch(&self, time: &str) -> Result<Vec<u8>> {
         let endpoint = format!("feeds/files/hourly/{}", time);
@@ -82,8 +92,13 @@ impl FeedsClient {
     /// - The token is found in the `download_url` attribute of feed items
     ///
     /// # Example
-    /// ```no_run
+    /// ```ignore
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = virustotal_rs::Client::new("your_api_key".into(), virustotal_rs::ApiTier::Public)?;
+    /// # let feeds_client = client.feeds();
     /// let file_bytes = feeds_client.download_feed_file("abc123token").await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn download_feed_file(&self, token: &str) -> Result<Vec<u8>> {
         let endpoint = format!("feeds/files/{}/download", token);
@@ -218,8 +233,13 @@ impl FeedsClient {
     /// - 60-minute lag from current time, 7-day retention
     ///
     /// # Example
-    /// ```no_run
+    /// ```ignore
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = virustotal_rs::Client::new("your_api_key".into(), virustotal_rs::ApiTier::Public)?;
+    /// # let feeds_client = client.feeds();
     /// let batch = feeds_client.get_domain_feed_batch("202312010802").await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn get_domain_feed_batch(&self, time: &str) -> Result<Vec<u8>> {
         let endpoint = format!("feeds/domains/{}", time);
@@ -239,8 +259,13 @@ impl FeedsClient {
     /// - 2-hour lag from current time, 7-day retention
     ///
     /// # Example
-    /// ```no_run
+    /// ```ignore
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = virustotal_rs::Client::new("your_api_key".into(), virustotal_rs::ApiTier::Public)?;
+    /// # let feeds_client = client.feeds();
     /// let hourly_batch = feeds_client.get_hourly_domain_feed_batch("2023120108").await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn get_hourly_domain_feed_batch(&self, time: &str) -> Result<Vec<u8>> {
         let endpoint = format!("feeds/domains/hourly/{}", time);
@@ -263,8 +288,13 @@ impl FeedsClient {
     /// - 60-minute lag from current time, 7-day retention
     ///
     /// # Example
-    /// ```no_run
+    /// ```ignore
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = virustotal_rs::Client::new("your_api_key".into(), virustotal_rs::ApiTier::Public)?;
+    /// # let feeds_client = client.feeds();
     /// let batch = feeds_client.get_ip_feed_batch("202312010802").await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn get_ip_feed_batch(&self, time: &str) -> Result<Vec<u8>> {
         let endpoint = format!("feeds/ip_addresses/{}", time);
@@ -284,8 +314,13 @@ impl FeedsClient {
     /// - 2-hour lag from current time, 7-day retention
     ///
     /// # Example
-    /// ```no_run
+    /// ```ignore
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = virustotal_rs::Client::new("your_api_key".into(), virustotal_rs::ApiTier::Public)?;
+    /// # let feeds_client = client.feeds();
     /// let hourly_batch = feeds_client.get_hourly_ip_feed_batch("2023120108").await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn get_hourly_ip_feed_batch(&self, time: &str) -> Result<Vec<u8>> {
         let endpoint = format!("feeds/ip_addresses/hourly/{}", time);
@@ -309,8 +344,13 @@ impl FeedsClient {
     /// - 60-minute lag from current time, 7-day retention
     ///
     /// # Example
-    /// ```no_run
+    /// ```ignore
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = virustotal_rs::Client::new("your_api_key".into(), virustotal_rs::ApiTier::Public)?;
+    /// # let feeds_client = client.feeds();
     /// let batch = feeds_client.get_url_feed_batch("202312010802").await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn get_url_feed_batch(&self, time: &str) -> Result<Vec<u8>> {
         let endpoint = format!("feeds/urls/{}", time);
@@ -330,8 +370,13 @@ impl FeedsClient {
     /// - 2-hour lag from current time, 7-day retention
     ///
     /// # Example
-    /// ```no_run
+    /// ```ignore
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = virustotal_rs::Client::new("your_api_key".into(), virustotal_rs::ApiTier::Public)?;
+    /// # let feeds_client = client.feeds();
     /// let hourly_batch = feeds_client.get_hourly_url_feed_batch("2023120108").await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn get_hourly_url_feed_batch(&self, time: &str) -> Result<Vec<u8>> {
         let endpoint = format!("feeds/urls/hourly/{}", time);
@@ -344,7 +389,11 @@ impl FeedsClient {
     /// individual lines from the decompressed feed data.
     ///
     /// # Example
-    /// ```no_run
+    /// ```ignore
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = virustotal_rs::Client::new("your_api_key".into(), virustotal_rs::ApiTier::Public)?;
+    /// # let feeds_client = client.feeds();
+    /// # let decompressed_data = "sample data";
     /// let batch_data = feeds_client.get_file_feed_batch("202312010802").await?;
     /// // After decompressing the bzip2 data...
     /// for line in decompressed_data.lines() {
@@ -352,6 +401,8 @@ impl FeedsClient {
     ///         println!("File: {}", item.id);
     ///     }
     /// }
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn parse_feed_line(&self, line: &str) -> Result<FeedItem> {
         serde_json::from_str(line).map_err(crate::Error::Json)
@@ -362,7 +413,12 @@ impl FeedsClient {
     /// Behavior feed batches contain one JSON object per line with sandbox analysis results.
     ///
     /// # Example
-    /// ```no_run
+    /// ```ignore
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = virustotal_rs::Client::new("your_api_key".into(), virustotal_rs::ApiTier::Public)?;
+    /// # let feeds_client = client.feeds();
+    /// # let decompressed_data = "sample data";
+    /// # use virustotal_rs::feeds::BehaviorFeedItem;
     /// let batch_data = feeds_client.get_file_behaviour_feed_batch("202312010802").await?;
     /// // After decompressing the bzip2 data...
     /// for line in decompressed_data.lines() {
@@ -375,6 +431,8 @@ impl FeedsClient {
     ///         }
     ///     }
     /// }
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn parse_behaviour_feed_line(&self, line: &str) -> Result<BehaviorFeedItem> {
         serde_json::from_str(line).map_err(crate::Error::Json)
@@ -385,7 +443,11 @@ impl FeedsClient {
     /// Domain feed batches contain one JSON object per line with domain analyses.
     ///
     /// # Example
-    /// ```no_run
+    /// ```ignore
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = virustotal_rs::Client::new("your_api_key".into(), virustotal_rs::ApiTier::Public)?;
+    /// # let feeds_client = client.feeds();
+    /// # let decompressed_data = "sample data";
     /// let batch_data = feeds_client.get_domain_feed_batch("202312010802").await?;
     /// // After decompressing the bzip2 data...
     /// for line in decompressed_data.lines() {
@@ -393,6 +455,8 @@ impl FeedsClient {
     ///         println!("Domain: {}", item.id);
     ///     }
     /// }
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn parse_domain_feed_line(&self, line: &str) -> Result<DomainFeedItem> {
         serde_json::from_str(line).map_err(crate::Error::Json)
@@ -403,7 +467,11 @@ impl FeedsClient {
     /// IP feed batches contain one JSON object per line with IP address analyses.
     ///
     /// # Example
-    /// ```no_run
+    /// ```ignore
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = virustotal_rs::Client::new("your_api_key".into(), virustotal_rs::ApiTier::Public)?;
+    /// # let feeds_client = client.feeds();
+    /// # let decompressed_data = "sample data";
     /// let batch_data = feeds_client.get_ip_feed_batch("202312010802").await?;
     /// // After decompressing the bzip2 data...
     /// for line in decompressed_data.lines() {
@@ -411,6 +479,8 @@ impl FeedsClient {
     ///         println!("IP: {}", item.id);
     ///     }
     /// }
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn parse_ip_feed_line(&self, line: &str) -> Result<IpFeedItem> {
         serde_json::from_str(line).map_err(crate::Error::Json)
@@ -421,7 +491,11 @@ impl FeedsClient {
     /// URL feed batches contain one JSON object per line with URL analyses.
     ///
     /// # Example
-    /// ```no_run
+    /// ```ignore
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = virustotal_rs::Client::new("your_api_key".into(), virustotal_rs::ApiTier::Public)?;
+    /// # let feeds_client = client.feeds();
+    /// # let decompressed_data = "sample data";
     /// let batch_data = feeds_client.get_url_feed_batch("202312010802").await?;
     /// // After decompressing the bzip2 data...
     /// for line in decompressed_data.lines() {
@@ -432,6 +506,8 @@ impl FeedsClient {
     ///         }
     ///     }
     /// }
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn parse_url_feed_line(&self, line: &str) -> Result<UrlFeedItem> {
         serde_json::from_str(line).map_err(crate::Error::Json)
@@ -441,6 +517,7 @@ impl FeedsClient {
     ///
     /// # Examples
     /// ```
+    /// # use virustotal_rs::feeds::FeedsClient;
     /// // For per-minute feed: "202312010802"
     /// let minute_time = FeedsClient::format_time(2023, 12, 1, 8, Some(2));
     ///
@@ -671,9 +748,10 @@ impl BehaviorFeedItem {
     ///
     /// # Example
     /// ```
+    /// use virustotal_rs::feeds::BehaviorFeedItem;
     /// let url = "https://www.virustotal.com/api/v3/feeds/file_behaviours/TOKEN123/evtx";
     /// let token = BehaviorFeedItem::extract_token(url);
-    /// assert_eq!(token, Some("TOKEN123"));
+    /// assert_eq!(token, Some("TOKEN123".to_string()));
     /// ```
     pub fn extract_token(url: &str) -> Option<String> {
         // Look for the pattern /file_behaviours/<TOKEN>/<artifact>

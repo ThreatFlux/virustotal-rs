@@ -34,6 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Basic info
             println!("\n📊 Domain Details:");
             if let Some(creation_date) = domain_info.object.attributes.creation_date {
+                #[allow(deprecated)]
                 let date = chrono::NaiveDateTime::from_timestamp_opt(creation_date, 0)
                     .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
                     .unwrap_or_else(|| creation_date.to_string());
@@ -61,7 +62,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 if stats.malicious > 0 || stats.suspicious > 0 {
                     let detection_rate =
-                        ((stats.malicious + stats.suspicious) as f64 / total as f64 * 100.0);
+                        (stats.malicious + stats.suspicious) as f64 / total as f64 * 100.0;
                     println!(
                         "\n  🚨 Detection Rate: {:.1}% ({}/{} engines)",
                         detection_rate,
@@ -164,7 +165,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 if stats.malicious > 0 || stats.suspicious > 0 {
                     let detection_rate =
-                        ((stats.malicious + stats.suspicious) as f64 / total as f64 * 100.0);
+                        (stats.malicious + stats.suspicious) as f64 / total as f64 * 100.0;
                     println!(
                         "\n  🚨 Detection Rate: {:.1}% ({}/{} engines)",
                         detection_rate,

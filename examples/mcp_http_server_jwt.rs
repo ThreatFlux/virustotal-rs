@@ -34,82 +34,96 @@
 //! npx @modelcontextprotocol/inspector http://127.0.0.1:3000
 //! ```
 
+#[cfg(feature = "mcp-jwt")]
 use anyhow::Result;
+#[cfg(feature = "mcp-jwt")]
 use virustotal_rs::mcp::{transport::ServerConfig, JwtConfig};
 
 #[tokio::main]
-async fn main() -> Result<()> {
-    // Get API key from environment
-    let api_key = std::env::var("VIRUSTOTAL_API_KEY")
-        .expect("VIRUSTOTAL_API_KEY environment variable is required");
-
-    // Get server address
-    let addr = std::env::var("HTTP_ADDR")
-        .unwrap_or_else(|_| "127.0.0.1:3000".to_string())
-        .parse()
-        .expect("Invalid HTTP_ADDR format");
-
-    // Configure JWT
-    let jwt_config = if let Ok(secret) = std::env::var("JWT_SECRET") {
-        println!("Using custom JWT secret");
-        JwtConfig::new(secret)
-    } else {
-        println!("Using auto-generated JWT secret");
-        JwtConfig::default()
-    };
-
-    let jwt_config = if let Ok(expiry_str) = std::env::var("JWT_EXPIRY_SECONDS") {
-        if let Ok(expiry) = expiry_str.parse::<u64>() {
-            println!("JWT tokens will expire in {} seconds", expiry);
-            jwt_config.with_expiration(expiry)
-        } else {
-            jwt_config
-        }
-    } else {
-        println!("JWT tokens will expire in 24 hours (default)");
-        jwt_config
-    };
-
-    // Enable debug if requested
-    let debug = std::env::var("DEBUG").is_ok();
-    if debug {
-        println!("Debug logging enabled");
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(not(feature = "mcp-jwt"))]
+    {
+        eprintln!("This example requires the 'mcp-jwt' feature to be enabled.");
+        eprintln!("Run with: cargo run --example mcp_http_server_jwt --features mcp-jwt");
+        std::process::exit(1);
     }
 
-    println!("🚀 Starting VirusTotal MCP HTTP Server with JWT Authentication");
-    println!("📡 Server will listen on: http://{}", addr);
-    println!("🔒 JWT Authentication: ENABLED");
-    println!();
-    println!("📋 Available endpoints:");
-    println!("   POST /auth/token     - Get access token");
-    println!("   POST /auth/refresh   - Refresh access token");
-    println!("   POST /               - MCP requests (requires auth)");
-    println!("   GET  /health         - Health check (no auth)");
-    println!();
-    println!("🔑 Default credentials:");
-    println!("   Admin: admin / admin123 (full permissions)");
-    println!("   User:  user / user123   (read-only permissions)");
-    println!();
-    println!("💡 Get a token:");
-    println!("   curl -X POST http://{}/auth/token \\", addr);
-    println!("        -H \"Content-Type: application/json\" \\");
-    println!("        -d '{{\"username\": \"admin\", \"password\": \"admin123\"}}'");
-    println!();
-    println!("🛠️  Test MCP call:");
-    println!("   curl -X POST http://{0}/ \\", addr);
-    println!("        -H \"Authorization: Bearer <token>\" \\");
-    println!("        -H \"Content-Type: application/json\" \\");
-    println!("        -d '{{\"jsonrpc\": \"2.0\", \"method\": \"tools/list\", \"id\": 1}}'");
-    println!();
-    println!("Press Ctrl+C to stop the server");
-    println!("{}", "=".repeat(80));
+    #[cfg(feature = "mcp-jwt")]
+    {
+        // Get API key from environment
+        let api_key = std::env::var("VIRUSTOTAL_API_KEY")
+            .expect("VIRUSTOTAL_API_KEY environment variable is required");
 
-    // Create and run server
-    ServerConfig::new()
-        .api_key(api_key)
-        .http_addr(addr)
-        .with_jwt(jwt_config)
-        .debug(debug)
-        .run()
-        .await
+        // Get server address
+        let addr = std::env::var("HTTP_ADDR")
+            .unwrap_or_else(|_| "127.0.0.1:3000".to_string())
+            .parse()
+            .expect("Invalid HTTP_ADDR format");
+
+        // Configure JWT
+        let jwt_config = if let Ok(secret) = std::env::var("JWT_SECRET") {
+            println!("Using custom JWT secret");
+            JwtConfig::new(secret)
+        } else {
+            println!("Using auto-generated JWT secret");
+            JwtConfig::default()
+        };
+
+        let jwt_config = if let Ok(expiry_str) = std::env::var("JWT_EXPIRY_SECONDS") {
+            if let Ok(expiry) = expiry_str.parse::<u64>() {
+                println!("JWT tokens will expire in {} seconds", expiry);
+                jwt_config.with_expiration(expiry)
+            } else {
+                jwt_config
+            }
+        } else {
+            println!("JWT tokens will expire in 24 hours (default)");
+            jwt_config
+        };
+
+        // Enable debug if requested
+        let debug = std::env::var("DEBUG").is_ok();
+        if debug {
+            println!("Debug logging enabled");
+        }
+
+        println!("🚀 Starting VirusTotal MCP HTTP Server with JWT Authentication");
+        println!("📡 Server will listen on: http://{}", addr);
+        println!("🔒 JWT Authentication: ENABLED");
+        println!();
+        println!("📋 Available endpoints:");
+        println!("   POST /auth/token     - Get access token");
+        println!("   POST /auth/refresh   - Refresh access token");
+        println!("   POST /               - MCP requests (requires auth)");
+        println!("   GET  /health         - Health check (no auth)");
+        println!();
+        println!("🔑 Default credentials:");
+        println!("   Admin: admin / admin123 (full permissions)");
+        println!("   User:  user / user123   (read-only permissions)");
+        println!();
+        println!("💡 Get a token:");
+        println!("   curl -X POST http://{}/auth/token \\", addr);
+        println!("        -H \"Content-Type: application/json\" \\");
+        println!("        -d '{{\"username\": \"admin\", \"password\": \"admin123\"}}'");
+        println!();
+        println!("🛠️  Test MCP call:");
+        println!("   curl -X POST http://{0}/ \\", addr);
+        println!("        -H \"Authorization: Bearer <token>\" \\");
+        println!("        -H \"Content-Type: application/json\" \\");
+        println!("        -d '{{\"jsonrpc\": \"2.0\", \"method\": \"tools/list\", \"id\": 1}}'");
+        println!();
+        println!("Press Ctrl+C to stop the server");
+        println!("{}", "=".repeat(80));
+
+        // Create and run server
+        ServerConfig::new()
+            .api_key(api_key)
+            .http_addr(addr)
+            .with_jwt(jwt_config)
+            .debug(debug)
+            .run()
+            .await?;
+    }
+
+    Ok(())
 }

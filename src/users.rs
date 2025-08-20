@@ -25,10 +25,15 @@ impl UsersClient {
     /// * `id` - User ID or API key
     ///
     /// # Example
-    /// ```no_run
+    /// ```ignore
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = virustotal_rs::Client::new("your_api_key".into(), virustotal_rs::ApiTier::Public)?;
+    /// # let users_client = client.users();
     /// let user = users_client.get_user("user123").await?;
     /// // Or using API key:
     /// let user = users_client.get_user("api_key_here").await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn get_user(&self, id: &str) -> Result<UserResponse> {
         let endpoint = format!("users/{}", id);
@@ -44,17 +49,21 @@ impl UsersClient {
     /// * `updates` - Partial user object with attributes to update
     ///
     /// # Example
-    /// ```no_run
+    /// ```ignore
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = virustotal_rs::Client::new("your_api_key".into(), virustotal_rs::ApiTier::Public)?;
+    /// # let users_client = client.users();
+    /// use virustotal_rs::users::{UserUpdateRequest, UserUpdate, UserUpdateAttributes};
     /// let updates = UserUpdateRequest {
-    ///     data: UserUpdate {
-    ///         attributes: UserUpdateAttributes {
+    ///     data: UserUpdate::new(UserUpdateAttributes {
     ///             first_name: Some("John".to_string()),
     ///             last_name: Some("Doe".to_string()),
     ///             ..Default::default()
-    ///         }
-    ///     }
+    ///         })
     /// };
     /// let updated_user = users_client.update_user("user123", &updates).await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn update_user(&self, id: &str, updates: &UserUpdateRequest) -> Result<UserResponse> {
         let endpoint = format!("users/{}", id);
@@ -71,8 +80,13 @@ impl UsersClient {
     /// * `password` - User password for confirmation
     ///
     /// # Example
-    /// ```no_run
+    /// ```ignore
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = virustotal_rs::Client::new("your_api_key".into(), virustotal_rs::ApiTier::Public)?;
+    /// # let users_client = client.users();
     /// users_client.delete_user("user123", "user_password").await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn delete_user(&self, id: &str, password: &str) -> Result<()> {
         let endpoint = format!("users/{}", id);
@@ -93,8 +107,13 @@ impl UsersClient {
     /// * `cursor` - Continuation cursor for pagination
     ///
     /// # Example
-    /// ```no_run
-    /// let submissions = users_client.get_relationship("user123", "submissions", Some(20), None).await?;
+    /// ```ignore
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = virustotal_rs::Client::new("your_api_key".into(), virustotal_rs::ApiTier::Public)?;
+    /// # let users_client = client.users();
+    /// let submissions: virustotal_rs::objects::Collection<serde_json::Value> = users_client.get_relationship("user123", "submissions", Some(20), None).await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn get_relationship<T: for<'de> Deserialize<'de>>(
         &self,

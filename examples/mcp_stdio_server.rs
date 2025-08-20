@@ -9,7 +9,9 @@
 //! Test with MCP Inspector:
 //!   npx @modelcontextprotocol/inspector cargo run --example mcp_stdio_server --features mcp
 
+#[cfg(feature = "mcp")]
 use std::env;
+#[cfg(feature = "mcp")]
 use virustotal_rs::{ApiTier, ClientBuilder};
 
 #[cfg(feature = "mcp")]

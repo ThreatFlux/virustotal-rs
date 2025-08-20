@@ -29,7 +29,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Step 1: Check server metadata
     println!("📋 Step 1: Fetching OAuth server metadata...");
     let metadata_response = client
-        .get(&format!("{}/oauth/metadata", server_base))
+        .get(format!("{}/oauth/metadata", server_base))
         .send()
         .await?;
 
@@ -48,10 +48,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Step 2: Check health endpoint
     println!("🏥 Step 2: Checking server health...");
-    let health_response = client
-        .get(&format!("{}/health", server_base))
-        .send()
-        .await?;
+    let health_response = client.get(format!("{}/health", server_base)).send().await?;
 
     if health_response.status().is_success() {
         let health_text = health_response.text().await?;

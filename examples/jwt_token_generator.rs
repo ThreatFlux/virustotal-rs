@@ -1,3 +1,5 @@
+#![allow(unexpected_cfgs)]
+
 //! JWT Token Generator for VirusTotal MCP Server
 //!
 //! This utility generates JWT tokens that can be used with the JWT-enabled MCP HTTP server.
@@ -8,12 +10,16 @@
 //!   cargo run --example jwt_token_generator --features mcp-jwt -- --user admin --role admin
 //!   cargo run --example jwt_token_generator --features mcp-jwt -- --secret my-secret --expiry 3600
 
+#[cfg(feature = "mcp-jwt")]
 use anyhow::Result;
+#[cfg(feature = "mcp-jwt")]
 use virustotal_rs::mcp::auth::{JwtConfig, JwtManager};
 
+#[allow(unexpected_cfgs)]
 #[cfg(feature = "clap")]
 use clap::Parser;
 
+#[allow(unexpected_cfgs)]
 #[cfg(feature = "clap")]
 #[derive(Parser)]
 #[command(name = "jwt-token-generator")]
@@ -44,6 +50,7 @@ struct Args {
     output: String,
 }
 
+#[allow(unexpected_cfgs)]
 #[cfg(not(feature = "clap"))]
 struct Args {
     user: String,
@@ -55,100 +62,113 @@ struct Args {
 }
 
 #[tokio::main]
-async fn main() -> Result<()> {
-    #[cfg(feature = "clap")]
-    let args = Args::parse();
-
-    #[cfg(not(feature = "clap"))]
-    let args = parse_args();
-
-    // Create JWT configuration
-    let jwt_config = if let Some(secret) = &args.secret {
-        JwtConfig::new(secret.clone())
-    } else {
-        JwtConfig::default()
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(not(feature = "mcp-jwt"))]
+    {
+        eprintln!("This example requires the 'mcp-jwt' feature to be enabled.");
+        eprintln!("Run with: cargo run --example jwt_token_generator --features mcp-jwt");
+        std::process::exit(1);
     }
-    .with_expiration(args.expiry);
 
-    let jwt_manager = JwtManager::new(jwt_config.clone());
+    #[cfg(feature = "mcp-jwt")]
+    {
+        #[allow(unexpected_cfgs)]
+        #[cfg(feature = "clap")]
+        let args = Args::parse();
 
-    // Generate token based on role and permissions
-    let token = match args.role.as_str() {
-        "admin" => jwt_manager.generate_admin_token(&args.user)?,
-        "readonly" => jwt_manager.generate_readonly_token(&args.user)?,
-        _ => {
-            // Custom role with optional permissions
-            let permissions = if let Some(perms) = &args.permissions {
-                perms.split(',').map(|s| s.trim().to_string()).collect()
-            } else {
-                vec!["mcp:access".to_string()]
-            };
-            jwt_manager.generate_token_with_permissions(&args.user, &args.role, permissions)?
+        #[allow(unexpected_cfgs)]
+        #[cfg(not(feature = "clap"))]
+        let args = parse_args();
+
+        // Create JWT configuration
+        let jwt_config = if let Some(secret) = &args.secret {
+            JwtConfig::new(secret.clone())
+        } else {
+            JwtConfig::default()
         }
-    };
+        .with_expiration(args.expiry);
 
-    // Validate the token to get claims
-    let claims = jwt_manager.validate_token(&token)?;
+        let jwt_manager = JwtManager::new(jwt_config.clone());
 
-    // Output in requested format
-    match args.output.as_str() {
-        "json" => {
-            let output = serde_json::json!({
-                "access_token": token,
-                "token_type": "Bearer",
-                "expires_in": args.expiry,
-                "user_id": claims.sub,
-                "role": claims.role,
-                "permissions": claims.permissions,
-                "issued_at": claims.iat,
-                "expires_at": claims.exp
-            });
-            println!("{}", serde_json::to_string_pretty(&output)?);
-        }
-        "full" => {
-            println!("🔑 JWT Token Generated");
-            println!("======================");
-            println!("User ID:      {}", claims.sub);
-            println!("Role:         {}", claims.role);
-            println!("Permissions:  {}", claims.permissions.join(", "));
-            println!(
-                "Issued At:    {} ({})",
-                claims.iat,
-                format_timestamp(claims.iat)
-            );
-            println!(
-                "Expires At:   {} ({})",
-                claims.exp,
-                format_timestamp(claims.exp)
-            );
-            println!(
-                "Secret:       {}",
-                if args.secret.is_some() {
-                    "Custom"
+        // Generate token based on role and permissions
+        let token = match args.role.as_str() {
+            "admin" => jwt_manager.generate_admin_token(&args.user)?,
+            "readonly" => jwt_manager.generate_readonly_token(&args.user)?,
+            _ => {
+                // Custom role with optional permissions
+                let permissions = if let Some(perms) = &args.permissions {
+                    perms.split(',').map(|s| s.trim().to_string()).collect()
                 } else {
-                    "Auto-generated"
-                }
-            );
-            println!("Valid For:    {} seconds", args.expiry);
-            println!();
-            println!("Token:");
-            println!("{}", token);
-            println!();
-            println!("Usage:");
-            println!(
-                "curl -H \"Authorization: Bearer {}\" http://localhost:3000/",
-                token
-            );
-        }
-        _ => {
-            // Default: just output the token
-            println!("{}", token);
-        }
-    }
+                    vec!["mcp:access".to_string()]
+                };
+                jwt_manager.generate_token_with_permissions(&args.user, &args.role, permissions)?
+            }
+        };
 
-    Ok(())
+        // Validate the token to get claims
+        let claims = jwt_manager.validate_token(&token)?;
+
+        // Output in requested format
+        match args.output.as_str() {
+            "json" => {
+                let output = serde_json::json!({
+                    "access_token": token,
+                    "token_type": "Bearer",
+                    "expires_in": args.expiry,
+                    "user_id": claims.sub,
+                    "role": claims.role,
+                    "permissions": claims.permissions,
+                    "issued_at": claims.iat,
+                    "expires_at": claims.exp
+                });
+                println!("{}", serde_json::to_string_pretty(&output)?);
+            }
+            "full" => {
+                println!("🔑 JWT Token Generated");
+                println!("======================");
+                println!("User ID:      {}", claims.sub);
+                println!("Role:         {}", claims.role);
+                println!("Permissions:  {}", claims.permissions.join(", "));
+                println!(
+                    "Issued At:    {} ({})",
+                    claims.iat,
+                    format_timestamp(claims.iat)
+                );
+                println!(
+                    "Expires At:   {} ({})",
+                    claims.exp,
+                    format_timestamp(claims.exp)
+                );
+                println!(
+                    "Secret:       {}",
+                    if args.secret.is_some() {
+                        "Custom"
+                    } else {
+                        "Auto-generated"
+                    }
+                );
+                println!("Valid For:    {} seconds", args.expiry);
+                println!();
+                println!("Token:");
+                println!("{}", token);
+                println!();
+                println!("Usage:");
+                println!(
+                    "curl -H \"Authorization: Bearer {}\" http://localhost:3000/",
+                    token
+                );
+            }
+            _ => {
+                // Default: just output the token
+                println!("{}", token);
+            }
+        }
+
+        Ok(())
+    }
 }
 
+#[cfg(feature = "mcp-jwt")]
 fn format_timestamp(timestamp: usize) -> String {
     use chrono::DateTime;
     match DateTime::from_timestamp(timestamp as i64, 0) {
@@ -158,7 +178,8 @@ fn format_timestamp(timestamp: usize) -> String {
 }
 
 // Simple argument parser if clap is not available
-#[cfg(not(feature = "clap"))]
+#[allow(unexpected_cfgs)]
+#[cfg(all(feature = "mcp-jwt", not(feature = "clap")))]
 fn parse_args() -> Args {
     let args: Vec<String> = std::env::args().collect();
     let mut parsed_args = Args {

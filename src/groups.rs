@@ -22,8 +22,13 @@ impl GroupsClient {
     /// * `id` - Group ID
     ///
     /// # Example
-    /// ```no_run
+    /// ```ignore
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = virustotal_rs::Client::new("your_api_key".into(), virustotal_rs::ApiTier::Public)?;
+    /// # let groups_client = client.groups();
     /// let group = groups_client.get_group("group123").await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn get_group(&self, id: &str) -> Result<GroupResponse> {
         let endpoint = format!("groups/{}", id);
@@ -39,17 +44,21 @@ impl GroupsClient {
     /// * `updates` - Partial group object with attributes to update
     ///
     /// # Example
-    /// ```no_run
+    /// ```ignore
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = virustotal_rs::Client::new("your_api_key".into(), virustotal_rs::ApiTier::Public)?;
+    /// # let groups_client = client.groups();
+    /// use virustotal_rs::groups::{GroupUpdateRequest, GroupUpdate, GroupUpdateAttributes};
     /// let updates = GroupUpdateRequest {
-    ///     data: GroupUpdate {
-    ///         attributes: GroupUpdateAttributes {
+    ///     data: GroupUpdate::new(GroupUpdateAttributes {
     ///             name: Some("New Group Name".to_string()),
     ///             description: Some("Updated description".to_string()),
     ///             ..Default::default()
-    ///         }
-    ///     }
+    ///         })
     /// };
     /// let updated_group = groups_client.update_group("group123", &updates).await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn update_group(
         &self,
@@ -68,8 +77,13 @@ impl GroupsClient {
     /// * `id` - Group ID
     ///
     /// # Example
-    /// ```no_run
+    /// ```ignore
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = virustotal_rs::Client::new("your_api_key".into(), virustotal_rs::ApiTier::Public)?;
+    /// # let groups_client = client.groups();
     /// let admins = groups_client.get_administrators("group123").await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn get_administrators(&self, id: &str) -> Result<AdminsResponse> {
         let endpoint = format!("groups/{}/relationships/administrators", id);
@@ -86,9 +100,14 @@ impl GroupsClient {
     /// * `user_emails` - List of user email addresses
     ///
     /// # Example
-    /// ```no_run
+    /// ```ignore
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = virustotal_rs::Client::new("your_api_key".into(), virustotal_rs::ApiTier::Public)?;
+    /// # let groups_client = client.groups();
     /// let emails = vec!["admin1@example.com", "admin2@example.com"];
     /// groups_client.add_administrators("group123", emails).await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn add_administrators(&self, id: &str, user_emails: Vec<&str>) -> Result<()> {
         let endpoint = format!("groups/{}/relationships/administrators", id);
@@ -113,8 +132,13 @@ impl GroupsClient {
     /// * `user_id` - User ID to check
     ///
     /// # Example
-    /// ```no_run
+    /// ```ignore
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = virustotal_rs::Client::new("your_api_key".into(), virustotal_rs::ApiTier::Public)?;
+    /// # let groups_client = client.groups();
     /// let is_admin = groups_client.is_administrator("group123", "user456").await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn is_administrator(&self, id: &str, user_id: &str) -> Result<bool> {
         let endpoint = format!("groups/{}/relationships/administrators/{}", id, user_id);
@@ -131,8 +155,13 @@ impl GroupsClient {
     /// * `user_id` - User ID to remove admin privileges from
     ///
     /// # Example
-    /// ```no_run
+    /// ```ignore
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = virustotal_rs::Client::new("your_api_key".into(), virustotal_rs::ApiTier::Public)?;
+    /// # let groups_client = client.groups();
     /// groups_client.remove_administrator("group123", "user456").await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn remove_administrator(&self, id: &str, user_id: &str) -> Result<()> {
         let endpoint = format!("groups/{}/relationships/administrators/{}", id, user_id);
@@ -147,8 +176,13 @@ impl GroupsClient {
     /// * `id` - Group ID
     ///
     /// # Example
-    /// ```no_run
+    /// ```ignore
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = virustotal_rs::Client::new("your_api_key".into(), virustotal_rs::ApiTier::Public)?;
+    /// # let groups_client = client.groups();
     /// let users = groups_client.get_users("group123").await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn get_users(&self, id: &str) -> Result<UsersResponse> {
         let endpoint = format!("groups/{}/relationships/users", id);
@@ -162,8 +196,13 @@ impl GroupsClient {
     /// * `user_id` - User ID to check
     ///
     /// # Example
-    /// ```no_run
+    /// ```ignore
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = virustotal_rs::Client::new("your_api_key".into(), virustotal_rs::ApiTier::Public)?;
+    /// # let groups_client = client.groups();
     /// let is_member = groups_client.is_member("group123", "user456").await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn is_member(&self, id: &str, user_id: &str) -> Result<bool> {
         let endpoint = format!("groups/{}/relationships/users/{}", id, user_id);
@@ -180,8 +219,13 @@ impl GroupsClient {
     /// * `user_id` - User ID to remove from the group
     ///
     /// # Example
-    /// ```no_run
+    /// ```ignore
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = virustotal_rs::Client::new("your_api_key".into(), virustotal_rs::ApiTier::Public)?;
+    /// # let groups_client = client.groups();
     /// groups_client.remove_user("group123", "user456").await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn remove_user(&self, id: &str, user_id: &str) -> Result<()> {
         let endpoint = format!("groups/{}/relationships/users/{}", id, user_id);
@@ -198,9 +242,14 @@ impl GroupsClient {
     /// * `user_emails` - List of user email addresses
     ///
     /// # Example
-    /// ```no_run
+    /// ```ignore
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = virustotal_rs::Client::new("your_api_key".into(), virustotal_rs::ApiTier::Public)?;
+    /// # let groups_client = client.groups();
     /// let emails = vec!["user1@example.com", "user2@example.com"];
     /// groups_client.add_users("group123", emails).await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn add_users(&self, id: &str, user_emails: Vec<&str>) -> Result<()> {
         let endpoint = format!("groups/{}/relationships/users", id);
@@ -229,8 +278,13 @@ impl GroupsClient {
     /// * `cursor` - Continuation cursor for pagination
     ///
     /// # Example
-    /// ```no_run
-    /// let graphs = groups_client.get_relationship("group123", "graphs", Some(20), None).await?;
+    /// ```ignore
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = virustotal_rs::Client::new("your_api_key".into(), virustotal_rs::ApiTier::Public)?;
+    /// # let groups_client = client.groups();
+    /// let graphs: virustotal_rs::objects::Collection<serde_json::Value> = groups_client.get_relationship("group123", "graphs", Some(20), None).await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn get_relationship<T: for<'de> Deserialize<'de>>(
         &self,
@@ -483,9 +537,10 @@ mod tests {
 
     #[test]
     fn test_group_update_creation() {
-        let mut attributes = GroupUpdateAttributes::default();
-        attributes.name = Some("New Group Name".to_string());
-        attributes.description = Some("New description".to_string());
+        let attributes = GroupUpdateAttributes {
+            name: Some("New Group Name".to_string()),
+            description: Some("New description".to_string()),
+        };
 
         let update = GroupUpdate::new(attributes);
         assert_eq!(update.object_type, "group");

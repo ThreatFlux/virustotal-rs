@@ -7,14 +7,31 @@ allow = [
     "BSD-2-Clause",
     "ISC",
     "Unicode-3.0",
-    "Unicode-DFS-2016",
-    "CC0-1.0",
     "Unlicense",
+    "Zlib",
+    "CDLA-Permissive-2.0",
 ]
 
 [bans]
 multiple-versions = "warn"
 wildcards = "allow"
+skip = [
+    # Known safe duplicates due to dependency tree requirements
+    { name = "getrandom", version = "=0.2.16" },
+    { name = "hashbrown", version = "=0.14.5" },
+    { name = "wasi", version = "=0.11.1+wasi-snapshot-preview1" },
+    { name = "windows-sys", version = "=0.52.0" },
+    { name = "windows-sys", version = "=0.59.0" },
+    { name = "windows-targets", version = "=0.52.6" },
+    { name = "windows_aarch64_gnullvm", version = "=0.52.6" },
+    { name = "windows_aarch64_msvc", version = "=0.52.6" },
+    { name = "windows_i686_gnu", version = "=0.52.6" },
+    { name = "windows_i686_gnullvm", version = "=0.52.6" },
+    { name = "windows_i686_msvc", version = "=0.52.6" },
+    { name = "windows_x86_64_gnu", version = "=0.52.6" },
+    { name = "windows_x86_64_gnullvm", version = "=0.52.6" },
+    { name = "windows_x86_64_msvc", version = "=0.52.6" },
+]
 
 [sources]
 unknown-registry = "warn"

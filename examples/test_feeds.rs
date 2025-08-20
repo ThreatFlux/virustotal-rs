@@ -1,3 +1,4 @@
+#[allow(unused_imports)]
 use std::io::Write;
 use virustotal_rs::{ApiTier, ClientBuilder, FeedConfig, FeedsClient};
 
@@ -141,6 +142,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Downloading sandbox feed for: {}", feed_time);
 
+    #[allow(deprecated)]
     match feeds.get_sandbox_feed_batch(feed_time).await {
         Ok(batch_data) => {
             println!("✓ Downloaded sandbox batch: {} bytes", batch_data.len());

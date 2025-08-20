@@ -1179,13 +1179,19 @@ impl<'a> PrivateFilesClient<'a> {
     /// * `request` - Request containing hashes and optional password
     ///
     /// # Example
-    /// ```no_run
+    /// ```ignore
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = virustotal_rs::Client::new("your_api_key".into(), virustotal_rs::ApiTier::Public)?;
+    /// # let private_files_client = client.private_files();
+    /// use virustotal_rs::private_files::CreatePrivateZipRequest;
     /// let request = CreatePrivateZipRequest::new(vec![
     ///     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".to_string(),
     ///     "275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f".to_string(),
     /// ]).with_password("mysecretpassword".to_string());
     ///
-    /// let zip_file = client.create_zip(&request).await?;
+    /// let zip_file = private_files_client.create_zip(&request).await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn create_zip(&self, request: &CreatePrivateZipRequest) -> Result<PrivateZipFile> {
         self.client.post("private/zip_files", request).await
