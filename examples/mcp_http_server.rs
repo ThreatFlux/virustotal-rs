@@ -87,7 +87,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Run the HTTP server
         tracing::info!("Server starting...");
         run_http_server(client, addr).await?;
-        
+
         Ok(())
     }
 }
