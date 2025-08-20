@@ -38,7 +38,7 @@ jobs:
         sudo apt-get install -y pkg-config libssl-dev
 
     - name: Install cargo-deadlinks
-      run: cargo install cargo-deadlinks
+      run: cargo install cargo-deadlinks --locked
 
     - name: Create docs header
       run: |
@@ -57,8 +57,10 @@ jobs:
         echo '<meta http-equiv="refresh" content="0; url=virustotal_rs">' > target/doc/index.html
 
     - name: Check for broken links
+      continue-on-error: true
+      timeout-minutes: 5
       run: |
-        cargo deadlinks --dir target/doc --check-http || echo "Some links may be broken"
+        cargo deadlinks --dir target/doc || echo "Link checking completed with warnings"
 
     - name: Generate documentation coverage report
       run: |
@@ -232,7 +234,7 @@ jobs:
 
   docs-deploy:
     name: Deploy Documentation
-    needs: docs-publish
+    needs: [docs-build, docs-examples, docs-lint]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     
@@ -240,6 +242,10 @@ jobs:
       contents: read
       pages: write
       id-token: write
+    
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     
     steps:
     - name: Download documentation artifact

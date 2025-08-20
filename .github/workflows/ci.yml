@@ -20,7 +20,7 @@ jobs:
         rust: [stable, beta]
         include:
           - os: ubuntu-latest
-            rust: 1.89.0  # MSRV
+            rust: 1.78.0  # MSRV
     runs-on: ${{ matrix.os }}
     
     steps:
@@ -73,10 +73,26 @@ jobs:
     - name: Test without features
       run: cargo test --no-default-features --verbose
 
+    - name: Debug environment
+      if: matrix.rust == 'stable' && matrix.os == 'ubuntu-latest'
+      run: |
+        echo "Environment Debug Information:"
+        echo "Rust version: $(rustc --version)"
+        echo "Cargo version: $(cargo --version)"
+        echo "Available disk space:"
+        df -h
+        echo "Memory info:"
+        free -h || true
+        echo "CPU info:"
+        nproc
+    
     - name: Test with MCP features
       run: |
+        echo "Testing MCP features individually..."
         cargo test --features mcp --verbose
+        echo "Testing MCP JWT features..."
         cargo test --features mcp-jwt --verbose
+        echo "Testing MCP OAuth features..."
         cargo test --features mcp-oauth --verbose
 
     - name: Build examples
@@ -154,7 +170,15 @@ jobs:
         sudo apt-get install -y pkg-config libssl-dev
 
     - name: Check documentation
-      run: RUSTDOCFLAGS="-D warnings" cargo doc --all-features --no-deps --document-private-items
+      run: |
+        # Create docs header for CI
+        cat > docs-header.html << 'EOF'
+        <style>
+          .sidebar { width: 250px; }
+          .content { margin-left: 250px; }
+        </style>
+        EOF
+        RUSTDOCFLAGS="-D warnings --html-in-header docs-header.html" cargo doc --all-features --no-deps --document-private-items
 
     - name: Test doc examples
       run: cargo test --doc --all-features
