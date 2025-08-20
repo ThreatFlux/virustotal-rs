@@ -283,8 +283,8 @@ impl<'a> GraphClient<'a> {
     /// List graphs
     ///
     /// Accepted filters:
-    /// - owner:<username>
-    /// - tag:<tag>
+    /// - owner:`<username>`
+    /// - tag:`<tag>`
     /// - visibility:public|private
     pub async fn list_graphs(
         &self,

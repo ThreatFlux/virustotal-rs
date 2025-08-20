@@ -1,11 +1,11 @@
 .PHONY: all clean build test fmt clippy doc audit security coverage bench check install-tools help
 
 # Default target
-all: install-tools fmt clippy build test test-no-features test-mcp-features build-examples test-doc doc audit security
+all: install-tools fmt clippy build test test-no-features test-mcp-features build-examples test-doc doc-check audit security
 	@echo "✅ All checks passed!"
 
 # CI simulation - matches GitHub Actions CI workflow
-ci: fmt-check clippy build test test-no-features test-mcp-features build-examples test-doc
+ci: fmt-check clippy build test test-no-features test-mcp-features build-examples test-doc doc-check
 	@echo "✅ CI checks passed!"
 
 # Install required tools
@@ -84,7 +84,7 @@ doc:
 # Check documentation with warnings as errors
 doc-check:
 	@echo "📖 Checking documentation..."
-	@RUSTDOCFLAGS="-D warnings" cargo doc --all-features --no-deps --quiet
+	@RUSTDOCFLAGS="-D warnings" cargo doc --all-features --no-deps --document-private-items
 	@echo "✅ Documentation check passed"
 
 # Run security audit
