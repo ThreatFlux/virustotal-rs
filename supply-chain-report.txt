@@ -1,0 +1,9 @@
+
+The following crates will be ignored because they come from a local directory:
+ - virustotal-rs
+
+The `crates.io` cache was not found or it is invalid.
+  Run `cargo supply-chain update` to generate it.
+
+Fetching publisher info from crates.io
+This will take roughly 2 seconds per crate due to API rate limits
