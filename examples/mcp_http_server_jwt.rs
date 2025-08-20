@@ -123,7 +123,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .debug(debug)
             .run()
             .await?;
+        
+        Ok(())
     }
-
-    Ok(())
 }

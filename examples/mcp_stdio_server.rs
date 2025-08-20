@@ -65,9 +65,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // Run the STDIO server
         run_stdio_server(client).await?;
+        
+        Ok(())
     }
-
-    Ok(())
 }
 
 #[cfg(all(feature = "mcp", test))]

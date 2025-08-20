@@ -52,6 +52,7 @@ struct Args {
 
 #[allow(unexpected_cfgs)]
 #[cfg(not(feature = "clap"))]
+#[allow(dead_code)]
 struct Args {
     user: String,
     role: String,

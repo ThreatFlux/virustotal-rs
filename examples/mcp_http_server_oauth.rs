@@ -165,7 +165,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             eprintln!("❌ Server error: {}", e);
             std::process::exit(1);
         }
+        
+        Ok(())
     }
-
-    Ok(())
 }
