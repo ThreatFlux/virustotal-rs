@@ -2,7 +2,7 @@
 name = "virustotal-rs"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.89.0"
+rust-version = "1.82.0"
 authors = ["ThreatFlux"]
 description = "Rust SDK for VirusTotal API v3"
 repository = "https://github.com/threatflux/virustotal-rs"
