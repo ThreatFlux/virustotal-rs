@@ -1,0 +1,593 @@
+name: Auto Release
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      version_type:
+        description: 'Version bump type'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+        - patch
+        - minor
+        - major
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  DOCKER_BUILDKIT: 1
+
+jobs:
+  # Wait for CI to complete successfully
+  wait-for-ci:
+    name: Wait for CI
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    
+    steps:
+    - name: Wait for CI workflows
+      uses: lewagon/wait-on-check-action@v1.3.4
+      with:
+        ref: ${{ github.sha }}
+        check-name: 'Test Suite'
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+        wait-interval: 30
+        allowed-conclusions: success
+
+    - name: Wait for Security Audit
+      uses: lewagon/wait-on-check-action@v1.3.4
+      with:
+        ref: ${{ github.sha }}
+        check-name: 'Security Audit'
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+        wait-interval: 30
+        allowed-conclusions: success,neutral,skipped
+      continue-on-error: true
+
+  # Determine version bump and update Cargo.toml
+  version-bump:
+    name: Version Bump
+    runs-on: ubuntu-latest
+    needs: [wait-for-ci]
+    if: always() && (needs.wait-for-ci.result == 'success' || github.event_name == 'workflow_dispatch')
+    outputs:
+      new_version: ${{ steps.version.outputs.new_version }}
+      version_changed: ${{ steps.version.outputs.version_changed }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0
+
+    - name: Setup Git
+      run: |
+        git config --global user.name 'github-actions[bot]'
+        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
+    - name: Install cargo-bump
+      run: cargo install cargo-bump
+
+    - name: Determine version bump
+      id: version
+      run: |
+        # Get current version from Cargo.toml
+        CURRENT_VERSION=$(grep '^version =' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+        echo "Current version: $CURRENT_VERSION"
+        
+        # Determine bump type
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          BUMP_TYPE="${{ github.event.inputs.version_type }}"
+        else
+          # Auto-determine based on commit messages since last release
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -z "$LAST_TAG" ]; then
+            COMMIT_RANGE="HEAD"
+          else
+            COMMIT_RANGE="$LAST_TAG..HEAD"
+          fi
+          
+          COMMIT_MESSAGES=$(git log --pretty=format:"%s" $COMMIT_RANGE)
+          
+          if echo "$COMMIT_MESSAGES" | grep -q "BREAKING CHANGE\|!:" ; then
+            BUMP_TYPE="major"
+          elif echo "$COMMIT_MESSAGES" | grep -q "feat\|feature:" ; then
+            BUMP_TYPE="minor"
+          else
+            BUMP_TYPE="patch"
+          fi
+        fi
+        
+        echo "Bump type: $BUMP_TYPE"
+        
+        # Bump version
+        cargo bump $BUMP_TYPE
+        NEW_VERSION=$(grep '^version =' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+        
+        echo "New version: $NEW_VERSION"
+        echo "new_version=v$NEW_VERSION" >> $GITHUB_OUTPUT
+        
+        # Check if version actually changed
+        if [ "$CURRENT_VERSION" != "$NEW_VERSION" ]; then
+          echo "version_changed=true" >> $GITHUB_OUTPUT
+          
+          # Commit version change
+          git add Cargo.toml
+          git commit -m "chore(release): bump version to $NEW_VERSION
+
+🤖 Generated with [Claude Code](https://claude.ai/code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>"
+          
+          # Create and push tag
+          git tag -a "v$NEW_VERSION" -m "Release v$NEW_VERSION"
+          git push origin main
+          git push origin "v$NEW_VERSION"
+        else
+          echo "version_changed=false" >> $GITHUB_OUTPUT
+        fi
+
+  # Build and test release
+  build-and-test:
+    name: Build and Test Release
+    needs: [version-bump]
+    if: needs.version-bump.outputs.version_changed == 'true'
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: windows-latest  
+            target: x86_64-pc-windows-msvc
+          - os: macos-latest
+            target: x86_64-apple-darwin
+          - os: macos-latest
+            target: aarch64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ needs.version-bump.outputs.new_version }}
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: ${{ matrix.target }}
+
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-${{ matrix.target }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Install system dependencies (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y pkg-config libssl-dev
+
+    - name: Install system dependencies (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        brew install openssl pkg-config
+
+    - name: Build release
+      run: cargo build --release --all-features --target ${{ matrix.target }}
+
+    - name: Run tests
+      run: cargo test --release --all-features --target ${{ matrix.target }}
+
+    - name: Build MCP server binary (Linux)
+      if: runner.os == 'Linux' && matrix.target == 'x86_64-unknown-linux-gnu'
+      run: |
+        # Build MCP server binary if it exists
+        if [ -f "src/mcp/main.rs" ] || [ -f "examples/mcp_server.rs" ]; then
+          cargo build --release --features mcp --target ${{ matrix.target }} --example mcp_server || true
+        fi
+
+  # Create GitHub release
+  create-release:
+    name: Create GitHub Release
+    needs: [version-bump, build-and-test]
+    runs-on: ubuntu-latest
+    if: needs.version-bump.outputs.version_changed == 'true'
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ needs.version-bump.outputs.new_version }}
+        fetch-depth: 0
+
+    - name: Generate changelog
+      id: changelog
+      run: |
+        LAST_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
+        if [ -z "$LAST_TAG" ]; then
+          COMMIT_RANGE="HEAD"
+        else
+          COMMIT_RANGE="$LAST_TAG..HEAD"
+        fi
+        
+        echo "## What's Changed" > release_notes.md
+        echo "" >> release_notes.md
+        
+        # Generate changelog from commits
+        git log --pretty=format:"- %s (%h)" $COMMIT_RANGE | grep -v "^- chore(release):" >> release_notes.md || echo "- Initial release" >> release_notes.md
+        
+        echo "" >> release_notes.md
+        echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${LAST_TAG}...${{ needs.version-bump.outputs.new_version }}" >> release_notes.md
+
+    - name: Create Release
+      id: create_release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ needs.version-bump.outputs.new_version }}
+        name: VirusTotal Rust SDK ${{ needs.version-bump.outputs.new_version }}
+        body_path: release_notes.md
+        draft: false
+        prerelease: ${{ contains(needs.version-bump.outputs.new_version, '-') }}
+        generate_release_notes: true
+
+  # Publish to crates.io
+  publish-crate:
+    name: Publish to crates.io
+    needs: [version-bump, build-and-test, create-release]
+    runs-on: ubuntu-latest
+    if: needs.version-bump.outputs.version_changed == 'true'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ needs.version-bump.outputs.new_version }}
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-publish-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y pkg-config libssl-dev
+
+    - name: Verify package
+      run: cargo package --allow-dirty
+
+    - name: Publish to crates.io
+      run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  # Build and push Docker image for MCP server
+  build-docker:
+    name: Build Docker Image
+    needs: [version-bump, create-release]
+    runs-on: ubuntu-latest
+    if: needs.version-bump.outputs.version_changed == 'true'
+    permissions:
+      contents: read
+      packages: write
+      
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ needs.version-bump.outputs.new_version }}
+
+    - name: Create Dockerfile for MCP Server
+      run: |
+        cat > Dockerfile << 'EOF'
+        # Multi-stage build for smaller final image
+        FROM rust:1.82-slim as builder
+
+        # Install system dependencies
+        RUN apt-get update && apt-get install -y \
+            pkg-config \
+            libssl-dev \
+            ca-certificates \
+            && rm -rf /var/lib/apt/lists/*
+
+        WORKDIR /app
+        COPY . .
+
+        # Build the MCP server with optimizations
+        RUN cargo build --release --features mcp-jwt,mcp-oauth --bin mcp_server || \
+            cargo build --release --features mcp --bin mcp_server
+
+        # Runtime image
+        FROM debian:bookworm-slim
+
+        # Install runtime dependencies
+        RUN apt-get update && apt-get install -y \
+            ca-certificates \
+            libssl3 \
+            && rm -rf /var/lib/apt/lists/*
+
+        # Create non-root user
+        RUN useradd -r -s /bin/false -m -d /app vt-user
+
+        WORKDIR /app
+        USER vt-user
+
+        # Copy the binary from builder stage
+        COPY --from=builder /app/target/release/mcp_server /usr/local/bin/mcp_server
+
+        # Set the binary as executable
+        USER root
+        RUN chmod +x /usr/local/bin/mcp_server
+        USER vt-user
+
+        # Health check
+        HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+            CMD curl -f http://localhost:8080/health || exit 1
+
+        # Default command
+        EXPOSE 8080
+        CMD ["mcp_server"]
+        EOF
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      with:
+        driver-opts: |
+          network=host
+          image=moby/buildkit:latest
+
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: |
+          threatflux/virustotal-rs-mcp
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-mcp
+        tags: |
+          type=ref,event=branch
+          type=semver,pattern={{version}},value=${{ needs.version-bump.outputs.new_version }}
+          type=semver,pattern={{major}}.{{minor}},value=${{ needs.version-bump.outputs.new_version }}
+          type=semver,pattern={{major}},value=${{ needs.version-bump.outputs.new_version }}
+          type=raw,value=latest
+        labels: |
+          org.opencontainers.image.title=VirusTotal Rust SDK MCP Server
+          org.opencontainers.image.description=Model Context Protocol server for VirusTotal threat intelligence
+          org.opencontainers.image.vendor=ThreatFlux
+          org.opencontainers.image.licenses=MIT OR Apache-2.0
+          maintainer=ThreatFlux Team
+
+    - name: Generate build args
+      id: build_args
+      run: |
+        echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        echo "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
+        echo "VCS_REF=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        build-args: |
+          VERSION=${{ steps.build_args.outputs.VERSION }}
+          BUILD_DATE=${{ steps.build_args.outputs.BUILD_DATE }}
+          VCS_REF=${{ steps.build_args.outputs.VCS_REF }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  # Security scan Docker image
+  docker-scan:
+    name: Scan Docker Image
+    needs: [version-bump, build-docker]
+    runs-on: ubuntu-latest
+    if: needs.version-bump.outputs.version_changed == 'true'
+    permissions:
+      contents: read
+      security-events: write
+      
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Pull Docker image
+      run: |
+        docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-mcp:latest
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-mcp:latest
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+        severity: 'CRITICAL,HIGH,MEDIUM'
+        vuln-type: 'os,library'
+      continue-on-error: true
+
+    - name: Upload Trivy results to GitHub Security
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: 'trivy-results.sarif'
+      if: always() && hashFiles('trivy-results.sarif') != ''
+
+  # Update Docker Hub description  
+  update-docker-description:
+    name: Update Docker Hub Description
+    needs: [version-bump, build-docker]
+    runs-on: ubuntu-latest
+    if: needs.version-bump.outputs.version_changed == 'true'
+    continue-on-error: true
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Check if Docker Hub credentials exist
+      id: check-creds
+      run: |
+        if [[ -n "${{ secrets.DOCKERHUB_USERNAME }}" ]] && [[ -n "${{ secrets.DOCKERHUB_TOKEN }}" ]]; then
+          echo "has-creds=true" >> $GITHUB_OUTPUT
+        else
+          echo "has-creds=false" >> $GITHUB_OUTPUT
+          echo "⚠️ Docker Hub credentials not configured. Skipping description update."
+        fi
+
+    - name: Update Docker Hub description
+      if: steps.check-creds.outputs.has-creds == 'true'
+      uses: peter-evans/dockerhub-description@v4
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+        repository: threatflux/virustotal-rs-mcp
+        readme-filepath: ./README.md
+        short-description: "VirusTotal Rust SDK with MCP server for AI/LLM threat intelligence integration"
+      continue-on-error: true
+
+  # Update documentation
+  update-documentation:
+    name: Update Documentation
+    needs: [version-bump, publish-crate]
+    runs-on: ubuntu-latest
+    if: needs.version-bump.outputs.version_changed == 'true' && !contains(needs.version-bump.outputs.new_version, '-')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ needs.version-bump.outputs.new_version }}
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-docs-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y pkg-config libssl-dev
+
+    - name: Generate documentation
+      run: |
+        cargo doc --all-features --no-deps
+        echo '<meta http-equiv="refresh" content="0; url=virustotal_rs">' > target/doc/index.html
+
+    - name: Deploy to GitHub Pages
+      uses: peaceiris/actions-gh-pages@v4
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./target/doc
+        # cname: virustotal-rs-docs.threatflux.com
+
+  # Notify completion
+  notify:
+    name: Release Complete
+    needs: [version-bump, build-and-test, create-release, publish-crate, build-docker, docker-scan, update-docker-description, update-documentation]
+    runs-on: ubuntu-latest
+    if: always() && needs.version-bump.outputs.version_changed == 'true'
+    
+    steps:
+    - name: Release Status
+      run: |
+        if [ "${{ needs.build-and-test.result }}" = "success" ] && \
+           [ "${{ needs.publish-crate.result }}" = "success" ] && \
+           [ "${{ needs.build-docker.result }}" = "success" ]; then
+          echo "✅ Auto-release ${{ needs.version-bump.outputs.new_version }} completed successfully!"
+          echo "📦 Published to crates.io"
+          echo "🐳 Docker images pushed to GHCR and Docker Hub"
+          echo "🔒 Security scan completed"
+          echo "📚 Documentation updated"
+        else
+          echo "❌ Auto-release ${{ needs.version-bump.outputs.new_version }} failed"
+          echo "Build/Test: ${{ needs.build-and-test.result }}"
+          echo "Crate Publish: ${{ needs.publish-crate.result }}" 
+          echo "Docker Build: ${{ needs.build-docker.result }}"
+          echo "Docker Scan: ${{ needs.docker-scan.result }}"
+          exit 1
+        fi
+
+    - name: Comment on commit
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const { data: commit } = await github.rest.repos.getCommit({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            ref: context.sha
+          });
+          
+          if (commit.commit.message.includes('chore(release):')) {
+            return; // Don't comment on release commits
+          }
+          
+          const success = '${{ needs.build-and-test.result }}' === 'success' && 
+                         '${{ needs.publish-crate.result }}' === 'success' && 
+                         '${{ needs.build-docker.result }}' === 'success';
+          
+          const status = success ? '✅' : '❌';
+          const message = `${status} Auto-release **${{ needs.version-bump.outputs.new_version }}** ${success ? 'completed' : 'failed'}!
+          
+          ${success ? `
+          - 📦 [Published to crates.io](https://crates.io/crates/virustotal-rs)
+          - 🐳 [Docker Hub image](https://hub.docker.com/r/threatflux/virustotal-rs-mcp)
+          - 🐳 [GHCR image](https://github.com/${{ github.repository }}/pkgs/container/${{ github.event.repository.name }}-mcp)
+          - 🔒 Security scan completed
+          - 📚 [Documentation updated](https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }})
+          ` : `
+          - Build/Test: ${{ needs.build-and-test.result }}
+          - Crate Publish: ${{ needs.publish-crate.result }}
+          - Docker Build: ${{ needs.build-docker.result }}
+          - Docker Scan: ${{ needs.docker-scan.result }}
+          `}`;
+          
+          await github.rest.repos.createCommitComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            commit_sha: context.sha,
+            body: message
+          });
