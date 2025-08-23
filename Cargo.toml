@@ -44,7 +44,7 @@ axum-extra = { version = "0.10", features = ["typed-header"], optional = true }
 
 # OAuth 2.1 authentication dependencies (optional)
 oauth2 = { version = "4.4", optional = true }
-rand = { version = "0.8", optional = true }
+rand = { version = "0.9", optional = true }
 
 [features]
 default = []
