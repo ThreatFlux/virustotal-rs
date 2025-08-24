@@ -4,7 +4,7 @@ use crate::{Client, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// Represents a Collection of IOCs in VirusTotal
+/// Represents a Collection of IOCs in `VirusTotal`
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Collection {
     #[serde(flatten)]
@@ -413,7 +413,7 @@ impl<'a> CollectionsClient<'a> {
         self.client.get(&url).await
     }
 
-    /// Add items to a collection relationship (domains, urls, ip_addresses, or files)
+    /// Add items to a collection relationship (domains, urls, `ip_addresses`, or files)
     pub async fn add_items<T>(
         &self,
         collection_id: &str,

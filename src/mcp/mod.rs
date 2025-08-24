@@ -1,7 +1,7 @@
-//! Model Context Protocol (MCP) integration for VirusTotal SDK
+//! Model Context Protocol (MCP) integration for `VirusTotal` SDK
 //!
 //! This module provides MCP server functionality that allows Language Models
-//! to interact with the VirusTotal API through standardized tool calls.
+//! to interact with the `VirusTotal` API through standardized tool calls.
 
 #[cfg(feature = "mcp-jwt")]
 pub mod auth;

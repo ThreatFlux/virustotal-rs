@@ -4,7 +4,7 @@ use crate::objects::{Collection, CollectionIterator};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// Client for managing VirusTotal users
+/// Client for managing `VirusTotal` users
 pub struct UsersClient {
     client: Client,
 }

@@ -1,4 +1,4 @@
-//! MCP Server implementation for VirusTotal SDK
+//! MCP Server implementation for `VirusTotal` SDK
 //!
 //! This module provides a simple MCP server for threat intelligence queries.
 
@@ -7,14 +7,14 @@ use crate::mcp::{convert_vt_error, McpResult};
 use crate::Client;
 use serde_json::{json, Value as JsonValue};
 
-/// VirusTotal MCP Server implementation
+/// `VirusTotal` MCP Server implementation
 #[derive(Clone)]
 pub struct VtMcpServer {
     client: Client,
 }
 
 impl VtMcpServer {
-    /// Create a new VirusTotal MCP server instance
+    /// Create a new `VirusTotal` MCP server instance
     pub fn new(client: Client) -> Self {
         Self { client }
     }
@@ -40,7 +40,7 @@ impl VtMcpServer {
         json!({
             "name": "virustotal-sdk",
             "version": "0.1.0",
-            "description": "VirusTotal threat intelligence MCP server"
+            "description": "`VirusTotal` threat intelligence MCP server"
         })
     }
 
@@ -58,7 +58,7 @@ impl VtMcpServer {
         vec![
             json!({
                 "name": "vti_search",
-                "description": "Search VirusTotal for threat intelligence on any indicator (hash, IP, domain, or URL). Automatically detects indicator type and returns comprehensive threat analysis.",
+                "description": "Search `VirusTotal` for threat intelligence on any indicator (hash, IP, domain, or URL). Automatically detects indicator type and returns comprehensive threat analysis.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -72,7 +72,7 @@ impl VtMcpServer {
             }),
             json!({
                 "name": "get_file_report",
-                "description": "Get detailed file analysis report from VirusTotal using a file hash (MD5, SHA1, SHA256, or SHA512).",
+                "description": "Get detailed file analysis report from `VirusTotal` using a file hash (MD5, SHA1, SHA256, or SHA512).",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -86,7 +86,7 @@ impl VtMcpServer {
             }),
             json!({
                 "name": "get_url_report",
-                "description": "Get detailed URL analysis report from VirusTotal for a specific URL.",
+                "description": "Get detailed URL analysis report from `VirusTotal` for a specific URL.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -100,7 +100,7 @@ impl VtMcpServer {
             }),
             json!({
                 "name": "get_ip_report",
-                "description": "Get detailed IP address analysis report from VirusTotal.",
+                "description": "Get detailed IP address analysis report from `VirusTotal`.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -114,7 +114,7 @@ impl VtMcpServer {
             }),
             json!({
                 "name": "get_domain_report",
-                "description": "Get detailed domain analysis report from VirusTotal.",
+                "description": "Get detailed domain analysis report from `VirusTotal`.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -161,7 +161,7 @@ impl VtMcpServer {
             .as_str()
             .ok_or_else(|| anyhow::anyhow!("Missing required parameter: url"))?;
 
-        // Encode URL for VirusTotal API
+        // Encode URL for `VirusTotal` API
         use base64::{engine::general_purpose, Engine as _};
         let url_id = general_purpose::STANDARD.encode(url);
         let url_info = self

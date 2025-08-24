@@ -4,7 +4,7 @@ use crate::{Client, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// Represents a Graph in VirusTotal
+/// Represents a Graph in `VirusTotal`
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Graph {
     #[serde(flatten)]

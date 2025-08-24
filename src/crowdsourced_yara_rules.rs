@@ -3,7 +3,7 @@ use crate::{Client, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// Represents a Crowdsourced YARA rule in VirusTotal
+/// Represents a Crowdsourced YARA rule in `VirusTotal`
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CrowdsourcedYaraRule {
     #[serde(flatten)]
@@ -116,13 +116,13 @@ impl<'a> CrowdsourcedYaraRulesClient<'a> {
     ///
     /// Allowed filters:
     /// - author: Rule author
-    /// - creation_date: Creation date
+    /// - `creation_date`: Creation date
     /// - enabled: Whether the rule is enabled (enabled:true or enabled:false)
-    /// - included_date: Included date
-    /// - last_modification_date: Last modification date
+    /// - `included_date`: Included date
+    /// - `last_modification_date`: Last modification date
     /// - name: Rule name (full word match)
     /// - tag: Rule tag
-    /// - threat_category: Threat category
+    /// - `threat_category`: Threat category
     pub async fn list(
         &self,
         filter: Option<&str>,

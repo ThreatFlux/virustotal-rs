@@ -6,7 +6,6 @@
 
 use anyhow::{anyhow, Result as AnyhowResult};
 use axum::{
-    async_trait,
     extract::FromRequestParts,
     http::request::Parts,
     response::{IntoResponse, Response},
@@ -454,7 +453,6 @@ impl IntoResponse for OAuthError {
 /// Extractor for OAuth credentials from HTTP requests
 pub struct OAuthClaims(pub OAuthCredentials);
 
-#[async_trait]
 impl<S> FromRequestParts<S> for OAuthClaims
 where
     S: Send + Sync,

@@ -1,7 +1,7 @@
 //! High-level search functionality for MCP integration
 //!
 //! This module provides the main search function that automatically detects
-//! indicator types and performs appropriate VirusTotal API queries.
+//! indicator types and performs appropriate `VirusTotal` API queries.
 
 use crate::mcp::indicators::{detect_indicator_type, IndicatorType};
 use crate::mcp::{convert_vt_error, McpResult};
@@ -27,7 +27,7 @@ pub struct ThreatIntelligence {
     pub context: ThreatContext,
     /// Timestamp of analysis
     pub last_analysis_date: Option<i64>,
-    /// Raw reputation score from VirusTotal
+    /// Raw reputation score from `VirusTotal`
     pub reputation: Option<i32>,
 }
 
@@ -72,7 +72,7 @@ pub struct ThreatContext {
 }
 
 /// High-level search function that auto-detects indicator type
-/// and performs appropriate VirusTotal analysis
+/// and performs appropriate `VirusTotal` analysis
 pub async fn vti_search(client: &Client, indicator: String) -> McpResult<ThreatIntelligence> {
     let indicator_type = detect_indicator_type(&indicator);
 
@@ -159,7 +159,7 @@ async fn search_file_hash(client: &Client, hash: &str) -> McpResult<ThreatIntell
     let mitre_techniques = Vec::new();
 
     // MITRE ATT&CK data extraction is simplified for now
-    // This would need proper field mapping based on VirusTotal API response
+    // This would need proper field mapping based on `VirusTotal` API response
 
     let context = ThreatContext {
         malware_families,

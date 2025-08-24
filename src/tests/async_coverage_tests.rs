@@ -687,7 +687,7 @@ mod file_behaviours_async_tests {
                 "id": "test_sandbox_id",
                 "attributes": {
                     "analysis_date": 1234567890,
-                    "sandbox": "VirusTotal Jujubox",
+                    "sandbox": "`VirusTotal` Jujubox",
                     "has_html_report": true,
                     "has_evtx": false,
                     "has_pcap": true,

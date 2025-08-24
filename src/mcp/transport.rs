@@ -26,7 +26,7 @@ use tower_http::cors::CorsLayer;
 
 /// Simple STDIO MCP server
 pub async fn run_stdio_server(client: Client) -> McpResult<()> {
-    tracing::info!("Starting VirusTotal MCP server with STDIO transport");
+    tracing::info!("Starting `VirusTotal` MCP server with STDIO transport");
 
     let server = VtMcpServer::new(client);
     let stdin = tokio::io::stdin();
@@ -139,7 +139,7 @@ async fn run_http_server_with_auth(
     #[cfg(not(feature = "mcp-oauth"))] _oauth_config: Option<()>,
 ) -> McpResult<()> {
     tracing::info!(
-        "Starting VirusTotal MCP server with HTTP transport on {}",
+        "Starting `VirusTotal` MCP server with HTTP transport on {}",
         addr
     );
 
@@ -256,7 +256,7 @@ async fn handle_http_request_oauth(
 
 #[cfg(feature = "axum")]
 async fn health_check() -> &'static str {
-    "VirusTotal MCP Server is healthy"
+    "`VirusTotal` MCP Server is healthy"
 }
 
 #[cfg(all(feature = "axum", feature = "mcp-jwt"))]
@@ -584,7 +584,7 @@ async fn handle_request(server: &VtMcpServer, request: JsonValue) -> JsonValue {
 /// Configuration for the MCP server
 #[derive(Debug, Clone)]
 pub struct ServerConfig {
-    /// API key for VirusTotal
+    /// API key for `VirusTotal`
     pub api_key: String,
     /// API tier (Public, Premium, etc.)
     pub api_tier: crate::ApiTier,
@@ -696,7 +696,7 @@ impl ServerConfig {
         // Initialize logging
         self.init_logging();
 
-        // Create VirusTotal client
+        // Create `VirusTotal` client
         let client = crate::ClientBuilder::new()
             .api_key(self.api_key)
             .tier(self.api_tier)

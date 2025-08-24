@@ -3,7 +3,7 @@ use crate::{Client, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// Represents a ZIP file in VirusTotal
+/// Represents a ZIP file in `VirusTotal`
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ZipFile {
     #[serde(flatten)]

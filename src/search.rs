@@ -202,8 +202,8 @@ impl<'a> SearchClient<'a> {
 
     /// Advanced corpus search (Intelligence API)
     ///
-    /// This endpoint allows searching for files in VirusTotal's dataset using
-    /// the same query syntax as the VirusTotal Intelligence user interface.
+    /// This endpoint allows searching for files in `VirusTotal`'s dataset using
+    /// the same query syntax as the `VirusTotal` Intelligence user interface.
     ///
     /// Requires premium privileges.
     pub async fn intelligence_search(

@@ -4,7 +4,7 @@ use crate::objects::{Collection, CollectionIterator, Object};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// Client for VirusTotal Private URL Scanning API
+/// Client for `VirusTotal` Private URL Scanning API
 ///
 /// NOTE: Private URL scanning requires special privileges and is only available
 /// with a Private Scanning License.

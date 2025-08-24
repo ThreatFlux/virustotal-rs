@@ -2074,7 +2074,7 @@ mod tests {
                         process_id: Some("2340".to_string()),
                     }]),
                     registry_keys_opened: Some(vec!["HKCU\\Software\\Test".to_string()]),
-                    sandbox_name: Some("VirusTotal Jujubox".to_string()),
+                    sandbox_name: Some("`VirusTotal` Jujubox".to_string()),
                     tags: Some(vec!["DIRECT_CPU_CLOCK_ACCESS".to_string()]),
                     text_highlighted: Some(vec!["PuTTY Configuration".to_string()]),
                     mutexes_created: Some(vec!["TestMutex".to_string()]),
@@ -2089,7 +2089,7 @@ mod tests {
         assert!(behavior.object.attributes.has_pcap.unwrap());
         assert_eq!(
             behavior.object.attributes.sandbox_name.unwrap(),
-            "VirusTotal Jujubox"
+            "`VirusTotal` Jujubox"
         );
         assert_eq!(behavior.object.attributes.processes_tree.unwrap().len(), 1);
     }
@@ -2165,7 +2165,7 @@ mod tests {
     #[test]
     fn test_sandbox_id_format() {
         // Sandbox IDs typically have format: {sha256}_{sandbox_name}-{timestamp}
-        let sandbox_id = "9f9e74241d59eccfe7040bfdcbbceacb374eda397cc53a4197b59e4f6f380a91_VirusTotal Jujubox-1658933614";
+        let sandbox_id = "9f9e74241d59eccfe7040bfdcbbceacb374eda397cc53a4197b59e4f6f380a91_`VirusTotal` Jujubox-1658933614";
 
         assert!(sandbox_id.contains("_"));
         assert!(sandbox_id.contains("-"));

@@ -3,7 +3,7 @@ use crate::{Client, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// Represents a Livehunt ruleset in VirusTotal
+/// Represents a Livehunt ruleset in `VirusTotal`
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LivehuntRuleset {
     #[serde(flatten)]

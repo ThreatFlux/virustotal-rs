@@ -235,7 +235,7 @@ impl<'a> CommentsClient<'a> {
     }
 
     /// Parse comment ID to extract item type and item ID
-    /// Returns (item_type_char, item_id, random_string)
+    /// Returns (`item_type_char`, `item_id`, `random_string`)
     pub fn parse_comment_id(comment_id: &str) -> Option<(char, String, String)> {
         let parts: Vec<&str> = comment_id.splitn(3, '-').collect();
         if parts.len() == 3 {
