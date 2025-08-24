@@ -14,6 +14,17 @@ impl TestUtils {
         MockServer::start().await
     }
 
+    /// Convenience helper that returns both a mock server and a connected test client.
+    /// This reduces the repeated boilerplate of creating a server and client separately
+    /// in each test.
+    pub async fn create_mock_server_and_client() -> (MockServer, Client) {
+        let mock_server = Self::create_mock_server().await;
+        let client = Self::create_test_client(&mock_server)
+            .await
+            .expect("failed to create test client");
+        (mock_server, client)
+    }
+
     /// Create a test client that connects to the mock server
     pub async fn create_test_client(mock_server: &MockServer) -> Result<Client> {
         ClientBuilder::new()
