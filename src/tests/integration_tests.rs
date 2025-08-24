@@ -16,8 +16,7 @@ mod client_http_tests {
 
     #[tokio::test]
     async fn test_client_get_success() {
-        let mock_server = TestUtils::create_mock_server().await;
-        let client = TestUtils::create_test_client(&mock_server).await.unwrap();
+        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
 
         let sample_data = sample_file_data();
         let response = MockResponseBuilder::new()
@@ -39,8 +38,7 @@ mod client_http_tests {
 
     #[tokio::test]
     async fn test_client_post_success() {
-        let mock_server = TestUtils::create_mock_server().await;
-        let client = TestUtils::create_test_client(&mock_server).await.unwrap();
+        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
 
         let request_body = json!({"test": "data"});
         let sample_data = sample_analysis_data();
@@ -63,8 +61,7 @@ mod client_http_tests {
 
     #[tokio::test]
     async fn test_client_put_success() {
-        let mock_server = TestUtils::create_mock_server().await;
-        let client = TestUtils::create_test_client(&mock_server).await.unwrap();
+        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
 
         let request_body = json!({"verdict": "harmless"});
         let sample_data = sample_vote_data();
@@ -87,8 +84,7 @@ mod client_http_tests {
 
     #[tokio::test]
     async fn test_client_delete_success() {
-        let mock_server = TestUtils::create_mock_server().await;
-        let client = TestUtils::create_test_client(&mock_server).await.unwrap();
+        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
 
         let response = MockResponseBuilder::new()
             .with_status(204)
@@ -111,8 +107,7 @@ mod error_handling_tests {
 
     #[tokio::test]
     async fn test_bad_request_error() {
-        let mock_server = TestUtils::create_mock_server().await;
-        let client = TestUtils::create_test_client(&mock_server).await.unwrap();
+        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
 
         let (status, error_response) = sample_error_response(400);
         let response = MockResponseBuilder::new()
@@ -135,8 +130,7 @@ mod error_handling_tests {
 
     #[tokio::test]
     async fn test_unauthorized_error() {
-        let mock_server = TestUtils::create_mock_server().await;
-        let client = TestUtils::create_test_client(&mock_server).await.unwrap();
+        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
 
         let (status, error_response) = sample_error_response(401);
         let response = MockResponseBuilder::new()
@@ -159,8 +153,7 @@ mod error_handling_tests {
 
     #[tokio::test]
     async fn test_forbidden_error() {
-        let mock_server = TestUtils::create_mock_server().await;
-        let client = TestUtils::create_test_client(&mock_server).await.unwrap();
+        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
 
         let (status, error_response) = sample_error_response(403);
         let response = MockResponseBuilder::new()
@@ -183,8 +176,7 @@ mod error_handling_tests {
 
     #[tokio::test]
     async fn test_not_found_error() {
-        let mock_server = TestUtils::create_mock_server().await;
-        let client = TestUtils::create_test_client(&mock_server).await.unwrap();
+        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
 
         let (status, error_response) = sample_error_response(404);
         let response = MockResponseBuilder::new()
@@ -207,8 +199,7 @@ mod error_handling_tests {
 
     #[tokio::test]
     async fn test_rate_limit_error() {
-        let mock_server = TestUtils::create_mock_server().await;
-        let client = TestUtils::create_test_client(&mock_server).await.unwrap();
+        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
 
         let (status, error_response) = sample_error_response(429);
         let response = MockResponseBuilder::new()
@@ -231,8 +222,7 @@ mod error_handling_tests {
 
     #[tokio::test]
     async fn test_internal_server_error() {
-        let mock_server = TestUtils::create_mock_server().await;
-        let client = TestUtils::create_test_client(&mock_server).await.unwrap();
+        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
 
         let (status, error_response) = sample_error_response(500);
         let response = MockResponseBuilder::new()
@@ -260,8 +250,7 @@ mod network_failure_tests {
 
     #[tokio::test]
     async fn test_timeout_error() {
-        let mock_server = TestUtils::create_mock_server().await;
-        let mut client = TestUtils::create_test_client(&mock_server).await.unwrap();
+        let (mock_server, mut client) = TestUtils::create_mock_server_and_client().await;
         client = client.with_timeout(Duration::from_millis(1)).unwrap();
 
         let response = MockResponseBuilder::new()
@@ -284,8 +273,7 @@ mod network_failure_tests {
 
     #[tokio::test]
     async fn test_invalid_json_response() {
-        let mock_server = TestUtils::create_mock_server().await;
-        let client = TestUtils::create_test_client(&mock_server).await.unwrap();
+        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
 
         let response = MockResponseBuilder::new()
             .build()
@@ -311,8 +299,7 @@ mod files_module_tests {
 
     #[tokio::test]
     async fn test_file_get_by_hash() {
-        let mock_server = TestUtils::create_mock_server().await;
-        let client = TestUtils::create_test_client(&mock_server).await.unwrap();
+        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
         let file_client = client.files();
 
         let hash = "44d88612fea8a8f36de82e1278abb02f";
@@ -334,8 +321,7 @@ mod files_module_tests {
 
     #[tokio::test]
     async fn test_file_analyse() {
-        let mock_server = TestUtils::create_mock_server().await;
-        let client = TestUtils::create_test_client(&mock_server).await.unwrap();
+        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
         let file_client = client.files();
 
         let hash = "44d88612fea8a8f36de82e1278abb02f";
@@ -360,8 +346,7 @@ mod files_module_tests {
 
     #[tokio::test]
     async fn test_file_comments() {
-        let mock_server = TestUtils::create_mock_server().await;
-        let client = TestUtils::create_test_client(&mock_server).await.unwrap();
+        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
         let file_client = client.files();
 
         let hash = "44d88612fea8a8f36de82e1278abb02f";
@@ -388,8 +373,7 @@ mod files_module_tests {
 
     #[tokio::test]
     async fn test_file_votes() {
-        let mock_server = TestUtils::create_mock_server().await;
-        let client = TestUtils::create_test_client(&mock_server).await.unwrap();
+        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
         let file_client = client.files();
 
         let hash = "44d88612fea8a8f36de82e1278abb02f";
@@ -413,8 +397,7 @@ mod files_module_tests {
 
     #[tokio::test]
     async fn test_file_add_comment() {
-        let mock_server = TestUtils::create_mock_server().await;
-        let client = TestUtils::create_test_client(&mock_server).await.unwrap();
+        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
         let file_client = client.files();
 
         let hash = "44d88612fea8a8f36de82e1278abb02f";
@@ -443,8 +426,7 @@ mod files_module_tests {
 
     #[tokio::test]
     async fn test_file_get_download_url() {
-        let mock_server = TestUtils::create_mock_server().await;
-        let client = TestUtils::create_test_client(&mock_server).await.unwrap();
+        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
         let file_client = client.files();
 
         let hash = "44d88612fea8a8f36de82e1278abb02f";
@@ -471,8 +453,7 @@ mod files_module_tests {
 
     #[tokio::test]
     async fn test_file_relationships() {
-        let mock_server = TestUtils::create_mock_server().await;
-        let client = TestUtils::create_test_client(&mock_server).await.unwrap();
+        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
         let file_client = client.files();
 
         let hash = "44d88612fea8a8f36de82e1278abb02f";
@@ -506,8 +487,7 @@ mod domains_module_tests {
 
     #[tokio::test]
     async fn test_domain_get() {
-        let mock_server = TestUtils::create_mock_server().await;
-        let client = TestUtils::create_test_client(&mock_server).await.unwrap();
+        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
         let domain_client = client.domains();
 
         let domain_name = "example.com";
@@ -532,8 +512,7 @@ mod domains_module_tests {
 
     #[tokio::test]
     async fn test_domain_analyse() {
-        let mock_server = TestUtils::create_mock_server().await;
-        let client = TestUtils::create_test_client(&mock_server).await.unwrap();
+        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
         let domain_client = client.domains();
 
         let domain_name = "example.com";
@@ -558,8 +537,7 @@ mod domains_module_tests {
 
     #[tokio::test]
     async fn test_domain_comments() {
-        let mock_server = TestUtils::create_mock_server().await;
-        let client = TestUtils::create_test_client(&mock_server).await.unwrap();
+        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
         let domain_client = client.domains();
 
         let domain_name = "example.com";
@@ -586,8 +564,7 @@ mod domains_module_tests {
 
     #[tokio::test]
     async fn test_domain_relationships() {
-        let mock_server = TestUtils::create_mock_server().await;
-        let client = TestUtils::create_test_client(&mock_server).await.unwrap();
+        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
         let domain_client = client.domains();
 
         let domain_name = "example.com";
@@ -616,8 +593,7 @@ mod domains_module_tests {
 
     #[tokio::test]
     async fn test_domain_subdomains() {
-        let mock_server = TestUtils::create_mock_server().await;
-        let client = TestUtils::create_test_client(&mock_server).await.unwrap();
+        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
         let domain_client = client.domains();
 
         let domain_name = "example.com";
@@ -663,8 +639,7 @@ mod ip_addresses_module_tests {
 
     #[tokio::test]
     async fn test_ip_address_get() {
-        let mock_server = TestUtils::create_mock_server().await;
-        let client = TestUtils::create_test_client(&mock_server).await.unwrap();
+        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
         let ip_client = client.ip_addresses();
 
         let ip_address = "8.8.8.8";
@@ -689,8 +664,7 @@ mod ip_addresses_module_tests {
 
     #[tokio::test]
     async fn test_ip_address_analyse() {
-        let mock_server = TestUtils::create_mock_server().await;
-        let client = TestUtils::create_test_client(&mock_server).await.unwrap();
+        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
         let ip_client = client.ip_addresses();
 
         let ip_address = "8.8.8.8";
@@ -715,8 +689,7 @@ mod ip_addresses_module_tests {
 
     #[tokio::test]
     async fn test_ip_address_comments() {
-        let mock_server = TestUtils::create_mock_server().await;
-        let client = TestUtils::create_test_client(&mock_server).await.unwrap();
+        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
         let ip_client = client.ip_addresses();
 
         let ip_address = "8.8.8.8";
@@ -743,8 +716,7 @@ mod ip_addresses_module_tests {
 
     #[tokio::test]
     async fn test_ip_address_relationships() {
-        let mock_server = TestUtils::create_mock_server().await;
-        let client = TestUtils::create_test_client(&mock_server).await.unwrap();
+        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
         let ip_client = client.ip_addresses();
 
         let ip_address = "8.8.8.8";
@@ -777,8 +749,7 @@ mod rules_module_tests {
 
     #[tokio::test]
     async fn test_sigma_rules_get() {
-        let mock_server = TestUtils::create_mock_server().await;
-        let client = TestUtils::create_test_client(&mock_server).await.unwrap();
+        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
         let sigma_client = client.sigma_rules();
 
         let rule_id = "sigma-rule-123";
@@ -803,8 +774,7 @@ mod rules_module_tests {
 
     #[tokio::test]
     async fn test_yara_rulesets_get() {
-        let mock_server = TestUtils::create_mock_server().await;
-        let client = TestUtils::create_test_client(&mock_server).await.unwrap();
+        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
         let yara_client = client.yara_rulesets();
 
         let ruleset_id = "yara-ruleset-456";
