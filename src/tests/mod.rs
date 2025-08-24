@@ -1,4 +1,4 @@
-// Comprehensive unit tests for the VirusTotal SDK
+// Comprehensive unit tests for the `VirusTotal` SDK
 
 // Mock infrastructure
 #[cfg(test)]

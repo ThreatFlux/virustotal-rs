@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 
-/// Represents a URL object in VirusTotal
+/// Represents a URL object in `VirusTotal`
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Url {
     #[serde(flatten)]

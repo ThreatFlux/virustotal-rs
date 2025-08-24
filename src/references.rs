@@ -3,7 +3,7 @@ use crate::{Client, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// Represents a Reference in VirusTotal
+/// Represents a Reference in `VirusTotal`
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Reference {
     #[serde(flatten)]

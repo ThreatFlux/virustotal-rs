@@ -2,13 +2,13 @@ use crate::{Client, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// VirusTotal metadata response
+/// `VirusTotal` metadata response
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MetadataResponse {
     pub data: Metadata,
 }
 
-/// VirusTotal metadata
+/// `VirusTotal` metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Metadata {
     /// Dictionary of all antivirus engines
@@ -79,9 +79,9 @@ pub struct RelationshipInfo {
 }
 
 impl Client {
-    /// Get VirusTotal metadata
+    /// Get `VirusTotal` metadata
     ///
-    /// This endpoint returns a dictionary with metadata related to VirusTotal,
+    /// This endpoint returns a dictionary with metadata related to `VirusTotal`,
     /// which includes:
     /// - A full list of engines in use
     /// - A list of existing privileges

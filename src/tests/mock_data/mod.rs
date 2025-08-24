@@ -5,7 +5,7 @@ use wiremock::{
     Mock, MockBuilder, ResponseTemplate,
 };
 
-/// A builder for creating mock VirusTotal API responses
+/// A builder for creating mock `VirusTotal` API responses
 pub struct MockResponseBuilder {
     response_data: Value,
     status_code: u16,

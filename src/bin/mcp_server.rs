@@ -1,6 +1,6 @@
-//! VirusTotal MCP Server Binary
+//! `VirusTotal` MCP Server Binary
 //!
-//! A Model Context Protocol (MCP) server for the VirusTotal API that provides
+//! A Model Context Protocol (MCP) server for the `VirusTotal` API that provides
 //! threat intelligence tools to Language Models.
 //!
 //! This server can run in multiple modes:
@@ -14,7 +14,7 @@
 //! - Health checks and monitoring
 //!
 //! Environment Variables:
-//! - `VIRUSTOTAL_API_KEY`: Required VirusTotal API key
+//! - `VIRUSTOTAL_API_KEY`: Required `VirusTotal` API key
 //! - `SERVER_MODE`: "http" (default) or "stdio"
 //! - `HTTP_ADDR`: HTTP server address (default: "127.0.0.1:8080")
 //! - `VIRUSTOTAL_API_TIER`: "Public" (default) or "Premium"
@@ -46,8 +46,8 @@ fn main() {
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     use std::env;
     use std::net::SocketAddr;
-    use virustotal_rs::{ApiTier, ClientBuilder};
     use virustotal_rs::mcp::{run_http_server, run_stdio_server};
+    use virustotal_rs::{ApiTier, ClientBuilder};
 
     // Initialize logging
     let log_level = env::var("LOG_LEVEL").unwrap_or_else(|_| "info".to_string());
@@ -63,7 +63,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .with_line_number(true)
         .init();
 
-    tracing::info!("Starting VirusTotal MCP Server...");
+    tracing::info!("Starting `VirusTotal` MCP Server...");
 
     // Get API key from environment
     let api_key = env::var("VIRUSTOTAL_API_KEY")
@@ -76,20 +76,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             ApiTier::Premium
         }
         _ => {
-            tracing::info!("Using Public API tier (set VIRUSTOTAL_API_TIER=Premium for higher tier)");
+            tracing::info!(
+                "Using Public API tier (set VIRUSTOTAL_API_TIER=Premium for higher tier)"
+            );
             ApiTier::Public
         }
     };
 
-    // Create VirusTotal client
-    tracing::info!("Initializing VirusTotal client...");
+    // Create `VirusTotal` client
+    tracing::info!("Initializing `VirusTotal` client...");
     let client = ClientBuilder::new()
         .api_key(api_key)
         .tier(api_tier)
         .build()
-        .map_err(|e| format!("Failed to create VirusTotal client: {}", e))?;
+        .map_err(|e| format!("Failed to create `VirusTotal` client: {}", e))?;
 
-    tracing::info!("VirusTotal client initialized successfully");
+    tracing::info!("`VirusTotal` client initialized successfully");
 
     // Determine server mode
     let server_mode = env::var("SERVER_MODE").unwrap_or_else(|_| "http".to_string());
@@ -100,7 +102,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             tracing::info!("Ready to accept MCP messages on stdin/stdout");
             run_stdio_server(client).await?;
         }
-        "http" | _ => {
+        _ => {
             let addr: SocketAddr = env::var("HTTP_ADDR")
                 .unwrap_or_else(|_| "127.0.0.1:8080".to_string())
                 .parse()
@@ -109,17 +111,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             tracing::info!("Starting MCP server in HTTP mode...");
             tracing::info!("Server will listen on: http://{}", addr);
             tracing::info!("Health check endpoint: http://{}/health", addr);
-            tracing::info!("Connect using: npx @modelcontextprotocol/inspector http://{}", addr);
-            
+            tracing::info!(
+                "Connect using: npx @modelcontextprotocol/inspector http://{}",
+                addr
+            );
+
             // Print authentication info based on features
             #[cfg(feature = "mcp-jwt")]
             tracing::info!("JWT authentication is available (feature: mcp-jwt)");
-            
+
             #[cfg(feature = "mcp-oauth")]
             tracing::info!("OAuth 2.1 authentication is available (feature: mcp-oauth)");
-            
+
             #[cfg(not(any(feature = "mcp-jwt", feature = "mcp-oauth")))]
-            tracing::info!("Running without authentication (use features mcp-jwt or mcp-oauth for auth)");
+            tracing::info!(
+                "Running without authentication (use features mcp-jwt or mcp-oauth for auth)"
+            );
 
             tracing::info!("Server starting...");
             run_http_server(client, addr).await?;
@@ -132,7 +139,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
 #[cfg(all(feature = "mcp", test))]
 mod tests {
-    use std::env;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
     #[test]
@@ -171,10 +177,7 @@ mod tests {
         ];
 
         for (input, expected_premium) in test_cases {
-            let is_premium = match input {
-                "Premium" | "premium" => true,
-                _ => false,
-            };
+            let is_premium = matches!(input, "Premium" | "premium");
             assert_eq!(is_premium, expected_premium, "Failed for input: {}", input);
         }
     }

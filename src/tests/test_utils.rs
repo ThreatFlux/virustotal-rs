@@ -47,7 +47,7 @@ impl TestUtils {
             .build()
     }
 
-    /// Setup a mock with common VirusTotal response headers
+    /// Setup a mock with common `VirusTotal` response headers
     #[allow(dead_code)]
     pub fn setup_mock_with_headers() -> ResponseTemplate {
         ResponseTemplate::new(200)

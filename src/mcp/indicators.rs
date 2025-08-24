@@ -1,4 +1,4 @@
-//! Indicator detection and parsing for VirusTotal MCP integration
+//! Indicator detection and parsing for `VirusTotal` MCP integration
 //!
 //! This module provides functionality to detect and classify different types
 //! of security indicators (hashes, IPs, domains, URLs) for automated analysis.
@@ -22,7 +22,7 @@ pub enum IndicatorType {
     Unknown(String),
 }
 
-/// Hash types supported by VirusTotal
+/// Hash types supported by `VirusTotal`
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HashType {
     Md5,
@@ -160,7 +160,7 @@ impl IndicatorType {
         }
     }
 
-    /// Check if this indicator type is supported by the VirusTotal API
+    /// Check if this indicator type is supported by the `VirusTotal` API
     pub fn is_supported(&self) -> bool {
         !matches!(self, IndicatorType::Unknown(_))
     }

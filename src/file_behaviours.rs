@@ -517,7 +517,7 @@ mod tests {
     #[test]
     fn test_file_behaviour_url() {
         let sandbox_id =
-            "5353e23f3653402339c93a8565307c6308ff378e03fcf23a4378f31c434030b0_VirusTotal Jujubox";
+            "5353e23f3653402339c93a8565307c6308ff378e03fcf23a4378f31c434030b0_`VirusTotal` Jujubox";
         assert_eq!(
             FileBehaviour::object_url(sandbox_id),
             format!("file_behaviours/{}", sandbox_id)

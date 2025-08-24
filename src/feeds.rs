@@ -3,7 +3,7 @@ use crate::error::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// Client for VirusTotal Intelligence Feeds (File, Domain, IP, URL, and Sandbox Analyses)
+/// Client for `VirusTotal` Intelligence Feeds (File, Domain, IP, URL, and Sandbox Analyses)
 ///
 /// NOTE: Each feed type requires its specific license:
 /// - File feeds: File feeds license
@@ -22,10 +22,10 @@ impl FeedsClient {
 
     /// Get a per-minute file feed batch
     ///
-    /// Downloads an individual one-minute batch by providing a time in format YYYYMMDDhhmm.
+    /// Downloads an individual one-minute batch by providing a time in format `YYYYMMDDhhmm`.
     ///
     /// # Arguments
-    /// * `time` - Time string in format YYYYMMDDhhmm (e.g., "202312010802" for Dec 1, 2023 08:02 UTC)
+    /// * `time` - Time string in format `YYYYMMDDhhmm` (e.g., "202312010802" for Dec 1, 2023 08:02 UTC)
     ///
     /// # Notes
     /// - You can download batches up to 7 days old
@@ -57,7 +57,7 @@ impl FeedsClient {
     /// Returns a single package containing all minutely packages for a given hour.
     ///
     /// # Arguments
-    /// * `time` - Time string in format YYYYMMDDhh (e.g., "2023120108" for Dec 1, 2023 08:00-08:59 UTC)
+    /// * `time` - Time string in format `YYYYMMDDhh` (e.g., "2023120108" for Dec 1, 2023 08:00-08:59 UTC)
     ///
     /// # Notes
     /// - Returns a .tar.bz2 file containing 60 minutely feeds
@@ -110,7 +110,7 @@ impl FeedsClient {
     /// Downloads an individual one-minute batch of sandbox behavior reports.
     ///
     /// # Arguments
-    /// * `time` - Time string in format YYYYMMDDhhmm
+    /// * `time` - Time string in format `YYYYMMDDhhmm`
     ///
     /// # Notes
     /// - Requires Sandbox feeds license
@@ -127,7 +127,7 @@ impl FeedsClient {
     /// Returns a package containing all minutely behavior feed packages for a given hour.
     ///
     /// # Arguments
-    /// * `time` - Time string in format YYYYMMDDhh
+    /// * `time` - Time string in format `YYYYMMDDhh`
     ///
     /// # Notes
     /// - Requires Sandbox feeds license
@@ -224,7 +224,7 @@ impl FeedsClient {
     /// Downloads an individual one-minute batch of domain analyses.
     ///
     /// # Arguments
-    /// * `time` - Time string in format YYYYMMDDhhmm (e.g., "202312010802")
+    /// * `time` - Time string in format `YYYYMMDDhhmm` (e.g., "202312010802")
     ///
     /// # Notes
     /// - Requires Domain feeds license
@@ -251,7 +251,7 @@ impl FeedsClient {
     /// Returns a single package containing all minutely domain feed packages for a given hour.
     ///
     /// # Arguments
-    /// * `time` - Time string in format YYYYMMDDhh (e.g., "2023120108")
+    /// * `time` - Time string in format `YYYYMMDDhh` (e.g., "2023120108")
     ///
     /// # Notes
     /// - Requires Domain feeds license
@@ -279,7 +279,7 @@ impl FeedsClient {
     /// Downloads an individual one-minute batch of IP address analyses.
     ///
     /// # Arguments
-    /// * `time` - Time string in format YYYYMMDDhhmm (e.g., "202312010802")
+    /// * `time` - Time string in format `YYYYMMDDhhmm` (e.g., "202312010802")
     ///
     /// # Notes
     /// - Requires IP feeds license
@@ -306,7 +306,7 @@ impl FeedsClient {
     /// Returns a single package containing all minutely IP feed packages for a given hour.
     ///
     /// # Arguments
-    /// * `time` - Time string in format YYYYMMDDhh (e.g., "2023120108")
+    /// * `time` - Time string in format `YYYYMMDDhh` (e.g., "2023120108")
     ///
     /// # Notes
     /// - Requires IP feeds license
@@ -334,7 +334,7 @@ impl FeedsClient {
     /// Downloads an individual one-minute batch of URL analyses.
     ///
     /// # Arguments
-    /// * `time` - Time string in format YYYYMMDDhhmm (e.g., "202312010802")
+    /// * `time` - Time string in format `YYYYMMDDhhmm` (e.g., "202312010802")
     ///
     /// # Notes
     /// - Requires URL feeds license
@@ -362,7 +362,7 @@ impl FeedsClient {
     /// Returns a single package containing all minutely URL feed packages for a given hour.
     ///
     /// # Arguments
-    /// * `time` - Time string in format YYYYMMDDhh (e.g., "2023120108")
+    /// * `time` - Time string in format `YYYYMMDDhh` (e.g., "2023120108")
     ///
     /// # Notes
     /// - Requires URL feeds license
@@ -575,7 +575,7 @@ impl FeedsClient {
     /// Generates a list of feed times for batch downloading.
     ///
     /// # Arguments
-    /// * `start_time` - Start time in format YYYYMMDDhhmm or YYYYMMDDhh
+    /// * `start_time` - Start time in format `YYYYMMDDhhmm` or `YYYYMMDDhh`
     /// * `end_time` - End time in same format as start_time
     /// * `is_hourly` - true for hourly increments, false for per-minute
     ///
@@ -689,7 +689,7 @@ pub struct FeedSubmitter {
 /// containing sandbox analysis results with artifact download links.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BehaviorFeedItem {
-    /// Behavior ID (SHA256_SandboxName format)
+    /// Behavior ID (`SHA256_SandboxName` format)
     pub id: String,
 
     /// Object type (always "file_behaviour")
@@ -1029,10 +1029,10 @@ mod tests {
     fn test_latest_available_time() {
         // Just test that the method runs and returns a string of correct length
         let minute_time = FeedsClient::get_latest_available_time(false);
-        assert_eq!(minute_time.len(), 12); // YYYYMMDDhhmm
+        assert_eq!(minute_time.len(), 12); // `YYYYMMDDhhmm`
 
         let hourly_time = FeedsClient::get_latest_available_time(true);
-        assert_eq!(hourly_time.len(), 10); // YYYYMMDDhh
+        assert_eq!(hourly_time.len(), 10); // `YYYYMMDDhh`
     }
 
     #[test]

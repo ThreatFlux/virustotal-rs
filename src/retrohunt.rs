@@ -3,7 +3,7 @@ use crate::{Client, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// Represents a Retrohunt job in VirusTotal
+/// Represents a Retrohunt job in `VirusTotal`
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RetrohuntJob {
     #[serde(flatten)]

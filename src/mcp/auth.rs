@@ -1,6 +1,5 @@
 use anyhow::{anyhow, Result as AnyhowResult};
 use axum::{
-    async_trait,
     extract::FromRequestParts,
     http::request::Parts,
     response::{IntoResponse, Response},
@@ -285,7 +284,6 @@ impl IntoResponse for AuthError {
 /// Extractor for JWT claims from HTTP requests
 pub struct JwtClaims(pub Claims);
 
-#[async_trait]
 impl<S> FromRequestParts<S> for JwtClaims
 where
     S: Send + Sync,
