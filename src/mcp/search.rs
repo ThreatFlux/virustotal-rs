@@ -3,10 +3,12 @@
 //! This module provides the main search function that automatically detects
 //! indicator types and performs appropriate `VirusTotal` API queries.
 
+use crate::common::AnalysisStats;
 use crate::mcp::indicators::{detect_indicator_type, IndicatorType};
 use crate::mcp::{convert_vt_error, McpResult};
 use crate::Client;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// Consolidated threat intelligence response
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -98,6 +100,101 @@ pub async fn vti_search(client: &Client, indicator: String) -> McpResult<ThreatI
     }
 }
 
+/// Helper function to calculate detection summary from analysis stats
+fn calculate_detection_summary(stats: &AnalysisStats) -> DetectionSummary {
+    let total_engines =
+        stats.harmless + stats.malicious + stats.suspicious + stats.undetected + stats.timeout;
+
+    DetectionSummary {
+        malicious: stats.malicious,
+        suspicious: stats.suspicious,
+        clean: stats.harmless + stats.undetected,
+        total_engines,
+        detection_ratio: if total_engines > 0 {
+            (stats.malicious + stats.suspicious) as f32 / total_engines as f32
+        } else {
+            0.0
+        },
+    }
+}
+
+/// Helper function to calculate threat score
+fn calculate_threat_score(stats: &AnalysisStats) -> u8 {
+    let total_engines =
+        stats.harmless + stats.malicious + stats.suspicious + stats.undetected + stats.timeout;
+
+    if total_engines > 0 {
+        ((stats.malicious as f32 + stats.suspicious as f32 * 0.5) / total_engines as f32 * 100.0)
+            as u8
+    } else {
+        0
+    }
+}
+
+/// Helper function to extract threat categories from analysis results
+fn extract_threat_categories<T>(
+    results: &Option<HashMap<String, T>>,
+    category_extractor: impl Fn(&T) -> (&str, Option<&String>),
+) -> Vec<String> {
+    let mut threat_categories = Vec::new();
+
+    if let Some(ref results) = results {
+        for (_, result) in results.iter() {
+            let (category, result_name) = category_extractor(result);
+            if category == "malicious" || category == "suspicious" {
+                if let Some(name) = result_name {
+                    if !threat_categories.contains(name) && threat_categories.len() < 10 {
+                        threat_categories.push(name.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    threat_categories
+}
+
+/// Helper function to format detection ratio message
+fn format_detection_ratio(detections: &DetectionSummary) -> String {
+    format!(
+        "Detection ratio: {}/{} engines flagged it ({} malicious, {} suspicious).",
+        detections.malicious + detections.suspicious,
+        detections.total_engines,
+        detections.malicious,
+        detections.suspicious
+    )
+}
+
+/// Helper function to create threat level description
+fn get_threat_level_description(threat_score: u8, indicator_type: &str) -> String {
+    let entity = match indicator_type {
+        "file" => "file",
+        "ip" => "IP address",
+        "domain" => "domain",
+        "url" => "URL",
+        _ => "indicator",
+    };
+
+    if threat_score == 0 {
+        format!(
+            "This {} appears to be clean with no malicious detections.",
+            entity
+        )
+    } else if threat_score < 20 {
+        format!("This {} has low threat indicators.", entity)
+    } else if threat_score < 50 {
+        format!("This {} shows moderate threat indicators.", entity)
+    } else if threat_score < 80 {
+        if indicator_type == "file" {
+            "This file is likely malicious with high threat indicators.".to_string()
+        } else {
+            format!("This {} is likely malicious.", entity)
+        }
+    } else {
+        format!("This {} is almost certainly malicious.", entity)
+    }
+}
+
 /// Search for file hash information
 async fn search_file_hash(client: &Client, hash: &str) -> McpResult<ThreatIntelligence> {
     let file = client.files().get(hash).await.map_err(convert_vt_error)?;
@@ -108,42 +205,15 @@ async fn search_file_hash(client: &Client, hash: &str) -> McpResult<ThreatIntell
         .last_analysis_stats
         .clone()
         .unwrap_or_default();
-    let total_engines =
-        stats.harmless + stats.malicious + stats.suspicious + stats.undetected + stats.timeout;
 
-    let detection_summary = DetectionSummary {
-        malicious: stats.malicious,
-        suspicious: stats.suspicious,
-        clean: stats.harmless + stats.undetected,
-        total_engines,
-        detection_ratio: if total_engines > 0 {
-            (stats.malicious + stats.suspicious) as f32 / total_engines as f32
-        } else {
-            0.0
-        },
-    };
-
-    // Calculate threat score (0-100)
-    let threat_score = if total_engines > 0 {
-        ((stats.malicious as f32 + stats.suspicious as f32 * 0.5) / total_engines as f32 * 100.0)
-            as u8
-    } else {
-        0
-    };
+    let detection_summary = calculate_detection_summary(&stats);
+    let threat_score = calculate_threat_score(&stats);
 
     // Extract threat categories
-    let mut threat_categories = Vec::new();
-    if let Some(ref results) = file.object.attributes.last_analysis_results {
-        for (_, result) in results.iter() {
-            if result.category == "malicious" || result.category == "suspicious" {
-                if let Some(ref result_name) = result.result {
-                    if !threat_categories.contains(result_name) && threat_categories.len() < 10 {
-                        threat_categories.push(result_name.clone());
-                    }
-                }
-            }
-        }
-    }
+    let threat_categories =
+        extract_threat_categories(&file.object.attributes.last_analysis_results, |result| {
+            (result.category.as_str(), result.result.as_ref())
+        });
 
     // Extract malware families
     let mut malware_families = Vec::new();
@@ -201,41 +271,15 @@ async fn search_ip_address(client: &Client, ip: &str) -> McpResult<ThreatIntelli
         .last_analysis_stats
         .clone()
         .unwrap_or_default();
-    let total_engines =
-        stats.harmless + stats.malicious + stats.suspicious + stats.undetected + stats.timeout;
 
-    let detection_summary = DetectionSummary {
-        malicious: stats.malicious,
-        suspicious: stats.suspicious,
-        clean: stats.harmless + stats.undetected,
-        total_engines,
-        detection_ratio: if total_engines > 0 {
-            (stats.malicious + stats.suspicious) as f32 / total_engines as f32
-        } else {
-            0.0
-        },
-    };
-
-    let threat_score = if total_engines > 0 {
-        ((stats.malicious as f32 + stats.suspicious as f32 * 0.5) / total_engines as f32 * 100.0)
-            as u8
-    } else {
-        0
-    };
+    let detection_summary = calculate_detection_summary(&stats);
+    let threat_score = calculate_threat_score(&stats);
 
     // Extract threat categories
-    let mut threat_categories = Vec::new();
-    if let Some(ref results) = ip_info.object.attributes.last_analysis_results {
-        for (_, result) in results.iter() {
-            if result.category == "malicious" || result.category == "suspicious" {
-                if let Some(ref result_name) = result.result {
-                    if !threat_categories.contains(result_name) && threat_categories.len() < 10 {
-                        threat_categories.push(result_name.clone());
-                    }
-                }
-            }
-        }
-    }
+    let threat_categories =
+        extract_threat_categories(&ip_info.object.attributes.last_analysis_results, |result| {
+            (result.category.as_str(), result.result.as_ref())
+        });
 
     let summary = create_ip_summary(&ip_info.object.attributes, &detection_summary, threat_score);
 
@@ -279,40 +323,14 @@ async fn search_domain(client: &Client, domain: &str) -> McpResult<ThreatIntelli
         .last_analysis_stats
         .clone()
         .unwrap_or_default();
-    let total_engines =
-        stats.harmless + stats.malicious + stats.suspicious + stats.undetected + stats.timeout;
 
-    let detection_summary = DetectionSummary {
-        malicious: stats.malicious,
-        suspicious: stats.suspicious,
-        clean: stats.harmless + stats.undetected,
-        total_engines,
-        detection_ratio: if total_engines > 0 {
-            (stats.malicious + stats.suspicious) as f32 / total_engines as f32
-        } else {
-            0.0
-        },
-    };
+    let detection_summary = calculate_detection_summary(&stats);
+    let threat_score = calculate_threat_score(&stats);
 
-    let threat_score = if total_engines > 0 {
-        ((stats.malicious as f32 + stats.suspicious as f32 * 0.5) / total_engines as f32 * 100.0)
-            as u8
-    } else {
-        0
-    };
-
-    let mut threat_categories = Vec::new();
-    if let Some(ref results) = domain_info.object.attributes.last_analysis_results {
-        for (_, result) in results.iter() {
-            if result.category == "malicious" || result.category == "suspicious" {
-                if let Some(ref result_name) = result.result {
-                    if !threat_categories.contains(result_name) && threat_categories.len() < 10 {
-                        threat_categories.push(result_name.clone());
-                    }
-                }
-            }
-        }
-    }
+    let threat_categories = extract_threat_categories(
+        &domain_info.object.attributes.last_analysis_results,
+        |result| (result.category.as_str(), result.result.as_ref()),
+    );
 
     let summary = create_domain_summary(
         &domain_info.object.attributes,
@@ -358,39 +376,14 @@ async fn search_url(client: &Client, url: &str) -> McpResult<ThreatIntelligence>
         .last_analysis_stats
         .clone()
         .unwrap_or_default();
-    let total_engines =
-        stats.harmless + stats.malicious + stats.suspicious + stats.undetected + stats.timeout;
 
-    let detection_summary = DetectionSummary {
-        malicious: stats.malicious,
-        suspicious: stats.suspicious,
-        clean: stats.harmless + stats.undetected,
-        total_engines,
-        detection_ratio: if total_engines > 0 {
-            (stats.malicious + stats.suspicious) as f32 / total_engines as f32
-        } else {
-            0.0
-        },
-    };
+    let detection_summary = calculate_detection_summary(&stats);
+    let threat_score = calculate_threat_score(&stats);
 
-    let threat_score = if total_engines > 0 {
-        ((stats.malicious as f32 + stats.suspicious as f32 * 0.5) / total_engines as f32 * 100.0)
-            as u8
-    } else {
-        0
-    };
-
-    let mut threat_categories = Vec::new();
-    if let Some(ref results) = url_info.object.attributes.last_analysis_results {
-        for (_, result) in results.iter() {
-            if result.category == "malicious" || result.category == "suspicious" {
-                let result_name = &result.result;
-                if !threat_categories.contains(result_name) && threat_categories.len() < 10 {
-                    threat_categories.push(result_name.clone());
-                }
-            }
-        }
-    }
+    let threat_categories = extract_threat_categories(
+        &url_info.object.attributes.last_analysis_results,
+        |result| (result.category.as_str(), Some(&result.result)),
+    );
 
     let summary = create_url_summary(
         &url_info.object.attributes,
@@ -432,25 +425,8 @@ fn create_file_summary(
 ) -> String {
     let mut parts = Vec::new();
 
-    if threat_score == 0 {
-        parts.push("This file appears to be clean with no malicious detections.".to_string());
-    } else if threat_score < 20 {
-        parts.push("This file has low threat indicators.".to_string());
-    } else if threat_score < 50 {
-        parts.push("This file shows moderate threat indicators.".to_string());
-    } else if threat_score < 80 {
-        parts.push("This file is likely malicious with high threat indicators.".to_string());
-    } else {
-        parts.push("This file is almost certainly malicious.".to_string());
-    }
-
-    parts.push(format!(
-        "Detection ratio: {}/{} engines flagged it ({} malicious, {} suspicious).",
-        detections.malicious + detections.suspicious,
-        detections.total_engines,
-        detections.malicious,
-        detections.suspicious
-    ));
+    parts.push(get_threat_level_description(threat_score, "file"));
+    parts.push(format_detection_ratio(detections));
 
     if let Some(file_type) = &attributes.type_description {
         parts.push(format!("File type: {}", file_type));
@@ -471,25 +447,8 @@ fn create_ip_summary(
 ) -> String {
     let mut parts = Vec::new();
 
-    if threat_score == 0 {
-        parts.push("This IP address appears to be clean.".to_string());
-    } else if threat_score < 20 {
-        parts.push("This IP address has low threat indicators.".to_string());
-    } else if threat_score < 50 {
-        parts.push("This IP address shows moderate threat indicators.".to_string());
-    } else if threat_score < 80 {
-        parts.push("This IP address is likely malicious.".to_string());
-    } else {
-        parts.push("This IP address is almost certainly malicious.".to_string());
-    }
-
-    parts.push(format!(
-        "Detection ratio: {}/{} engines flagged it ({} malicious, {} suspicious).",
-        detections.malicious + detections.suspicious,
-        detections.total_engines,
-        detections.malicious,
-        detections.suspicious
-    ));
+    parts.push(get_threat_level_description(threat_score, "ip"));
+    parts.push(format_detection_ratio(detections));
 
     if let Some(country) = &attributes.country {
         parts.push(format!("Located in: {}", country));
@@ -510,25 +469,8 @@ fn create_domain_summary(
 ) -> String {
     let mut parts = Vec::new();
 
-    if threat_score == 0 {
-        parts.push("This domain appears to be clean.".to_string());
-    } else if threat_score < 20 {
-        parts.push("This domain has low threat indicators.".to_string());
-    } else if threat_score < 50 {
-        parts.push("This domain shows moderate threat indicators.".to_string());
-    } else if threat_score < 80 {
-        parts.push("This domain is likely malicious.".to_string());
-    } else {
-        parts.push("This domain is almost certainly malicious.".to_string());
-    }
-
-    parts.push(format!(
-        "Detection ratio: {}/{} engines flagged it ({} malicious, {} suspicious).",
-        detections.malicious + detections.suspicious,
-        detections.total_engines,
-        detections.malicious,
-        detections.suspicious
-    ));
+    parts.push(get_threat_level_description(threat_score, "domain"));
+    parts.push(format_detection_ratio(detections));
 
     if let Some(registrar) = &attributes.registrar {
         parts.push(format!("Registrar: {}", registrar));
@@ -545,25 +487,8 @@ fn create_url_summary(
 ) -> String {
     let mut parts = Vec::new();
 
-    if threat_score == 0 {
-        parts.push("This URL appears to be clean.".to_string());
-    } else if threat_score < 20 {
-        parts.push("This URL has low threat indicators.".to_string());
-    } else if threat_score < 50 {
-        parts.push("This URL shows moderate threat indicators.".to_string());
-    } else if threat_score < 80 {
-        parts.push("This URL is likely malicious.".to_string());
-    } else {
-        parts.push("This URL is almost certainly malicious.".to_string());
-    }
-
-    parts.push(format!(
-        "Detection ratio: {}/{} engines flagged it ({} malicious, {} suspicious).",
-        detections.malicious + detections.suspicious,
-        detections.total_engines,
-        detections.malicious,
-        detections.suspicious
-    ));
+    parts.push(get_threat_level_description(threat_score, "url"));
+    parts.push(format_detection_ratio(detections));
 
     if let Some(title) = &attributes.title {
         parts.push(format!("Page title: {}", title));

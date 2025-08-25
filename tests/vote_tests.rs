@@ -1,11 +1,44 @@
 use serde_json::json;
-use virustotal_rs::{ApiTier, ClientBuilder, VoteVerdict};
+use virustotal_rs::{ApiTier, Client, ClientBuilder, Collection, VoteVerdict};
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
+// Helper function to create a test client with mock server
+async fn setup_test_environment() -> (MockServer, Client) {
+    let mock_server = MockServer::start().await;
+    let client = ClientBuilder::new()
+        .api_key("test_key")
+        .tier(ApiTier::Public)
+        .base_url(mock_server.uri())
+        .build()
+        .unwrap();
+    (mock_server, client)
+}
+
+// Helper function to setup a mock for a specific endpoint
+async fn setup_mock(
+    mock_server: &MockServer,
+    method_type: &str,
+    endpoint: &str,
+    response_body: serde_json::Value,
+    status_code: u16,
+) {
+    let mock = match method_type {
+        "GET" => Mock::given(method("GET")),
+        "POST" => Mock::given(method("POST")),
+        _ => Mock::given(method("GET")),
+    };
+
+    mock.and(path(endpoint))
+        .and(header("x-apikey", "test_key"))
+        .respond_with(ResponseTemplate::new(status_code).set_body_json(&response_body))
+        .mount(mock_server)
+        .await;
+}
+
 #[tokio::test]
 async fn test_get_votes() {
-    let mock_server = MockServer::start().await;
+    let (mock_server, client) = setup_test_environment().await;
 
     let votes_response = json!({
         "data": [
@@ -30,19 +63,14 @@ async fn test_get_votes() {
         ]
     });
 
-    Mock::given(method("GET"))
-        .and(path("/ip_addresses/8.8.8.8/votes"))
-        .and(header("x-apikey", "test_key"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(&votes_response))
-        .mount(&mock_server)
-        .await;
-
-    let client = ClientBuilder::new()
-        .api_key("test_key")
-        .tier(ApiTier::Public)
-        .base_url(mock_server.uri())
-        .build()
-        .unwrap();
+    setup_mock(
+        &mock_server,
+        "GET",
+        "/ip_addresses/8.8.8.8/votes",
+        votes_response,
+        200,
+    )
+    .await;
 
     let votes = client.ip_addresses().get_votes("8.8.8.8").await.unwrap();
 
@@ -59,7 +87,7 @@ async fn test_get_votes() {
 
 #[tokio::test]
 async fn test_add_vote_with_response() {
-    let mock_server = MockServer::start().await;
+    let (mock_server, client) = setup_test_environment().await;
 
     let vote_response = json!({
         "data": {
@@ -72,19 +100,14 @@ async fn test_add_vote_with_response() {
         }
     });
 
-    Mock::given(method("POST"))
-        .and(path("/ip_addresses/8.8.8.8/votes"))
-        .and(header("x-apikey", "test_key"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(&vote_response))
-        .mount(&mock_server)
-        .await;
-
-    let client = ClientBuilder::new()
-        .api_key("test_key")
-        .tier(ApiTier::Public)
-        .base_url(mock_server.uri())
-        .build()
-        .unwrap();
+    setup_mock(
+        &mock_server,
+        "POST",
+        "/ip_addresses/8.8.8.8/votes",
+        vote_response,
+        200,
+    )
+    .await;
 
     let vote = client
         .ip_addresses()
@@ -98,7 +121,7 @@ async fn test_add_vote_with_response() {
 
 #[tokio::test]
 async fn test_get_relationship() {
-    let mock_server = MockServer::start().await;
+    let (mock_server, client) = setup_test_environment().await;
 
     let relationship_response = json!({
         "data": [
@@ -122,21 +145,16 @@ async fn test_get_relationship() {
         }
     });
 
-    Mock::given(method("GET"))
-        .and(path("/ip_addresses/8.8.8.8/urls"))
-        .and(header("x-apikey", "test_key"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(&relationship_response))
-        .mount(&mock_server)
-        .await;
+    setup_mock(
+        &mock_server,
+        "GET",
+        "/ip_addresses/8.8.8.8/urls",
+        relationship_response,
+        200,
+    )
+    .await;
 
-    let client = ClientBuilder::new()
-        .api_key("test_key")
-        .tier(ApiTier::Public)
-        .base_url(mock_server.uri())
-        .build()
-        .unwrap();
-
-    let urls: virustotal_rs::Collection<serde_json::Value> = client
+    let urls: Collection<serde_json::Value> = client
         .ip_addresses()
         .get_relationship("8.8.8.8", "urls")
         .await
@@ -147,7 +165,7 @@ async fn test_get_relationship() {
 
 #[tokio::test]
 async fn test_get_relationship_descriptors() {
-    let mock_server = MockServer::start().await;
+    let (mock_server, client) = setup_test_environment().await;
 
     let descriptors_response = json!({
         "data": [
@@ -162,19 +180,14 @@ async fn test_get_relationship_descriptors() {
         ]
     });
 
-    Mock::given(method("GET"))
-        .and(path("/ip_addresses/8.8.8.8/relationships/resolutions"))
-        .and(header("x-apikey", "test_key"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(&descriptors_response))
-        .mount(&mock_server)
-        .await;
-
-    let client = ClientBuilder::new()
-        .api_key("test_key")
-        .tier(ApiTier::Public)
-        .base_url(mock_server.uri())
-        .build()
-        .unwrap();
+    setup_mock(
+        &mock_server,
+        "GET",
+        "/ip_addresses/8.8.8.8/relationships/resolutions",
+        descriptors_response,
+        200,
+    )
+    .await;
 
     let descriptors = client
         .ip_addresses()
@@ -189,7 +202,7 @@ async fn test_get_relationship_descriptors() {
 
 #[tokio::test]
 async fn test_comment_with_tags() {
-    let mock_server = MockServer::start().await;
+    let (mock_server, client) = setup_test_environment().await;
 
     let comment_response = json!({
         "data": {
@@ -203,19 +216,14 @@ async fn test_comment_with_tags() {
         }
     });
 
-    Mock::given(method("POST"))
-        .and(path("/ip_addresses/1.2.3.4/comments"))
-        .and(header("x-apikey", "test_key"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(&comment_response))
-        .mount(&mock_server)
-        .await;
-
-    let client = ClientBuilder::new()
-        .api_key("test_key")
-        .tier(ApiTier::Public)
-        .base_url(mock_server.uri())
-        .build()
-        .unwrap();
+    setup_mock(
+        &mock_server,
+        "POST",
+        "/ip_addresses/1.2.3.4/comments",
+        comment_response,
+        200,
+    )
+    .await;
 
     let comment = client
         .ip_addresses()
