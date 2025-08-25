@@ -2,6 +2,7 @@ use crate::objects::{Collection, CollectionIterator, Object};
 use crate::{Client, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt;
 
 /// Represents a Threat Actor in `VirusTotal`
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -83,10 +84,9 @@ pub enum ThreatActorOrder {
     RelatedEntitiesCountDesc,
 }
 
-impl ThreatActorOrder {
-    /// Convert to API parameter string
-    pub fn to_string(&self) -> &'static str {
-        match self {
+impl fmt::Display for ThreatActorOrder {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
             ThreatActorOrder::FirstSeenDateAsc => "first_seen_date+",
             ThreatActorOrder::FirstSeenDateDesc => "first_seen_date-",
             ThreatActorOrder::LastModificationDateAsc => "last_modification_date+",
@@ -95,7 +95,8 @@ impl ThreatActorOrder {
             ThreatActorOrder::LastSeenDateDesc => "last_seen_date-",
             ThreatActorOrder::RelatedEntitiesCountAsc => "related_entities_count+",
             ThreatActorOrder::RelatedEntitiesCountDesc => "related_entities_count-",
-        }
+        };
+        write!(f, "{}", s)
     }
 }
 
@@ -133,10 +134,9 @@ pub enum RelationshipOrder {
     StatusDesc,
 }
 
-impl RelationshipOrder {
-    /// Convert to API parameter string
-    pub fn to_string(&self) -> &'static str {
-        match self {
+impl fmt::Display for RelationshipOrder {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
             RelationshipOrder::CreationDateAsc => "creation_date+",
             RelationshipOrder::CreationDateDesc => "creation_date-",
             RelationshipOrder::LastModificationDateAsc => "last_modification_date+",
@@ -161,7 +161,8 @@ impl RelationshipOrder {
             RelationshipOrder::IpDesc => "ip-",
             RelationshipOrder::StatusAsc => "status+",
             RelationshipOrder::StatusDesc => "status-",
-        }
+        };
+        write!(f, "{}", s)
     }
 }
 
@@ -171,6 +172,60 @@ pub struct ThreatActorsClient<'a> {
 }
 
 impl<'a> ThreatActorsClient<'a> {
+    /// Helper function to build query URL with common parameters
+    fn build_query_url(
+        base: &str,
+        filter: Option<&str>,
+        order: Option<&dyn ToString>,
+        limit: Option<u32>,
+        cursor: Option<&str>,
+    ) -> String {
+        let mut url = String::from(base);
+        url.push('?');
+
+        if let Some(f) = filter {
+            url.push_str(&format!("filter={}&", urlencoding::encode(f)));
+        }
+
+        if let Some(o) = order {
+            url.push_str(&format!("order={}&", o.to_string()));
+        }
+
+        if let Some(l) = limit {
+            url.push_str(&format!("limit={}&", l));
+        }
+
+        if let Some(c) = cursor {
+            url.push_str(&format!("cursor={}&", c));
+        }
+
+        // Remove trailing '&' or '?'
+        url.pop();
+        url
+    }
+
+    /// Helper function to build iterator URL
+    fn build_iterator_url(
+        base: &str,
+        filter: Option<&str>,
+        order: Option<&dyn ToString>,
+    ) -> String {
+        let mut url = String::from(base);
+        url.push('?');
+
+        if let Some(f) = filter {
+            url.push_str(&format!("filter={}&", urlencoding::encode(f)));
+        }
+
+        if let Some(o) = order {
+            url.push_str(&format!("order={}&", o.to_string()));
+        }
+
+        // Remove trailing '&' or '?'
+        url.pop();
+        url
+    }
+
     pub fn new(client: &'a Client) -> Self {
         Self { client }
     }
@@ -192,27 +247,13 @@ impl<'a> ThreatActorsClient<'a> {
         limit: Option<u32>,
         cursor: Option<&str>,
     ) -> Result<Collection<ThreatActor>> {
-        let mut url = String::from("threat_actors?");
-
-        if let Some(f) = filter {
-            url.push_str(&format!("filter={}&", urlencoding::encode(f)));
-        }
-
-        if let Some(o) = order {
-            url.push_str(&format!("order={}&", o.to_string()));
-        }
-
-        if let Some(l) = limit {
-            url.push_str(&format!("limit={}&", l.min(40))); // Max 40
-        }
-
-        if let Some(c) = cursor {
-            url.push_str(&format!("cursor={}&", c));
-        }
-
-        // Remove trailing '&' or '?'
-        url.pop();
-
+        let url = Self::build_query_url(
+            "threat_actors",
+            filter,
+            order.as_ref().map(|o| o as &dyn ToString),
+            limit.map(|l| l.min(40)), // Max 40
+            cursor,
+        );
         self.client.get(&url).await
     }
 
@@ -222,19 +263,11 @@ impl<'a> ThreatActorsClient<'a> {
         filter: Option<&str>,
         order: Option<ThreatActorOrder>,
     ) -> CollectionIterator<'_, ThreatActor> {
-        let mut url = String::from("threat_actors?");
-
-        if let Some(f) = filter {
-            url.push_str(&format!("filter={}&", urlencoding::encode(f)));
-        }
-
-        if let Some(o) = order {
-            url.push_str(&format!("order={}&", o.to_string()));
-        }
-
-        // Remove trailing '&' or '?'
-        url.pop();
-
+        let url = Self::build_iterator_url(
+            "threat_actors",
+            filter,
+            order.as_ref().map(|o| o as &dyn ToString),
+        );
         CollectionIterator::new(self.client, url)
     }
 
@@ -271,27 +304,18 @@ impl<'a> ThreatActorsClient<'a> {
     where
         T: serde::de::DeserializeOwned,
     {
-        let mut url = format!(
-            "threat_actors/{}/{}?",
+        let base = format!(
+            "threat_actors/{}/{}",
             urlencoding::encode(threat_actor_id),
             relationship
         );
-
-        if let Some(o) = order {
-            url.push_str(&format!("order={}&", o.to_string()));
-        }
-
-        if let Some(l) = limit {
-            url.push_str(&format!("limit={}&", l));
-        }
-
-        if let Some(c) = cursor {
-            url.push_str(&format!("cursor={}&", c));
-        }
-
-        // Remove trailing '&' or '?'
-        url.pop();
-
+        let url = Self::build_query_url(
+            &base,
+            None,
+            order.as_ref().map(|o| o as &dyn ToString),
+            limit,
+            cursor,
+        );
         self.client.get(&url).await
     }
 
@@ -305,19 +329,12 @@ impl<'a> ThreatActorsClient<'a> {
     where
         T: serde::de::DeserializeOwned + Clone + Send + 'static,
     {
-        let mut url = format!(
-            "threat_actors/{}/{}?",
+        let base = format!(
+            "threat_actors/{}/{}",
             urlencoding::encode(threat_actor_id),
             relationship
         );
-
-        if let Some(o) = order {
-            url.push_str(&format!("order={}&", o.to_string()));
-        }
-
-        // Remove trailing '&' or '?'
-        url.pop();
-
+        let url = Self::build_iterator_url(&base, None, order.as_ref().map(|o| o as &dyn ToString));
         CollectionIterator::new(self.client, url)
     }
 
@@ -332,23 +349,12 @@ impl<'a> ThreatActorsClient<'a> {
     where
         T: serde::de::DeserializeOwned,
     {
-        let mut url = format!(
-            "threat_actors/{}/relationships/{}?",
+        let base = format!(
+            "threat_actors/{}/relationships/{}",
             urlencoding::encode(threat_actor_id),
             relationship
         );
-
-        if let Some(l) = limit {
-            url.push_str(&format!("limit={}&", l));
-        }
-
-        if let Some(c) = cursor {
-            url.push_str(&format!("cursor={}&", c));
-        }
-
-        // Remove trailing '&' or '?'
-        url.pop();
-
+        let url = Self::build_query_url(&base, None, None as Option<&dyn ToString>, limit, cursor);
         self.client.get(&url).await
     }
 }

