@@ -5,7 +5,7 @@
 use crate::mcp::search::vti_search;
 use crate::mcp::{convert_vt_error, McpResult};
 use crate::Client;
-use serde_json::{json, Value as JsonValue};
+use serde_json::{json, Map, Value as JsonValue};
 
 /// `VirusTotal` MCP Server implementation
 #[derive(Clone)]
@@ -55,78 +55,63 @@ impl VtMcpServer {
 
     /// List available tools
     pub fn list_tools(&self) -> Vec<JsonValue> {
-        vec![
+        const TOOLS: &[(&str, &str, &str, &str)] = &[
+            (
+                "vti_search",
+                "Search `VirusTotal` for threat intelligence on any indicator (hash, IP, domain, or URL). Automatically detects indicator type and returns comprehensive threat analysis.",
+                "indicator",
+                "The indicator to search for (file hash, IP address, domain, or URL)",
+            ),
+            (
+                "get_file_report",
+                "Get detailed file analysis report from `VirusTotal` using a file hash (MD5, SHA1, SHA256, or SHA512).",
+                "hash",
+                "File hash (MD5, SHA1, SHA256, or SHA512)",
+            ),
+            (
+                "get_url_report",
+                "Get detailed URL analysis report from `VirusTotal` for a specific URL.",
+                "url",
+                "The URL to analyze",
+            ),
+            (
+                "get_ip_report",
+                "Get detailed IP address analysis report from `VirusTotal`.",
+                "ip",
+                "IP address (IPv4 or IPv6)",
+            ),
+            (
+                "get_domain_report",
+                "Get detailed domain analysis report from `VirusTotal`.",
+                "domain",
+                "Domain name to analyze",
+            ),
+        ];
+
+        TOOLS
+            .iter()
+            .map(|(name, desc, field, field_desc)| Self::make_tool(name, desc, field, field_desc))
+            .collect()
+    }
+
+    fn make_tool(name: &str, description: &str, field: &str, field_desc: &str) -> JsonValue {
+        let mut properties = Map::new();
+        properties.insert(
+            field.to_string(),
             json!({
-                "name": "vti_search",
-                "description": "Search `VirusTotal` for threat intelligence on any indicator (hash, IP, domain, or URL). Automatically detects indicator type and returns comprehensive threat analysis.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "indicator": {
-                            "type": "string",
-                            "description": "The indicator to search for (file hash, IP address, domain, or URL)"
-                        }
-                    },
-                    "required": ["indicator"]
-                }
+                "type": "string",
+                "description": field_desc
             }),
-            json!({
-                "name": "get_file_report",
-                "description": "Get detailed file analysis report from `VirusTotal` using a file hash (MD5, SHA1, SHA256, or SHA512).",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "hash": {
-                            "type": "string",
-                            "description": "File hash (MD5, SHA1, SHA256, or SHA512)"
-                        }
-                    },
-                    "required": ["hash"]
-                }
-            }),
-            json!({
-                "name": "get_url_report",
-                "description": "Get detailed URL analysis report from `VirusTotal` for a specific URL.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "url": {
-                            "type": "string",
-                            "description": "The URL to analyze"
-                        }
-                    },
-                    "required": ["url"]
-                }
-            }),
-            json!({
-                "name": "get_ip_report",
-                "description": "Get detailed IP address analysis report from `VirusTotal`.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "ip": {
-                            "type": "string",
-                            "description": "IP address (IPv4 or IPv6)"
-                        }
-                    },
-                    "required": ["ip"]
-                }
-            }),
-            json!({
-                "name": "get_domain_report",
-                "description": "Get detailed domain analysis report from `VirusTotal`.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "domain": {
-                            "type": "string",
-                            "description": "Domain name to analyze"
-                        }
-                    },
-                    "required": ["domain"]
-                }
-            }),
-        ]
+        );
+        json!({
+            "name": name,
+            "description": description,
+            "inputSchema": {
+                "type": "object",
+                "properties": properties,
+                "required": [field]
+            }
+        })
     }
 
     /// Handle vti_search tool call
