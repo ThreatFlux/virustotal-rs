@@ -12,7 +12,8 @@ use axum::{
 };
 use oauth2::{
     basic::BasicClient, AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken,
-    PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, RefreshToken, Scope, TokenResponse, TokenUrl,
+    EmptyExtraTokenFields, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, RefreshToken, Scope,
+    StandardTokenResponse, TokenResponse, TokenUrl,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -255,41 +256,62 @@ impl OAuthState {
         state: String,
         session_id: String,
     ) -> AnyhowResult<OAuthCredentials> {
-        // Retrieve and validate session
-        let session = {
-            let sessions = self.sessions.read().unwrap();
-            sessions
-                .get(&session_id)
-                .cloned()
-                .ok_or_else(|| anyhow!("Invalid session ID"))?
-        };
+        let session = self.get_session(&session_id)?;
+        Self::validate_csrf(&session, &state)?;
 
-        // Validate CSRF token
+        let credentials = self.exchange_code(&session, code).await?;
+        self.store_credentials(credentials.clone());
+        self.remove_session(&session_id);
+        Ok(credentials)
+    }
+
+    fn get_session(&self, session_id: &str) -> AnyhowResult<OAuthSession> {
+        let sessions = self.sessions.read().unwrap();
+        sessions
+            .get(session_id)
+            .cloned()
+            .ok_or_else(|| anyhow!("Invalid session ID"))
+    }
+
+    fn validate_csrf(session: &OAuthSession, state: &str) -> AnyhowResult<()> {
         if session.csrf_token != state {
-            return Err(anyhow!("CSRF token mismatch"));
+            Err(anyhow!("CSRF token mismatch"))
+        } else {
+            Ok(())
         }
+    }
 
-        // Exchange code for token
+    async fn exchange_code(
+        &self,
+        session: &OAuthSession,
+        code: String,
+    ) -> AnyhowResult<OAuthCredentials> {
         let mut token_request = self.client.exchange_code(AuthorizationCode::new(code));
-
-        // Add PKCE verifier if used
         if let Some(verifier) = &session.pkce_verifier {
             token_request =
                 token_request.set_pkce_verifier(PkceCodeVerifier::new(verifier.clone()));
         }
 
-        let token_response = token_request
+        let token_response: StandardTokenResponse<
+            EmptyExtraTokenFields,
+            oauth2::basic::BasicTokenType,
+        > = token_request
             .request_async(oauth2::reqwest::async_http_client)
             .await
             .map_err(|e| anyhow!("Token exchange failed: {}", e))?;
 
-        // Create credentials
+        Ok(Self::build_credentials(token_response))
+    }
+
+    fn build_credentials(
+        token_response: StandardTokenResponse<EmptyExtraTokenFields, oauth2::basic::BasicTokenType>,
+    ) -> OAuthCredentials {
         let issued_at = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
 
-        let credentials = OAuthCredentials {
+        OAuthCredentials {
             access_token: token_response.access_token().secret().to_string(),
             token_type: "Bearer".to_string(),
             expires_in: token_response.expires_in().map(|d| d.as_secs()),
@@ -304,21 +326,17 @@ impl OAuthState {
                     .join(" ")
             }),
             issued_at,
-        };
-
-        // Store credentials
-        {
-            let mut creds = self.credentials.write().unwrap();
-            *creds = Some(credentials.clone());
         }
+    }
 
-        // Clean up session
-        {
-            let mut sessions = self.sessions.write().unwrap();
-            sessions.remove(&session_id);
-        }
+    fn store_credentials(&self, credentials: OAuthCredentials) {
+        let mut creds = self.credentials.write().unwrap();
+        *creds = Some(credentials);
+    }
 
-        Ok(credentials)
+    fn remove_session(&self, session_id: &str) {
+        let mut sessions = self.sessions.write().unwrap();
+        sessions.remove(session_id);
     }
 
     /// Get current credentials
