@@ -24,6 +24,16 @@ use axum::extract::Query;
 #[cfg(any(feature = "mcp-jwt", feature = "mcp-oauth"))]
 use tower_http::cors::CorsLayer;
 
+#[cfg(feature = "mcp-jwt")]
+type MaybeJwtConfig = JwtConfig;
+#[cfg(not(feature = "mcp-jwt"))]
+type MaybeJwtConfig = ();
+
+#[cfg(feature = "mcp-oauth")]
+type MaybeOAuthConfig = OAuthConfig;
+#[cfg(not(feature = "mcp-oauth"))]
+type MaybeOAuthConfig = ();
+
 /// Simple STDIO MCP server
 pub async fn run_stdio_server(client: Client) -> McpResult<()> {
     tracing::info!("Starting `VirusTotal` MCP server with STDIO transport");
@@ -70,87 +80,54 @@ pub async fn run_stdio_server(client: Client) -> McpResult<()> {
     Ok(())
 }
 
-/// Simple HTTP MCP server  
+/// Simple HTTP MCP server
 pub async fn run_http_server(client: Client, addr: SocketAddr) -> McpResult<()> {
     run_http_server_with_config(client, addr, None).await
 }
 
-/// HTTP MCP server with optional authentication  
-#[cfg(all(feature = "mcp-jwt", feature = "mcp-oauth"))]
+/// HTTP MCP server with optional authentication
 pub async fn run_http_server_with_config(
     client: Client,
     addr: SocketAddr,
-    jwt_config: Option<JwtConfig>,
+    jwt_config: Option<MaybeJwtConfig>,
 ) -> McpResult<()> {
     run_http_server_with_auth(client, addr, jwt_config, None).await
 }
 
-#[cfg(all(feature = "mcp-jwt", not(feature = "mcp-oauth")))]
-pub async fn run_http_server_with_config(
-    client: Client,
-    addr: SocketAddr,
-    jwt_config: Option<JwtConfig>,
-) -> McpResult<()> {
-    run_http_server_with_auth(client, addr, jwt_config, None).await
-}
-
-#[cfg(all(not(feature = "mcp-jwt"), feature = "mcp-oauth"))]
-pub async fn run_http_server_with_config(
-    client: Client,
-    addr: SocketAddr,
-    _jwt_config: Option<()>,
-) -> McpResult<()> {
-    run_http_server_with_auth(client, addr, None, None).await
-}
-
-#[cfg(all(not(feature = "mcp-jwt"), not(feature = "mcp-oauth")))]
-pub async fn run_http_server_with_config(
-    client: Client,
-    addr: SocketAddr,
-    _jwt_config: Option<()>,
-) -> McpResult<()> {
-    run_http_server_with_auth(client, addr, None, None).await
-}
-
-/// HTTP MCP server with comprehensive authentication support
+/// HTTP MCP server with OAuth authentication
 #[cfg(feature = "mcp-oauth")]
 pub async fn run_http_server_with_oauth(
     client: Client,
     addr: SocketAddr,
     oauth_config: OAuthConfig,
 ) -> McpResult<()> {
-    #[cfg(feature = "mcp-jwt")]
-    {
-        run_http_server_with_auth(client, addr, None, Some(oauth_config)).await
-    }
-    #[cfg(not(feature = "mcp-jwt"))]
-    {
-        run_http_server_with_auth(client, addr, None, Some(oauth_config)).await
-    }
+    run_http_server_with_auth(client, addr, None, Some(oauth_config)).await
 }
 
 /// HTTP MCP server with both JWT and OAuth support
 async fn run_http_server_with_auth(
     client: Client,
     addr: SocketAddr,
-    #[cfg(feature = "mcp-jwt")] jwt_config: Option<JwtConfig>,
-    #[cfg(not(feature = "mcp-jwt"))] _jwt_config: Option<()>,
-    #[cfg(feature = "mcp-oauth")] oauth_config: Option<OAuthConfig>,
-    #[cfg(not(feature = "mcp-oauth"))] _oauth_config: Option<()>,
+    jwt_config: Option<MaybeJwtConfig>,
+    oauth_config: Option<MaybeOAuthConfig>,
 ) -> McpResult<()> {
     tracing::info!(
         "Starting `VirusTotal` MCP server with HTTP transport on {}",
         addr
     );
 
+    #[cfg(not(feature = "mcp-jwt"))]
+    let _ = jwt_config;
+    #[cfg(not(feature = "mcp-oauth"))]
+    let _ = oauth_config;
+
     let server = VtMcpServer::new(client);
 
     #[cfg(feature = "axum")]
     {
-        use axum::{
-            routing::{get, post},
-            Router,
-        };
+        #[cfg(feature = "mcp-oauth")]
+        use axum::routing::get;
+        use axum::routing::post;
 
         // Handle OAuth authentication if configured
         #[cfg(feature = "mcp-oauth")]
@@ -159,9 +136,7 @@ async fn run_http_server_with_auth(
                 tracing::info!("Enabling OAuth 2.1 authentication for HTTP server");
                 let oauth_state = OAuthState::new(config)?;
 
-                let app = Router::new()
-                    .route("/", post(handle_http_request_oauth))
-                    .route("/health", get(health_check))
+                let app = base_router(post(handle_http_request_oauth))
                     .route("/oauth/authorize", get(oauth_authorize))
                     .route("/oauth/callback", get(oauth_callback))
                     .route("/oauth/token", post(oauth_token))
@@ -173,9 +148,7 @@ async fn run_http_server_with_auth(
                     "OAuth 2.1 authentication enabled. Use /oauth/authorize to start flow"
                 );
 
-                let listener = tokio::net::TcpListener::bind(addr).await?;
-                tracing::info!("HTTP server listening on {}", addr);
-                return Ok(axum::serve(listener, app.into_make_service()).await?);
+                return serve_router(app, addr).await;
             }
         }
 
@@ -187,9 +160,7 @@ async fn run_http_server_with_auth(
                 let jwt_manager = JwtManager::new(config.clone());
 
                 // Create router with JWT state
-                let app = Router::new()
-                    .route("/", post(handle_http_request_jwt))
-                    .route("/health", get(health_check))
+                let app = base_router(post(handle_http_request_jwt))
                     .route("/auth/token", post(generate_token))
                     .route("/auth/refresh", post(refresh_token))
                     .with_state((server, jwt_manager.clone()))
@@ -198,21 +169,14 @@ async fn run_http_server_with_auth(
 
                 tracing::info!("JWT authentication enabled. Use /auth/token to get access tokens");
 
-                let listener = tokio::net::TcpListener::bind(addr).await?;
-                tracing::info!("HTTP server listening on {}", addr);
-                return Ok(axum::serve(listener, app.into_make_service()).await?);
+                return serve_router(app, addr).await;
             }
         }
 
         // No authentication - basic server
-        let app = Router::new()
-            .route("/", post(handle_http_request))
-            .route("/health", get(health_check))
-            .with_state(server);
+        let app = base_router(post(handle_http_request)).with_state(server);
 
-        let listener = tokio::net::TcpListener::bind(addr).await?;
-        tracing::info!("HTTP server listening on {}", addr);
-        axum::serve(listener, app.into_make_service()).await?;
+        serve_router(app, addr).await?;
     }
 
     #[cfg(not(feature = "axum"))]
@@ -226,32 +190,52 @@ async fn run_http_server_with_auth(
 }
 
 #[cfg(feature = "axum")]
+fn base_router<S>(root: axum::routing::MethodRouter<S>) -> axum::Router<S>
+where
+    S: Clone + Send + Sync + 'static,
+{
+    use axum::{routing::get, Router};
+    Router::new()
+        .route("/", root)
+        .route("/health", get(health_check))
+}
+
+#[cfg(feature = "axum")]
+async fn serve_router(app: axum::Router, addr: SocketAddr) -> McpResult<()> {
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    tracing::info!("HTTP server listening on {}", addr);
+    Ok(axum::serve(listener, app.into_make_service()).await?)
+}
+
+#[cfg(feature = "axum")]
+async fn process_request(server: &VtMcpServer, request: JsonValue) -> JsonValue {
+    handle_request(server, request).await
+}
+
+#[cfg(feature = "axum")]
 async fn handle_http_request(
-    server: axum::extract::State<VtMcpServer>,
-    request: axum::Json<JsonValue>,
+    axum::extract::State(server): axum::extract::State<VtMcpServer>,
+    axum::Json(request): axum::Json<JsonValue>,
 ) -> Result<axum::Json<JsonValue>, axum::http::StatusCode> {
-    let response = handle_request(&server, request.0).await;
-    Ok(axum::Json(response))
+    Ok(axum::Json(process_request(&server, request).await))
 }
 
 #[cfg(all(feature = "axum", feature = "mcp-jwt"))]
 async fn handle_http_request_jwt(
     axum::extract::State((server, _)): axum::extract::State<(VtMcpServer, JwtManager)>,
     _claims: JwtClaims,
-    request: axum::Json<JsonValue>,
+    axum::Json(request): axum::Json<JsonValue>,
 ) -> Result<axum::Json<JsonValue>, axum::http::StatusCode> {
-    let response = handle_request(&server, request.0).await;
-    Ok(axum::Json(response))
+    Ok(axum::Json(process_request(&server, request).await))
 }
 
 #[cfg(all(feature = "axum", feature = "mcp-oauth"))]
 async fn handle_http_request_oauth(
     axum::extract::State((server, _)): axum::extract::State<(VtMcpServer, OAuthState)>,
     _claims: OAuthClaims,
-    request: axum::Json<JsonValue>,
+    axum::Json(request): axum::Json<JsonValue>,
 ) -> Result<axum::Json<JsonValue>, axum::http::StatusCode> {
-    let response = handle_request(&server, request.0).await;
-    Ok(axum::Json(response))
+    Ok(axum::Json(process_request(&server, request).await))
 }
 
 #[cfg(feature = "axum")]

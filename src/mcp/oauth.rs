@@ -12,7 +12,8 @@ use axum::{
 };
 use oauth2::{
     basic::BasicClient, AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken,
-    PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, RefreshToken, Scope, TokenResponse, TokenUrl,
+    EmptyExtraTokenFields, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, RefreshToken, Scope,
+    StandardTokenResponse, TokenResponse, TokenUrl,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -255,41 +256,62 @@ impl OAuthState {
         state: String,
         session_id: String,
     ) -> AnyhowResult<OAuthCredentials> {
-        // Retrieve and validate session
-        let session = {
-            let sessions = self.sessions.read().unwrap();
-            sessions
-                .get(&session_id)
-                .cloned()
-                .ok_or_else(|| anyhow!("Invalid session ID"))?
-        };
+        let session = self.get_session(&session_id)?;
+        Self::validate_csrf(&session, &state)?;
 
-        // Validate CSRF token
+        let credentials = self.exchange_code(&session, code).await?;
+        self.store_credentials(credentials.clone());
+        self.remove_session(&session_id);
+        Ok(credentials)
+    }
+
+    fn get_session(&self, session_id: &str) -> AnyhowResult<OAuthSession> {
+        let sessions = self.sessions.read().unwrap();
+        sessions
+            .get(session_id)
+            .cloned()
+            .ok_or_else(|| anyhow!("Invalid session ID"))
+    }
+
+    fn validate_csrf(session: &OAuthSession, state: &str) -> AnyhowResult<()> {
         if session.csrf_token != state {
-            return Err(anyhow!("CSRF token mismatch"));
+            Err(anyhow!("CSRF token mismatch"))
+        } else {
+            Ok(())
         }
+    }
 
-        // Exchange code for token
+    async fn exchange_code(
+        &self,
+        session: &OAuthSession,
+        code: String,
+    ) -> AnyhowResult<OAuthCredentials> {
         let mut token_request = self.client.exchange_code(AuthorizationCode::new(code));
-
-        // Add PKCE verifier if used
         if let Some(verifier) = &session.pkce_verifier {
             token_request =
                 token_request.set_pkce_verifier(PkceCodeVerifier::new(verifier.clone()));
         }
 
-        let token_response = token_request
+        let token_response: StandardTokenResponse<
+            EmptyExtraTokenFields,
+            oauth2::basic::BasicTokenType,
+        > = token_request
             .request_async(oauth2::reqwest::async_http_client)
             .await
             .map_err(|e| anyhow!("Token exchange failed: {}", e))?;
 
-        // Create credentials
+        Ok(Self::build_credentials(token_response))
+    }
+
+    fn build_credentials(
+        token_response: StandardTokenResponse<EmptyExtraTokenFields, oauth2::basic::BasicTokenType>,
+    ) -> OAuthCredentials {
         let issued_at = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
 
-        let credentials = OAuthCredentials {
+        OAuthCredentials {
             access_token: token_response.access_token().secret().to_string(),
             token_type: "Bearer".to_string(),
             expires_in: token_response.expires_in().map(|d| d.as_secs()),
@@ -304,21 +326,17 @@ impl OAuthState {
                     .join(" ")
             }),
             issued_at,
-        };
-
-        // Store credentials
-        {
-            let mut creds = self.credentials.write().unwrap();
-            *creds = Some(credentials.clone());
         }
+    }
 
-        // Clean up session
-        {
-            let mut sessions = self.sessions.write().unwrap();
-            sessions.remove(&session_id);
-        }
+    fn store_credentials(&self, credentials: OAuthCredentials) {
+        let mut creds = self.credentials.write().unwrap();
+        *creds = Some(credentials);
+    }
 
-        Ok(credentials)
+    fn remove_session(&self, session_id: &str) {
+        let mut sessions = self.sessions.write().unwrap();
+        sessions.remove(session_id);
     }
 
     /// Get current credentials
@@ -343,51 +361,27 @@ impl OAuthState {
             .request_async(oauth2::reqwest::async_http_client)
             .await
             .map_err(|e| anyhow!("Token refresh failed: {}", e))?;
-
-        let issued_at = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
-
-        let credentials = OAuthCredentials {
-            access_token: token_response.access_token().secret().to_string(),
-            token_type: "Bearer".to_string(),
-            expires_in: token_response.expires_in().map(|d| d.as_secs()),
-            refresh_token: token_response
-                .refresh_token()
-                .map(|t| t.secret().to_string())
-                .or_else(|| {
-                    // Keep existing refresh token if new one not provided
-                    let creds = self.credentials.read().unwrap();
-                    creds.as_ref().and_then(|c| c.refresh_token.clone())
-                }),
-            scope: token_response.scopes().map(|scopes| {
-                scopes
-                    .iter()
-                    .map(|s| s.as_str())
-                    .collect::<Vec<_>>()
-                    .join(" ")
-            }),
-            issued_at,
-        };
-
-        // Update stored credentials
-        {
-            let mut creds = self.credentials.write().unwrap();
-            *creds = Some(credentials.clone());
+        let mut credentials = Self::build_credentials(token_response);
+        if credentials.refresh_token.is_none() {
+            let creds = self.credentials.read().unwrap();
+            credentials.refresh_token = creds.as_ref().and_then(|c| c.refresh_token.clone());
         }
+        self.store_credentials(credentials.clone());
 
         Ok(credentials)
     }
 
     /// Get valid access token (refresh if needed)
     pub async fn get_access_token(&self) -> AnyhowResult<String> {
-        let needs_refresh = {
+        let (needs_refresh, token) = {
             let creds = self.credentials.read().unwrap();
-            match creds.as_ref() {
-                Some(c) => c.needs_refresh(self.config.refresh_threshold),
-                None => return Err(anyhow!("No credentials available")),
-            }
+            let c = creds
+                .as_ref()
+                .ok_or_else(|| anyhow!("No credentials available"))?;
+            (
+                c.needs_refresh(self.config.refresh_threshold),
+                c.access_token.clone(),
+            )
         };
 
         if needs_refresh {
@@ -395,8 +389,7 @@ impl OAuthState {
             let refreshed = self.refresh_token().await?;
             Ok(refreshed.access_token)
         } else {
-            let creds = self.credentials.read().unwrap();
-            Ok(creds.as_ref().unwrap().access_token.clone())
+            Ok(token)
         }
     }
 }
