@@ -63,109 +63,112 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     #[cfg(feature = "mcp-oauth")]
-    {
-        // Initialize logging
-        tracing_subscriber::fmt()
-            .with_target(false)
-            .with_thread_ids(true)
-            .with_level(true)
-            .with_ansi(true)
-            .init();
+    run().await
+}
 
-        // Get configuration from environment
-        let api_key = env::var("VIRUSTOTAL_API_KEY")
-            .expect("VIRUSTOTAL_API_KEY environment variable is required");
+#[cfg(feature = "mcp-oauth")]
+async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    tracing_subscriber::fmt()
+        .with_target(false)
+        .with_thread_ids(true)
+        .with_level(true)
+        .with_ansi(true)
+        .init();
 
-        let http_addr = env::var("HTTP_ADDR")
-            .unwrap_or_else(|_| "127.0.0.1:3000".to_string())
-            .parse::<SocketAddr>()
-            .expect("Invalid HTTP_ADDR format");
+    let api_key = env::var("VIRUSTOTAL_API_KEY")
+        .expect("VIRUSTOTAL_API_KEY environment variable is required");
 
-        let api_tier = match env::var("VIRUSTOTAL_API_TIER").as_deref() {
-            Ok("Premium") => ApiTier::Premium,
-            _ => ApiTier::Public,
-        };
+    let http_addr = env::var("HTTP_ADDR")
+        .unwrap_or_else(|_| "127.0.0.1:3000".to_string())
+        .parse::<SocketAddr>()
+        .expect("Invalid HTTP_ADDR format");
 
-        // Configure OAuth
-        let client_id =
-            env::var("OAUTH_CLIENT_ID").unwrap_or_else(|_| "virustotal-mcp-client".to_string());
+    let api_tier = match env::var("VIRUSTOTAL_API_TIER").as_deref() {
+        Ok("Premium") => ApiTier::Premium,
+        _ => ApiTier::Public,
+    };
 
-        let auth_server_url = env::var("OAUTH_AUTH_SERVER_URL")
-            .unwrap_or_else(|_| "http://localhost:8080".to_string());
+    let oauth_config = load_oauth_config(http_addr)?;
+    let debug = env::var("DEBUG").is_ok();
 
-        let mut oauth_config = OAuthConfig::new(client_id, auth_server_url);
+    print_config(http_addr, &oauth_config);
 
-        // Optional client secret for confidential clients
-        if let Ok(client_secret) = env::var("OAUTH_CLIENT_SECRET") {
-            oauth_config = oauth_config.with_client_secret(client_secret);
-        }
+    let config = ServerConfig::new()
+        .api_key(api_key)
+        .api_tier(api_tier)
+        .http_addr(http_addr)
+        .debug(debug)
+        .with_oauth(oauth_config);
 
-        // Optional custom redirect URI
-        if let Ok(redirect_uri) = env::var("OAUTH_REDIRECT_URI") {
-            oauth_config = oauth_config.with_redirect_uri(redirect_uri);
-        } else {
-            // Default to server's callback endpoint
-            oauth_config =
-                oauth_config.with_redirect_uri(format!("http://{}/oauth/callback", http_addr));
-        }
-
-        // Optional custom scopes
-        if let Ok(scopes_str) = env::var("OAUTH_SCOPES") {
-            let scopes: Vec<String> = scopes_str
-                .split(',')
-                .map(|s| s.trim().to_string())
-                .collect();
-            oauth_config = oauth_config.with_scopes(scopes);
-        }
-
-        // Enable debug mode if requested
-        let debug = env::var("DEBUG").is_ok();
-
-        println!("🚀 Starting VirusTotal MCP Server with OAuth 2.1 Authentication");
-        println!("📍 Server Address: {}", http_addr);
-        println!("🔐 OAuth Client ID: {}", oauth_config.client_id);
-        println!("🔗 Auth Server: {}", oauth_config.auth_server_url);
-        println!("↩️  Redirect URI: {}", oauth_config.redirect_uri);
-        println!("🎯 Scopes: {}", oauth_config.scopes.join(", "));
-        println!(
-            "🔒 PKCE: {}",
-            if oauth_config.use_pkce {
-                "Enabled"
-            } else {
-                "Disabled"
-            }
-        );
-        println!();
-        println!("📋 Available endpoints:");
-        println!("  GET  /health              - Health check");
-        println!("  GET  /oauth/authorize     - Start OAuth flow");
-        println!("  GET  /oauth/callback      - OAuth callback");
-        println!("  POST /oauth/token         - Token exchange/refresh");
-        println!("  GET  /oauth/metadata      - OAuth server metadata");
-        println!("  POST /                    - MCP requests (requires auth)");
-        println!();
-        println!("🔧 Example OAuth flow:");
-        println!("  1. GET http://{}/oauth/authorize", http_addr);
-        println!("  2. Complete authorization on auth server");
-        println!("  3. Use returned access token for MCP requests");
-        println!();
-        println!("💡 For testing with curl:");
-        println!("  curl http://{}/oauth/metadata", http_addr);
-        println!();
-
-        // Create and run server
-        let config = ServerConfig::new()
-            .api_key(api_key)
-            .api_tier(api_tier)
-            .http_addr(http_addr)
-            .debug(debug)
-            .with_oauth(oauth_config);
-
-        if let Err(e) = config.run().await {
-            eprintln!("❌ Server error: {}", e);
-            std::process::exit(1);
-        }
-
-        Ok(())
+    if let Err(e) = config.run().await {
+        eprintln!("❌ Server error: {}", e);
+        std::process::exit(1);
     }
+    Ok(())
+}
+
+#[cfg(feature = "mcp-oauth")]
+fn load_oauth_config(http_addr: SocketAddr) -> Result<OAuthConfig, Box<dyn std::error::Error>> {
+    let client_id =
+        env::var("OAUTH_CLIENT_ID").unwrap_or_else(|_| "virustotal-mcp-client".to_string());
+    let auth_server_url =
+        env::var("OAUTH_AUTH_SERVER_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
+
+    let mut oauth_config = OAuthConfig::new(client_id, auth_server_url);
+
+    if let Ok(client_secret) = env::var("OAUTH_CLIENT_SECRET") {
+        oauth_config = oauth_config.with_client_secret(client_secret);
+    }
+
+    if let Ok(redirect_uri) = env::var("OAUTH_REDIRECT_URI") {
+        oauth_config = oauth_config.with_redirect_uri(redirect_uri);
+    } else {
+        oauth_config =
+            oauth_config.with_redirect_uri(format!("http://{}/oauth/callback", http_addr));
+    }
+
+    if let Ok(scopes_str) = env::var("OAUTH_SCOPES") {
+        let scopes: Vec<String> = scopes_str
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .collect();
+        oauth_config = oauth_config.with_scopes(scopes);
+    }
+
+    Ok(oauth_config)
+}
+
+#[cfg(feature = "mcp-oauth")]
+fn print_config(http_addr: SocketAddr, oauth_config: &OAuthConfig) {
+    println!("🚀 Starting VirusTotal MCP Server with OAuth 2.1 Authentication");
+    println!("📍 Server Address: {}", http_addr);
+    println!("🔐 OAuth Client ID: {}", oauth_config.client_id);
+    println!("🔗 Auth Server: {}", oauth_config.auth_server_url);
+    println!("↩️  Redirect URI: {}", oauth_config.redirect_uri);
+    println!("🎯 Scopes: {}", oauth_config.scopes.join(", "));
+    println!(
+        "🔒 PKCE: {}",
+        if oauth_config.use_pkce {
+            "Enabled"
+        } else {
+            "Disabled"
+        }
+    );
+    println!();
+    println!("📋 Available endpoints:");
+    println!("  GET  /health              - Health check");
+    println!("  GET  /oauth/authorize     - Start OAuth flow");
+    println!("  GET  /oauth/callback      - OAuth callback");
+    println!("  POST /oauth/token         - Token exchange/refresh");
+    println!("  GET  /oauth/metadata      - OAuth server metadata");
+    println!("  POST /                    - MCP requests (requires auth)");
+    println!();
+    println!("🔧 Example OAuth flow:");
+    println!("  1. GET http://{}/oauth/authorize", http_addr);
+    println!("  2. Complete authorization on auth server");
+    println!("  3. Use returned access token for MCP requests");
+    println!();
+    println!("💡 For testing with curl:");
+    println!("  curl http://{}/oauth/metadata", http_addr);
+    println!();
 }
