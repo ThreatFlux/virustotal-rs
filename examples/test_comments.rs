@@ -1,65 +1,97 @@
-use virustotal_rs::{ApiTier, ClientBuilder, CommentVoteType, CommentsClient};
+use virustotal_rs::objects::CollectionMeta;
+use virustotal_rs::{ApiTier, Comment, CommentVoteType, CommentsClient};
+#[path = "common/mod.rs"]
+mod common;
+use common::build_client_from_env;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let api_key = std::env::var("VT_API_KEY").unwrap_or_else(|_| "test_key".to_string());
-
-    let client = ClientBuilder::new()
-        .api_key(api_key)
-        .tier(ApiTier::Public)
-        .build()?;
+    let client = build_client_from_env("VT_API_KEY", ApiTier::Public)?;
 
     let comments_client = client.comments();
+    let example_comment_id = "f-abc123456789-xyz987654321";
+    run_comment_tests(&comments_client, example_comment_id).await?;
+    Ok(())
+}
 
+async fn run_comment_tests(
+    comments_client: &CommentsClient<'_>,
+    example_comment_id: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    print_header();
+    execute_tests(comments_client, example_comment_id).await?;
+    print_footer();
+    Ok(())
+}
+
+fn print_header() {
     println!("Testing Comments API:");
     println!("====================");
+}
 
-    // Test getting latest comments
+fn print_footer() {
+    println!("\n====================");
+    println!("Comments API testing complete!");
+}
+
+async fn execute_tests(
+    comments_client: &CommentsClient<'_>,
+    example_comment_id: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    test_latest_comments(comments_client).await?;
+    test_filtered_comments(comments_client).await?;
+    test_get_comment(comments_client, example_comment_id).await?;
+    test_voting(comments_client, example_comment_id).await?;
+    test_id_parsing();
+    test_relationships(comments_client, example_comment_id).await?;
+    test_iterator(comments_client).await?;
+    test_delete(comments_client, example_comment_id).await?;
+    Ok(())
+}
+
+fn print_comment_meta(meta: &CollectionMeta) {
+    if let Some(count) = meta.count {
+        println!("   - Total comments in batch: {}", count);
+    }
+    if meta.cursor.is_some() {
+        println!("   - Has more results: yes (cursor available)");
+    }
+}
+
+fn print_comment_details(comment: &Comment) {
+    println!("\n   Comment: {}", comment.object.id);
+    println!("   - Text: {}", comment.object.attributes.text);
+    if let Some(tags) = &comment.object.attributes.tags {
+        println!("   - Tags: {:?}", tags);
+    }
+    if let Some(votes) = &comment.object.attributes.votes {
+        println!(
+            "   - Votes: {} positive, {} negative, {} abuse",
+            votes.positive, votes.negative, votes.abuse
+        );
+    }
+}
+
+async fn test_latest_comments(
+    comments_client: &CommentsClient<'_>,
+) -> Result<(), Box<dyn std::error::Error>> {
     println!("\n1. Getting latest comments:");
     match comments_client.get_latest(None, Some(5)).await {
         Ok(comments) => {
             println!("   ✓ Successfully retrieved latest comments");
             if let Some(meta) = &comments.meta {
-                if let Some(count) = meta.count {
-                    println!("   - Total comments in batch: {}", count);
-                }
-                if let Some(_cursor) = &meta.cursor {
-                    println!("   - Has more results: yes (cursor available)");
-                }
+                print_comment_meta(meta);
             }
-            for comment in comments.data.iter().take(3) {
-                println!("\n   Comment: {}", comment.object.id);
-                println!("   - Text: {}", comment.object.attributes.text);
-                if let Some(tags) = &comment.object.attributes.tags {
-                    println!("   - Tags: {:?}", tags);
-                }
-                if let Some(votes) = &comment.object.attributes.votes {
-                    println!(
-                        "   - Votes: {} positive, {} negative, {} abuse",
-                        votes.positive, votes.negative, votes.abuse
-                    );
-                }
-
-                // Parse comment ID to understand where it was posted
-                if let Some((item_type, _, _)) =
-                    CommentsClient::parse_comment_id(&comment.object.id)
-                {
-                    let item_desc = match item_type {
-                        'd' => "domain",
-                        'f' => "file",
-                        'g' => "graph",
-                        'i' => "IP address",
-                        'u' => "URL",
-                        _ => "unknown",
-                    };
-                    println!("   - Posted on: {}", item_desc);
-                }
-            }
+            comments.data.iter().take(3).for_each(print_comment_details);
         }
         Err(e) => println!("   ✗ Error: {}", e),
     }
+    Ok(())
+}
 
-    // Test getting filtered comments
+async fn test_filtered_comments(
+    comments_client: &CommentsClient<'_>,
+) -> Result<(), Box<dyn std::error::Error>> {
     println!("\n2. Getting comments filtered by tag:");
     match comments_client
         .get_latest(Some("tag:malware"), Some(3))
@@ -76,13 +108,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Err(e) => println!("   ✗ Error: {}", e),
     }
+    Ok(())
+}
 
-    // Example comment ID for testing (would be from actual data in production)
-    let example_comment_id = "f-abc123456789-xyz987654321";
-
-    // Test getting a specific comment
+async fn test_get_comment(
+    comments_client: &CommentsClient<'_>,
+    comment_id: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     println!("\n3. Getting a specific comment:");
-    match comments_client.get(example_comment_id).await {
+    match comments_client.get(comment_id).await {
         Ok(comment) => {
             println!("   ✓ Successfully retrieved comment");
             println!("   - ID: {}", comment.object.id);
@@ -90,61 +124,60 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Err(e) => println!("   ✗ Error (expected if comment doesn't exist): {}", e),
     }
+    Ok(())
+}
 
-    // Test voting on a comment
+async fn vote_and_print(
+    comments_client: &CommentsClient<'_>,
+    comment_id: &str,
+    vote: CommentVoteType,
+    label: &str,
+) {
+    println!("   {}", label);
+    match comments_client.vote(comment_id, vote).await {
+        Ok(response) => {
+            println!("      ✓ Successfully voted");
+            println!(
+                "      - Updated votes: {} positive, {} negative, {} abuse",
+                response.data.positive, response.data.negative, response.data.abuse
+            );
+        }
+        Err(e) => println!("      ✗ Error: {}", e),
+    }
+}
+
+async fn test_voting(
+    comments_client: &CommentsClient<'_>,
+    comment_id: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     println!("\n4. Voting on a comment:");
+    vote_and_print(
+        comments_client,
+        comment_id,
+        CommentVoteType::Positive,
+        "   a) Adding positive vote:",
+    )
+    .await;
+    vote_and_print(
+        comments_client,
+        comment_id,
+        CommentVoteType::Negative,
+        "   b) Adding negative vote:",
+    )
+    .await;
+    vote_and_print(
+        comments_client,
+        comment_id,
+        CommentVoteType::Abuse,
+        "   c) Reporting as abuse:",
+    )
+    .await;
+    Ok(())
+}
 
-    // Positive vote
-    println!("   a) Adding positive vote:");
-    match comments_client
-        .vote(example_comment_id, CommentVoteType::Positive)
-        .await
-    {
-        Ok(response) => {
-            println!("      ✓ Successfully voted");
-            println!(
-                "      - Updated votes: {} positive, {} negative, {} abuse",
-                response.data.positive, response.data.negative, response.data.abuse
-            );
-        }
-        Err(e) => println!("      ✗ Error: {}", e),
-    }
-
-    // Negative vote
-    println!("   b) Adding negative vote:");
-    match comments_client
-        .vote(example_comment_id, CommentVoteType::Negative)
-        .await
-    {
-        Ok(response) => {
-            println!("      ✓ Successfully voted");
-            println!(
-                "      - Updated votes: {} positive, {} negative, {} abuse",
-                response.data.positive, response.data.negative, response.data.abuse
-            );
-        }
-        Err(e) => println!("      ✗ Error: {}", e),
-    }
-
-    // Abuse vote
-    println!("   c) Reporting as abuse:");
-    match comments_client
-        .vote(example_comment_id, CommentVoteType::Abuse)
-        .await
-    {
-        Ok(response) => {
-            println!("      ✓ Successfully reported");
-            println!(
-                "      - Updated votes: {} positive, {} negative, {} abuse",
-                response.data.positive, response.data.negative, response.data.abuse
-            );
-        }
-        Err(e) => println!("      ✗ Error: {}", e),
-    }
-
-    // Test comment ID parsing
+fn test_id_parsing() {
     println!("\n5. Comment ID parsing utilities:");
-    let test_ids = vec![
+    let test_ids = [
         "f-1234567890abcdef-random123",
         "d-example.com-xyz456",
         "i-192.168.1.1-abc789",
@@ -168,11 +201,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("      - Random suffix: {}", random_str);
         }
     }
+}
 
-    // Test getting comment relationships
+async fn test_relationships(
+    comments_client: &CommentsClient<'_>,
+    comment_id: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     println!("\n6. Getting comment relationships:");
     match comments_client
-        .get_relationship::<serde_json::Value>(example_comment_id, "item")
+        .get_relationship::<serde_json::Value>(comment_id, "item")
         .await
     {
         Ok(items) => {
@@ -181,8 +218,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Err(e) => println!("   ✗ Error: {}", e),
     }
+    Ok(())
+}
 
-    // Test pagination with iterator
+async fn test_iterator(
+    comments_client: &CommentsClient<'_>,
+) -> Result<(), Box<dyn std::error::Error>> {
     println!("\n7. Testing comment iteration:");
     let mut iterator = comments_client.get_latest_iterator(Some("tag:phishing".to_string()));
     match iterator.next_batch().await {
@@ -192,28 +233,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 println!("   ✓ Retrieved batch of {} comments", batch.len());
                 for comment in batch.iter().take(2) {
-                    println!(
-                        "   - Comment: {}",
-                        &comment.object.attributes.text
-                            [..50.min(comment.object.attributes.text.len())]
-                    );
+                    let text = &comment.object.attributes.text;
+                    println!("   - Comment: {}", &text[..50.min(text.len())]);
                 }
             }
         }
         Err(e) => println!("   ✗ Error: {}", e),
     }
+    Ok(())
+}
 
-    // Test deleting a comment (only works if you own the comment)
+async fn test_delete(
+    comments_client: &CommentsClient<'_>,
+    comment_id: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     println!("\n8. Deleting a comment:");
-    match comments_client.delete(example_comment_id).await {
-        Ok(()) => {
-            println!("   ✓ Successfully deleted comment");
-        }
+    match comments_client.delete(comment_id).await {
+        Ok(()) => println!("   ✓ Successfully deleted comment"),
         Err(e) => println!("   ✗ Error (expected if you don't own the comment): {}", e),
     }
-
-    println!("\n====================");
-    println!("Comments API testing complete!");
-
     Ok(())
 }
