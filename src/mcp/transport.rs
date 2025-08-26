@@ -125,10 +125,9 @@ async fn run_http_server_with_auth(
 
     #[cfg(feature = "axum")]
     {
-        use axum::{
-            routing::{get, post},
-            Router,
-        };
+        #[cfg(feature = "mcp-oauth")]
+        use axum::routing::get;
+        use axum::routing::post;
 
         // Handle OAuth authentication if configured
         #[cfg(feature = "mcp-oauth")]
@@ -137,9 +136,7 @@ async fn run_http_server_with_auth(
                 tracing::info!("Enabling OAuth 2.1 authentication for HTTP server");
                 let oauth_state = OAuthState::new(config)?;
 
-                let app = Router::new()
-                    .route("/", post(handle_http_request_oauth))
-                    .route("/health", get(health_check))
+                let app = base_router(post(handle_http_request_oauth))
                     .route("/oauth/authorize", get(oauth_authorize))
                     .route("/oauth/callback", get(oauth_callback))
                     .route("/oauth/token", post(oauth_token))
@@ -163,9 +160,7 @@ async fn run_http_server_with_auth(
                 let jwt_manager = JwtManager::new(config.clone());
 
                 // Create router with JWT state
-                let app = Router::new()
-                    .route("/", post(handle_http_request_jwt))
-                    .route("/health", get(health_check))
+                let app = base_router(post(handle_http_request_jwt))
                     .route("/auth/token", post(generate_token))
                     .route("/auth/refresh", post(refresh_token))
                     .with_state((server, jwt_manager.clone()))
@@ -179,10 +174,7 @@ async fn run_http_server_with_auth(
         }
 
         // No authentication - basic server
-        let app = Router::new()
-            .route("/", post(handle_http_request))
-            .route("/health", get(health_check))
-            .with_state(server);
+        let app = base_router(post(handle_http_request)).with_state(server);
 
         serve_router(app, addr).await?;
     }
@@ -198,6 +190,17 @@ async fn run_http_server_with_auth(
 }
 
 #[cfg(feature = "axum")]
+fn base_router<S>(root: axum::routing::MethodRouter<S>) -> axum::Router<S>
+where
+    S: Clone + Send + Sync + 'static,
+{
+    use axum::{routing::get, Router};
+    Router::new()
+        .route("/", root)
+        .route("/health", get(health_check))
+}
+
+#[cfg(feature = "axum")]
 async fn serve_router(app: axum::Router, addr: SocketAddr) -> McpResult<()> {
     let listener = tokio::net::TcpListener::bind(addr).await?;
     tracing::info!("HTTP server listening on {}", addr);
@@ -205,32 +208,34 @@ async fn serve_router(app: axum::Router, addr: SocketAddr) -> McpResult<()> {
 }
 
 #[cfg(feature = "axum")]
+async fn process_request(server: &VtMcpServer, request: JsonValue) -> JsonValue {
+    handle_request(server, request).await
+}
+
+#[cfg(feature = "axum")]
 async fn handle_http_request(
-    server: axum::extract::State<VtMcpServer>,
-    request: axum::Json<JsonValue>,
+    axum::extract::State(server): axum::extract::State<VtMcpServer>,
+    axum::Json(request): axum::Json<JsonValue>,
 ) -> Result<axum::Json<JsonValue>, axum::http::StatusCode> {
-    let response = handle_request(&server, request.0).await;
-    Ok(axum::Json(response))
+    Ok(axum::Json(process_request(&server, request).await))
 }
 
 #[cfg(all(feature = "axum", feature = "mcp-jwt"))]
 async fn handle_http_request_jwt(
     axum::extract::State((server, _)): axum::extract::State<(VtMcpServer, JwtManager)>,
     _claims: JwtClaims,
-    request: axum::Json<JsonValue>,
+    axum::Json(request): axum::Json<JsonValue>,
 ) -> Result<axum::Json<JsonValue>, axum::http::StatusCode> {
-    let response = handle_request(&server, request.0).await;
-    Ok(axum::Json(response))
+    Ok(axum::Json(process_request(&server, request).await))
 }
 
 #[cfg(all(feature = "axum", feature = "mcp-oauth"))]
 async fn handle_http_request_oauth(
     axum::extract::State((server, _)): axum::extract::State<(VtMcpServer, OAuthState)>,
     _claims: OAuthClaims,
-    request: axum::Json<JsonValue>,
+    axum::Json(request): axum::Json<JsonValue>,
 ) -> Result<axum::Json<JsonValue>, axum::http::StatusCode> {
-    let response = handle_request(&server, request.0).await;
-    Ok(axum::Json(response))
+    Ok(axum::Json(process_request(&server, request).await))
 }
 
 #[cfg(feature = "axum")]

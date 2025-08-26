@@ -373,12 +373,15 @@ impl OAuthState {
 
     /// Get valid access token (refresh if needed)
     pub async fn get_access_token(&self) -> AnyhowResult<String> {
-        let needs_refresh = {
+        let (needs_refresh, token) = {
             let creds = self.credentials.read().unwrap();
-            match creds.as_ref() {
-                Some(c) => c.needs_refresh(self.config.refresh_threshold),
-                None => return Err(anyhow!("No credentials available")),
-            }
+            let c = creds
+                .as_ref()
+                .ok_or_else(|| anyhow!("No credentials available"))?;
+            (
+                c.needs_refresh(self.config.refresh_threshold),
+                c.access_token.clone(),
+            )
         };
 
         if needs_refresh {
@@ -386,8 +389,7 @@ impl OAuthState {
             let refreshed = self.refresh_token().await?;
             Ok(refreshed.access_token)
         } else {
-            let creds = self.credentials.read().unwrap();
-            Ok(creds.as_ref().unwrap().access_token.clone())
+            Ok(token)
         }
     }
 }
