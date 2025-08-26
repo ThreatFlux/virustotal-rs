@@ -361,39 +361,12 @@ impl OAuthState {
             .request_async(oauth2::reqwest::async_http_client)
             .await
             .map_err(|e| anyhow!("Token refresh failed: {}", e))?;
-
-        let issued_at = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
-
-        let credentials = OAuthCredentials {
-            access_token: token_response.access_token().secret().to_string(),
-            token_type: "Bearer".to_string(),
-            expires_in: token_response.expires_in().map(|d| d.as_secs()),
-            refresh_token: token_response
-                .refresh_token()
-                .map(|t| t.secret().to_string())
-                .or_else(|| {
-                    // Keep existing refresh token if new one not provided
-                    let creds = self.credentials.read().unwrap();
-                    creds.as_ref().and_then(|c| c.refresh_token.clone())
-                }),
-            scope: token_response.scopes().map(|scopes| {
-                scopes
-                    .iter()
-                    .map(|s| s.as_str())
-                    .collect::<Vec<_>>()
-                    .join(" ")
-            }),
-            issued_at,
-        };
-
-        // Update stored credentials
-        {
-            let mut creds = self.credentials.write().unwrap();
-            *creds = Some(credentials.clone());
+        let mut credentials = Self::build_credentials(token_response);
+        if credentials.refresh_token.is_none() {
+            let creds = self.credentials.read().unwrap();
+            credentials.refresh_token = creds.as_ref().and_then(|c| c.refresh_token.clone());
         }
+        self.store_credentials(credentials.clone());
 
         Ok(credentials)
     }
