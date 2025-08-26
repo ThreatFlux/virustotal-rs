@@ -5,7 +5,9 @@
 use crate::mcp::search::vti_search;
 use crate::mcp::{convert_vt_error, McpResult};
 use crate::Client;
+use serde::Serialize;
 use serde_json::{json, Map, Value as JsonValue};
+use std::future::Future;
 
 /// `VirusTotal` MCP Server implementation
 #[derive(Clone)]
@@ -114,81 +116,67 @@ impl VtMcpServer {
         })
     }
 
+    async fn fetch_report<F, Fut, T>(
+        &self,
+        arguments: &JsonValue,
+        field: &str,
+        fetcher: F,
+    ) -> McpResult<JsonValue>
+    where
+        F: Fn(Client, String) -> Fut,
+        Fut: Future<Output = McpResult<T>>,
+        T: Serialize,
+    {
+        let value = arguments[field]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing required parameter: {}", field))?
+            .to_string();
+
+        let data = fetcher(self.client.clone(), value).await?;
+        Ok(serde_json::to_value(data)?)
+    }
+
     /// Handle vti_search tool call
     async fn handle_vti_search(&self, arguments: &JsonValue) -> McpResult<JsonValue> {
         let indicator = arguments["indicator"]
             .as_str()
             .ok_or_else(|| anyhow::anyhow!("Missing required parameter: indicator"))?;
-
         let result = vti_search(&self.client, indicator.to_string()).await?;
         Ok(serde_json::to_value(result)?)
     }
 
     /// Handle get_file_report tool call
     async fn handle_get_file_report(&self, arguments: &JsonValue) -> McpResult<JsonValue> {
-        let hash = arguments["hash"]
-            .as_str()
-            .ok_or_else(|| anyhow::anyhow!("Missing required parameter: hash"))?;
-
-        let file = self
-            .client
-            .files()
-            .get(hash)
-            .await
-            .map_err(convert_vt_error)?;
-
-        Ok(serde_json::to_value(file)?)
+        self.fetch_report(arguments, "hash", |c, hash| async move {
+            c.files().get(&hash).await.map_err(convert_vt_error)
+        })
+        .await
     }
 
     /// Handle get_url_report tool call
     async fn handle_get_url_report(&self, arguments: &JsonValue) -> McpResult<JsonValue> {
-        let url = arguments["url"]
-            .as_str()
-            .ok_or_else(|| anyhow::anyhow!("Missing required parameter: url"))?;
-
-        // Encode URL for `VirusTotal` API
-        use base64::{engine::general_purpose, Engine as _};
-        let url_id = general_purpose::STANDARD.encode(url);
-        let url_info = self
-            .client
-            .urls()
-            .get(&url_id)
-            .await
-            .map_err(convert_vt_error)?;
-
-        Ok(serde_json::to_value(url_info)?)
+        self.fetch_report(arguments, "url", |c, url| async move {
+            use base64::{engine::general_purpose, Engine as _};
+            let url_id = general_purpose::STANDARD.encode(&url);
+            c.urls().get(&url_id).await.map_err(convert_vt_error)
+        })
+        .await
     }
 
     /// Handle get_ip_report tool call
     async fn handle_get_ip_report(&self, arguments: &JsonValue) -> McpResult<JsonValue> {
-        let ip = arguments["ip"]
-            .as_str()
-            .ok_or_else(|| anyhow::anyhow!("Missing required parameter: ip"))?;
-
-        let ip_info = self
-            .client
-            .ip_addresses()
-            .get(ip)
-            .await
-            .map_err(convert_vt_error)?;
-
-        Ok(serde_json::to_value(ip_info)?)
+        self.fetch_report(arguments, "ip", |c, ip| async move {
+            c.ip_addresses().get(&ip).await.map_err(convert_vt_error)
+        })
+        .await
     }
 
     /// Handle get_domain_report tool call
     async fn handle_get_domain_report(&self, arguments: &JsonValue) -> McpResult<JsonValue> {
-        let domain = arguments["domain"]
-            .as_str()
-            .ok_or_else(|| anyhow::anyhow!("Missing required parameter: domain"))?;
-
-        let domain_info = self
-            .client
-            .domains()
-            .get(domain)
-            .await
-            .map_err(convert_vt_error)?;
-
-        Ok(serde_json::to_value(domain_info)?)
+        self.fetch_report(arguments, "domain", |c, d| async move {
+            c.domains().get(&d).await.map_err(convert_vt_error)
+        })
+        .await
     }
 }
 
