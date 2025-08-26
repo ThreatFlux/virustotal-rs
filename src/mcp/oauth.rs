@@ -106,6 +106,21 @@ impl OAuthConfig {
         self.token_endpoint = token_endpoint.into();
         self
     }
+
+    /// Parse scopes from a comma-separated string
+    pub fn parse_scopes(scopes_str: &str) -> Vec<String> {
+        scopes_str
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .collect()
+    }
+
+    /// Read scopes from the `OAUTH_SCOPES` environment variable if present
+    pub fn scopes_from_env() -> Option<Vec<String>> {
+        std::env::var("OAUTH_SCOPES")
+            .ok()
+            .map(|s| Self::parse_scopes(&s))
+    }
 }
 
 /// OAuth credentials (access token + metadata)

@@ -2,7 +2,7 @@
 //! This module focuses on testing uncovered functionality in the files API
 
 use crate::files::*;
-use crate::tests::test_utils::{create_test_client, create_mock_server};
+use crate::tests::test_utils::TestUtils;
 use crate::tests::mock_data::*;
 use serde_json::json;
 use std::collections::HashMap;
@@ -10,14 +10,7 @@ use wiremock::{
     matchers::{method, path, path_regex, query_param},
     Mock, ResponseTemplate, MockServer,
 };
-use crate::VtClient;
 
-// Helper function to create a mock server with test client
-async fn setup_test_environment() -> (MockServer, VtClient) {
-    let mock_server = create_mock_server().await;
-    let client = create_test_client().with_base_url(&mock_server.uri()).unwrap();
-    (mock_server, client)
-}
 
 // Helper function to setup a standard file endpoint mock
 async fn setup_file_endpoint_mock(
@@ -65,7 +58,7 @@ async fn test_files_client_creation() {
 
 #[tokio::test]
 async fn test_file_upload_url_request() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
 
     setup_file_endpoint_mock(
         &mock_server,
@@ -82,7 +75,7 @@ async fn test_file_upload_url_request() {
 
 #[tokio::test]
 async fn test_file_scan_with_url() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
 
     setup_file_endpoint_mock(
         &mock_server,
@@ -105,7 +98,7 @@ async fn test_file_scan_with_url() {
 
 #[tokio::test]
 async fn test_file_rescan_with_params() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
     
     setup_file_endpoint_mock(
         &mock_server,
@@ -125,7 +118,7 @@ async fn test_file_rescan_with_params() {
 
 #[tokio::test]
 async fn test_file_get_comments() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
     
     Mock::given(method("GET"))
         .and(path(format!("/files/{}/comments", TEST_FILE_HASH)))
@@ -151,7 +144,7 @@ async fn test_file_get_comments() {
 
 #[tokio::test]
 async fn test_file_add_comment() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
     
     Mock::given(method("POST"))
         .and(path(format!("/files/{}/comments", TEST_FILE_HASH)))
@@ -173,7 +166,7 @@ async fn test_file_add_comment() {
 
 #[tokio::test]
 async fn test_file_get_votes() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
     
     Mock::given(method("GET"))
         .and(path(format!("/files/{}/votes", TEST_FILE_HASH)))
@@ -198,7 +191,7 @@ async fn test_file_get_votes() {
 
 #[tokio::test]
 async fn test_file_add_vote() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
     
     Mock::given(method("POST"))
         .and(path(format!("/files/{}/votes", TEST_FILE_HASH)))
@@ -220,7 +213,7 @@ async fn test_file_add_vote() {
 
 #[tokio::test]
 async fn test_file_get_download_url() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
     
     Mock::given(method("GET"))
         .and(path(format!("/files/{}/download_url", TEST_FILE_HASH)))
@@ -236,7 +229,7 @@ async fn test_file_get_download_url() {
 
 #[tokio::test]
 async fn test_file_relationships() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
     
     // Test contacted_domains relationship
     Mock::given(method("GET"))
@@ -266,7 +259,7 @@ async fn test_file_relationships() {
 
 #[tokio::test]
 async fn test_file_contacted_ips() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
     
     setup_regex_endpoint_mock(
         &mock_server,
@@ -291,7 +284,7 @@ async fn test_file_contacted_ips() {
 
 #[tokio::test]
 async fn test_file_dropped_files() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
     
     setup_regex_endpoint_mock(
         &mock_server,
@@ -316,7 +309,7 @@ async fn test_file_dropped_files() {
 
 #[tokio::test]
 async fn test_file_similar_files() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
     
     setup_regex_endpoint_mock(
         &mock_server,
@@ -341,7 +334,7 @@ async fn test_file_similar_files() {
 
 #[tokio::test]
 async fn test_file_carbonblack_children() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
     
     setup_regex_endpoint_mock(
         &mock_server,
@@ -365,7 +358,7 @@ async fn test_file_carbonblack_children() {
 
 #[tokio::test]
 async fn test_file_carbonblack_parents() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
     
     setup_regex_endpoint_mock(
         &mock_server,
@@ -389,7 +382,7 @@ async fn test_file_carbonblack_parents() {
 
 #[tokio::test]
 async fn test_file_compressed_parents() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
     
     setup_regex_endpoint_mock(
         &mock_server,
@@ -413,7 +406,7 @@ async fn test_file_compressed_parents() {
 
 #[tokio::test]
 async fn test_file_email_parents() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
     
     setup_regex_endpoint_mock(
         &mock_server,
@@ -437,7 +430,7 @@ async fn test_file_email_parents() {
 
 #[tokio::test]
 async fn test_file_execution_parents() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
     
     setup_regex_endpoint_mock(
         &mock_server,
@@ -461,7 +454,7 @@ async fn test_file_execution_parents() {
 
 #[tokio::test]
 async fn test_file_pe_resource_parents() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
     
     setup_regex_endpoint_mock(
         &mock_server,
@@ -485,7 +478,7 @@ async fn test_file_pe_resource_parents() {
 
 #[tokio::test]
 async fn test_file_relationships_with_limit() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
     
     Mock::given(method("GET"))
         .and(path_regex(format!(r"^/files/{}/contacted_domains", TEST_FILE_HASH)))
@@ -531,7 +524,7 @@ async fn test_file_behaviours() {
 
 #[tokio::test]
 async fn test_file_error_handling() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
 
     // Test 404 not found
     Mock::given(method("GET"))

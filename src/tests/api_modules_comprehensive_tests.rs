@@ -3,27 +3,20 @@
 
 use crate::attack_tactics::*;
 use crate::attack_techniques::*;
-use crate::urls::*;
 use crate::collections::*;
 use crate::comments::*;
 use crate::livehunt::*;
 use crate::retrohunt::*;
 use crate::search::*;
-use crate::tests::test_utils::{create_test_client, create_mock_server};
 use crate::tests::mock_data::*;
+use crate::tests::test_utils::TestUtils;
+use crate::urls::*;
 use serde_json::json;
 use wiremock::{
     matchers::{method, path, path_regex, query_param},
-    Mock, ResponseTemplate, MockServer,
+    Mock, MockServer, ResponseTemplate,
 };
-use crate::VtClient;
 
-// Helper function to create mock server and client
-async fn setup_test_environment() -> (MockServer, VtClient) {
-    let mock_server = create_mock_server().await;
-    let client = create_test_client().with_base_url(&mock_server.uri()).unwrap();
-    (mock_server, client)
-}
 
 // Helper function to setup a GET endpoint mock
 async fn setup_get_endpoint(
@@ -52,10 +45,7 @@ async fn setup_post_endpoint(
 }
 
 // Helper function to setup a DELETE endpoint mock with 204 response
-async fn setup_delete_endpoint(
-    mock_server: &MockServer,
-    endpoint: String,
-) {
+async fn setup_delete_endpoint(mock_server: &MockServer, endpoint: String) {
     Mock::given(method("DELETE"))
         .and(path(endpoint))
         .respond_with(ResponseTemplate::new(204))
@@ -92,10 +82,10 @@ async fn setup_get_regex_endpoint(
 // Attack Tactics Tests
 #[tokio::test]
 async fn test_attack_tactics_client_get() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
 
     let tactic_id = "TA0001";
-    
+
     setup_get_endpoint(
         &mock_server,
         format!("/attack_tactics/{}", tactic_id),
@@ -111,8 +101,9 @@ async fn test_attack_tactics_client_get() {
                     "tactics": ["initial-access"]
                 }
             }
-        })
-    ).await;
+        }),
+    )
+    .await;
 
     let result = client.attack_tactics().get(tactic_id).await;
     assert!(result.is_ok());
@@ -120,10 +111,10 @@ async fn test_attack_tactics_client_get() {
 
 #[tokio::test]
 async fn test_attack_tactics_get_techniques() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
 
     let tactic_id = "TA0001";
-    
+
     setup_get_regex_endpoint(
         &mock_server,
         format!(r"^/attack_tactics/{}/attack_techniques", tactic_id),
@@ -139,8 +130,9 @@ async fn test_attack_tactics_get_techniques() {
                     }
                 }
             ]
-        })
-    ).await;
+        }),
+    )
+    .await;
 
     let result = client.attack_tactics().get_techniques(tactic_id).await;
     assert!(result.is_ok());
@@ -148,10 +140,10 @@ async fn test_attack_tactics_get_techniques() {
 
 #[tokio::test]
 async fn test_attack_tactics_get_objects() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
 
     let tactic_id = "TA0001";
-    
+
     setup_get_regex_endpoint(
         &mock_server,
         format!(r"^/attack_tactics/{}/objects", tactic_id),
@@ -166,8 +158,9 @@ async fn test_attack_tactics_get_objects() {
                     }
                 }
             ]
-        })
-    ).await;
+        }),
+    )
+    .await;
 
     let result = client.attack_tactics().get_objects(tactic_id).await;
     assert!(result.is_ok());
@@ -175,10 +168,10 @@ async fn test_attack_tactics_get_objects() {
 
 #[tokio::test]
 async fn test_attack_tactics_relationships() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
 
     let tactic_id = "TA0001";
-    
+
     setup_get_regex_endpoint(
         &mock_server,
         format!(r"^/attack_tactics/{}/relationships", tactic_id),
@@ -194,8 +187,9 @@ async fn test_attack_tactics_relationships() {
                     }
                 }
             ]
-        })
-    ).await;
+        }),
+    )
+    .await;
 
     let result = client.attack_tactics().get_relationships(tactic_id).await;
     assert!(result.is_ok());
@@ -204,10 +198,10 @@ async fn test_attack_tactics_relationships() {
 // Attack Techniques Tests
 #[tokio::test]
 async fn test_attack_techniques_client_get() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
 
     let technique_id = "T1566";
-    
+
     setup_get_endpoint(
         &mock_server,
         format!("/attack_techniques/{}", technique_id),
@@ -224,8 +218,9 @@ async fn test_attack_techniques_client_get() {
                     "subtechniques": ["T1566.001", "T1566.002"]
                 }
             }
-        })
-    ).await;
+        }),
+    )
+    .await;
 
     let result = client.attack_techniques().get(technique_id).await;
     assert!(result.is_ok());
@@ -233,10 +228,10 @@ async fn test_attack_techniques_client_get() {
 
 #[tokio::test]
 async fn test_attack_techniques_get_subtechniques() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
 
     let technique_id = "T1566";
-    
+
     setup_get_regex_endpoint(
         &mock_server,
         format!(r"^/attack_techniques/{}/subtechniques", technique_id),
@@ -252,22 +247,31 @@ async fn test_attack_techniques_get_subtechniques() {
                     }
                 }
             ]
-        })
-    ).await;
+        }),
+    )
+    .await;
 
-    let result = client.attack_techniques().get_subtechniques(technique_id).await;
+    let result = client
+        .attack_techniques()
+        .get_subtechniques(technique_id)
+        .await;
     assert!(result.is_ok());
 }
 
 #[tokio::test]
 async fn test_attack_techniques_get_parent() {
     let mock_server = create_mock_server().await;
-    let client = create_test_client().with_base_url(&mock_server.uri()).unwrap();
+    let client = create_test_client()
+        .with_base_url(&mock_server.uri())
+        .unwrap();
 
     let subtechnique_id = "T1566.001";
-    
+
     Mock::given(method("GET"))
-        .and(path_regex(format!(r"^/attack_techniques/{}/parent_technique", subtechnique_id)))
+        .and(path_regex(format!(
+            r"^/attack_techniques/{}/parent_technique",
+            subtechnique_id
+        )))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "data": {
                 "type": "attack_technique",
@@ -288,10 +292,10 @@ async fn test_attack_techniques_get_parent() {
 // URLs Tests
 #[tokio::test]
 async fn test_urls_client_scan() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
 
     let test_url = "https://example.com/suspicious";
-    
+
     setup_post_endpoint(
         &mock_server,
         "/urls".to_string(),
@@ -303,8 +307,9 @@ async fn test_urls_client_scan() {
                     "status": "queued"
                 }
             }
-        })
-    ).await;
+        }),
+    )
+    .await;
 
     let result = client.urls().scan(test_url).await;
     assert!(result.is_ok());
@@ -312,10 +317,10 @@ async fn test_urls_client_scan() {
 
 #[tokio::test]
 async fn test_urls_client_get() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
 
     let url_id = "example-url-id";
-    
+
     setup_get_endpoint(
         &mock_server,
         format!("/urls/{}", url_id),
@@ -333,8 +338,9 @@ async fn test_urls_client_get() {
                     }
                 }
             }
-        })
-    ).await;
+        }),
+    )
+    .await;
 
     let result = client.urls().get(url_id).await;
     assert!(result.is_ok());
@@ -342,10 +348,10 @@ async fn test_urls_client_get() {
 
 #[tokio::test]
 async fn test_urls_rescan() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
 
     let url_id = "example-url-id";
-    
+
     setup_post_endpoint(
         &mock_server,
         format!("/urls/{}/analyse", url_id),
@@ -354,8 +360,9 @@ async fn test_urls_rescan() {
                 "type": "analysis",
                 "id": "rescan-analysis-id"
             }
-        })
-    ).await;
+        }),
+    )
+    .await;
 
     let result = client.urls().rescan(url_id).await;
     assert!(result.is_ok());
@@ -363,10 +370,10 @@ async fn test_urls_rescan() {
 
 #[tokio::test]
 async fn test_urls_get_comments() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
 
     let url_id = "example-url-id";
-    
+
     setup_get_endpoint(
         &mock_server,
         format!("/urls/{}/comments", url_id),
@@ -381,8 +388,9 @@ async fn test_urls_get_comments() {
                     }
                 }
             ]
-        })
-    ).await;
+        }),
+    )
+    .await;
 
     let result = client.urls().get_comments(url_id).await;
     assert!(result.is_ok());
@@ -390,10 +398,10 @@ async fn test_urls_get_comments() {
 
 #[tokio::test]
 async fn test_urls_add_comment() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
 
     let url_id = "example-url-id";
-    
+
     setup_post_endpoint(
         &mock_server,
         format!("/urls/{}/comments", url_id),
@@ -405,8 +413,9 @@ async fn test_urls_add_comment() {
                     "text": "Added comment"
                 }
             }
-        })
-    ).await;
+        }),
+    )
+    .await;
 
     let result = client.urls().add_comment(url_id, "Added comment").await;
     assert!(result.is_ok());
@@ -415,7 +424,7 @@ async fn test_urls_add_comment() {
 // Collections Tests
 #[tokio::test]
 async fn test_collections_client_create() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
 
     setup_post_endpoint(
         &mock_server,
@@ -429,8 +438,9 @@ async fn test_collections_client_create() {
                     "description": "A test collection"
                 }
             }
-        })
-    ).await;
+        }),
+    )
+    .await;
 
     let create_request = CreateCollectionRequest {
         data: CreateCollectionData {
@@ -450,10 +460,10 @@ async fn test_collections_client_create() {
 
 #[tokio::test]
 async fn test_collections_client_get() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
 
     let collection_id = "test-collection-id";
-    
+
     setup_get_endpoint(
         &mock_server,
         format!("/collections/{}", collection_id),
@@ -467,8 +477,9 @@ async fn test_collections_client_get() {
                     "items_count": 10
                 }
             }
-        })
-    ).await;
+        }),
+    )
+    .await;
 
     let result = client.collections().get(collection_id).await;
     assert!(result.is_ok());
@@ -476,10 +487,10 @@ async fn test_collections_client_get() {
 
 #[tokio::test]
 async fn test_collections_update() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
 
     let collection_id = "test-collection-id";
-    
+
     setup_patch_endpoint(
         &mock_server,
         format!("/collections/{}", collection_id),
@@ -492,8 +503,9 @@ async fn test_collections_update() {
                     "description": "Updated description"
                 }
             }
-        })
-    ).await;
+        }),
+    )
+    .await;
 
     let update_request = UpdateCollectionRequest {
         data: UpdateCollectionData {
@@ -506,20 +518,20 @@ async fn test_collections_update() {
         },
     };
 
-    let result = client.collections().update(collection_id, &update_request).await;
+    let result = client
+        .collections()
+        .update(collection_id, &update_request)
+        .await;
     assert!(result.is_ok());
 }
 
 #[tokio::test]
 async fn test_collections_delete() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
 
     let collection_id = "test-collection-id";
-    
-    setup_delete_endpoint(
-        &mock_server,
-        format!("/collections/{}", collection_id)
-    ).await;
+
+    setup_delete_endpoint(&mock_server, format!("/collections/{}", collection_id)).await;
 
     let result = client.collections().delete(collection_id).await;
     assert!(result.is_ok());
@@ -528,10 +540,10 @@ async fn test_collections_delete() {
 // LiveHunt Tests
 #[tokio::test]
 async fn test_livehunt_client_get_ruleset() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
 
     let ruleset_id = "test-ruleset-id";
-    
+
     setup_get_endpoint(
         &mock_server,
         format!("/intelligence/hunting_rulesets/{}", ruleset_id),
@@ -545,8 +557,9 @@ async fn test_livehunt_client_get_ruleset() {
                     "enabled": true
                 }
             }
-        })
-    ).await;
+        }),
+    )
+    .await;
 
     let result = client.livehunt().get_ruleset(ruleset_id).await;
     assert!(result.is_ok());
@@ -554,7 +567,7 @@ async fn test_livehunt_client_get_ruleset() {
 
 #[tokio::test]
 async fn test_livehunt_create_ruleset() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
 
     setup_post_endpoint(
         &mock_server,
@@ -567,8 +580,9 @@ async fn test_livehunt_create_ruleset() {
                     "name": "New Ruleset"
                 }
             }
-        })
-    ).await;
+        }),
+    )
+    .await;
 
     let create_request = CreateLivehuntRulesetRequest {
         data: CreateLivehuntRulesetData {
@@ -590,13 +604,16 @@ async fn test_livehunt_create_ruleset() {
 
 #[tokio::test]
 async fn test_livehunt_get_notifications() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
 
     let ruleset_id = "test-ruleset-id";
-    
+
     setup_get_regex_endpoint(
         &mock_server,
-        format!(r"^/intelligence/hunting_rulesets/{}/notifications", ruleset_id),
+        format!(
+            r"^/intelligence/hunting_rulesets/{}/notifications",
+            ruleset_id
+        ),
         json!({
             "data": [
                 {
@@ -609,20 +626,21 @@ async fn test_livehunt_get_notifications() {
                     }
                 }
             ]
-        })
-    ).await;
+        }),
+    )
+    .await;
 
     let result = client.livehunt().get_notifications(ruleset_id).await;
     assert!(result.is_ok());
 }
 
-// RetroHunt Tests  
+// RetroHunt Tests
 #[tokio::test]
 async fn test_retrohunt_client_get_job() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
 
     let job_id = "test-job-id";
-    
+
     setup_get_endpoint(
         &mock_server,
         format!("/intelligence/retrohunt_jobs/{}", job_id),
@@ -636,8 +654,9 @@ async fn test_retrohunt_client_get_job() {
                     "progress": 50
                 }
             }
-        })
-    ).await;
+        }),
+    )
+    .await;
 
     let result = client.retrohunt().get_job(job_id).await;
     assert!(result.is_ok());
@@ -645,7 +664,7 @@ async fn test_retrohunt_client_get_job() {
 
 #[tokio::test]
 async fn test_retrohunt_create_job() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
 
     setup_post_endpoint(
         &mock_server,
@@ -658,8 +677,9 @@ async fn test_retrohunt_create_job() {
                     "status": "queued"
                 }
             }
-        })
-    ).await;
+        }),
+    )
+    .await;
 
     let create_request = CreateRetrohuntJobRequest {
         data: CreateRetrohuntJobData {
@@ -682,14 +702,15 @@ async fn test_retrohunt_create_job() {
 
 #[tokio::test]
 async fn test_retrohunt_delete_job() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
 
     let job_id = "test-job-id";
-    
+
     setup_delete_endpoint(
         &mock_server,
-        format!("/intelligence/retrohunt_jobs/{}", job_id)
-    ).await;
+        format!("/intelligence/retrohunt_jobs/{}", job_id),
+    )
+    .await;
 
     let result = client.retrohunt().delete_job(job_id).await;
     assert!(result.is_ok());
@@ -698,7 +719,7 @@ async fn test_retrohunt_delete_job() {
 // Search Tests
 #[tokio::test]
 async fn test_search_client_search() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
 
     Mock::given(method("GET"))
         .and(path("/intelligence/search"))
@@ -724,7 +745,7 @@ async fn test_search_client_search() {
 
 #[tokio::test]
 async fn test_search_with_limit() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
 
     Mock::given(method("GET"))
         .and(path("/intelligence/search"))
@@ -746,10 +767,10 @@ async fn test_search_with_limit() {
 // Comments Tests
 #[tokio::test]
 async fn test_comments_client_get() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
 
     let comment_id = "test-comment-id";
-    
+
     setup_get_endpoint(
         &mock_server,
         format!("/comments/{}", comment_id),
@@ -763,8 +784,9 @@ async fn test_comments_client_get() {
                     "tags": ["malware"]
                 }
             }
-        })
-    ).await;
+        }),
+    )
+    .await;
 
     let result = client.comments().get(comment_id).await;
     assert!(result.is_ok());
@@ -772,10 +794,10 @@ async fn test_comments_client_get() {
 
 #[tokio::test]
 async fn test_comments_update() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
 
     let comment_id = "test-comment-id";
-    
+
     setup_patch_endpoint(
         &mock_server,
         format!("/comments/{}", comment_id),
@@ -787,23 +809,24 @@ async fn test_comments_update() {
                     "text": "Updated comment"
                 }
             }
-        })
-    ).await;
+        }),
+    )
+    .await;
 
-    let result = client.comments().update(comment_id, "Updated comment").await;
+    let result = client
+        .comments()
+        .update(comment_id, "Updated comment")
+        .await;
     assert!(result.is_ok());
 }
 
 #[tokio::test]
 async fn test_comments_delete() {
-    let (mock_server, client) = setup_test_environment().await;
+    let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
 
     let comment_id = "test-comment-id";
-    
-    setup_delete_endpoint(
-        &mock_server,
-        format!("/comments/{}", comment_id)
-    ).await;
+
+    setup_delete_endpoint(&mock_server, format!("/comments/{}", comment_id)).await;
 
     let result = client.comments().delete(comment_id).await;
     assert!(result.is_ok());
@@ -811,8 +834,8 @@ async fn test_comments_delete() {
 
 // Test data structure creation and serialization
 #[test]
-fn test_data_structures_creation() {
-    // Test AttackTacticAttributes
+#[test]
+fn test_attack_tactic_attributes_creation() {
     let tactic_attrs = AttackTacticAttributes {
         name: Some("Initial Access".to_string()),
         description: Some("The adversary is trying to get into your network".to_string()),
@@ -822,12 +845,14 @@ fn test_data_structures_creation() {
         techniques_count: Some(5),
         additional_attributes: HashMap::new(),
     };
-    
+
     assert_eq!(tactic_attrs.name.as_ref().unwrap(), "Initial Access");
     assert_eq!(tactic_attrs.external_id.as_ref().unwrap(), "TA0001");
     assert_eq!(tactic_attrs.platforms.as_ref().unwrap().len(), 2);
-    
-    // Test AttackTechniqueAttributes
+}
+
+#[test]
+fn test_attack_technique_attributes_creation() {
     let technique_attrs = AttackTechniqueAttributes {
         name: Some("Phishing".to_string()),
         description: Some("Adversaries may send phishing messages".to_string()),
@@ -845,12 +870,14 @@ fn test_data_structures_creation() {
         is_subtechnique: Some(false),
         additional_attributes: HashMap::new(),
     };
-    
+
     assert_eq!(technique_attrs.name.as_ref().unwrap(), "Phishing");
     assert_eq!(technique_attrs.external_id.as_ref().unwrap(), "T1566");
     assert_eq!(technique_attrs.is_subtechnique, Some(false));
-    
-    // Test CreateCollectionRequest
+}
+
+#[test]
+fn test_create_collection_request() {
     let collection_request = CreateCollectionRequest {
         data: CreateCollectionData {
             attributes: CreateCollectionAttributes {
@@ -872,7 +899,7 @@ fn test_data_structures_creation() {
             raw_items: None,
         },
     };
-    
+
     assert_eq!(collection_request.data.attributes.name, "Test Collection");
     assert!(collection_request.data.relationships.is_some());
 }
@@ -889,11 +916,11 @@ fn test_url_descriptor_variants() {
             id: "url-id-123".to_string(),
         },
     ];
-    
+
     for descriptor in descriptors {
         let serialized = serde_json::to_string(&descriptor).unwrap();
         assert!(!serialized.is_empty());
-        
+
         let deserialized: UrlDescriptor = serde_json::from_str(&serialized).unwrap();
         // Note: We can't directly compare due to the untagged enum nature
         assert!(!format!("{:?}", deserialized).is_empty());
@@ -903,17 +930,13 @@ fn test_url_descriptor_variants() {
 #[test]
 fn test_enum_string_conversions() {
     // Test ExportFormat
-    let export_formats = vec![
-        ExportFormat::Json,
-        ExportFormat::Csv,
-        ExportFormat::Stix,
-    ];
-    
+    let export_formats = vec![ExportFormat::Json, ExportFormat::Csv, ExportFormat::Stix];
+
     for format in export_formats {
         let string_val = format.to_string();
         assert!(!string_val.is_empty());
     }
-    
+
     // Test CollectionOrder
     let collection_orders = vec![
         CollectionOrder::CreationDateAsc,
@@ -922,18 +945,15 @@ fn test_enum_string_conversions() {
         CollectionOrder::FilesAsc,
         CollectionOrder::DomainsDesc,
     ];
-    
+
     for order in collection_orders {
         let string_val = order.to_string();
         assert!(!string_val.is_empty());
     }
-    
+
     // Test Corpus
-    let corpuses = vec![
-        Corpus::Goodware,
-        Corpus::Main,
-    ];
-    
+    let corpuses = vec![Corpus::Goodware, Corpus::Main];
+
     for corpus in corpuses {
         let string_val = corpus.to_string();
         assert!(!string_val.is_empty());

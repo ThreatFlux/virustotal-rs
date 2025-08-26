@@ -1,15 +1,11 @@
-use virustotal_rs::{
-    ApiTier, ClientBuilder, EntityType, IocStreamOrder, SourceType, YaraRuleOrder,
-};
+use virustotal_rs::{ApiTier, EntityType, IocStreamOrder, SourceType, YaraRuleOrder};
+#[path = "common/mod.rs"]
+mod common;
+use common::build_client_from_env;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let api_key = std::env::var("VT_API_KEY").unwrap_or_else(|_| "test_key".to_string());
-
-    let client = ClientBuilder::new()
-        .api_key(api_key)
-        .tier(ApiTier::Premium)
-        .build()?;
+    let client = build_client_from_env("VT_API_KEY", ApiTier::Premium)?;
 
     println!("Testing Crowdsourced YARA Rules and IoC Stream APIs");
     println!("===================================================\n");

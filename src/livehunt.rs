@@ -311,6 +311,32 @@ impl<'a> LivehuntClient<'a> {
     pub fn new(client: &'a Client) -> Self {
         Self { client }
     }
+    fn build_rulesets_url(
+        filter: Option<&str>,
+        order: Option<LivehuntRulesetOrder>,
+        limit: Option<u32>,
+        cursor: Option<&str>,
+    ) -> String {
+        let mut params = Vec::new();
+        if let Some(f) = filter {
+            params.push(format!("filter={}", urlencoding::encode(f)));
+        }
+        if let Some(o) = order {
+            params.push(format!("order={}", o.to_string()));
+        }
+        if let Some(l) = limit {
+            params.push(format!("limit={}", l));
+        }
+        if let Some(c) = cursor {
+            params.push(format!("cursor={}", urlencoding::encode(c)));
+        }
+        let query = if params.is_empty() {
+            String::new()
+        } else {
+            format!("?{}", params.join("&"))
+        };
+        format!("intelligence/hunting_rulesets{}", query)
+    }
 
     // ===== Ruleset Management =====
 
@@ -322,27 +348,7 @@ impl<'a> LivehuntClient<'a> {
         limit: Option<u32>,
         cursor: Option<&str>,
     ) -> Result<Collection<LivehuntRuleset>> {
-        let mut url = String::from("intelligence/hunting_rulesets?");
-
-        if let Some(f) = filter {
-            url.push_str(&format!("filter={}&", urlencoding::encode(f)));
-        }
-
-        if let Some(o) = order {
-            url.push_str(&format!("order={}&", o.to_string()));
-        }
-
-        if let Some(l) = limit {
-            url.push_str(&format!("limit={}&", l));
-        }
-
-        if let Some(c) = cursor {
-            url.push_str(&format!("cursor={}&", urlencoding::encode(c)));
-        }
-
-        // Remove trailing '&' or '?'
-        url.pop();
-
+        let url = Self::build_rulesets_url(filter, order, limit, cursor);
         self.client.get(&url).await
     }
 
@@ -352,19 +358,7 @@ impl<'a> LivehuntClient<'a> {
         filter: Option<&str>,
         order: Option<LivehuntRulesetOrder>,
     ) -> CollectionIterator<'_, LivehuntRuleset> {
-        let mut url = String::from("intelligence/hunting_rulesets?");
-
-        if let Some(f) = filter {
-            url.push_str(&format!("filter={}&", urlencoding::encode(f)));
-        }
-
-        if let Some(o) = order {
-            url.push_str(&format!("order={}&", o.to_string()));
-        }
-
-        // Remove trailing '&' or '?'
-        url.pop();
-
+        let url = Self::build_rulesets_url(filter, order, None, None);
         CollectionIterator::new(self.client, url)
     }
 
