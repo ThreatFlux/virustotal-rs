@@ -11,6 +11,12 @@ use crate::mcp::oauth::{OAuthClaims, OAuthConfig, OAuthError, OAuthState};
 #[cfg(any(feature = "mcp-jwt", feature = "mcp-oauth"))]
 use tower_http::cors::CorsLayer;
 
+#[cfg(feature = "axum")]
+use axum::{
+    routing::{get, post},
+    Router,
+};
+
 use super::common::handle_request;
 
 #[cfg(feature = "mcp-jwt")]
@@ -97,11 +103,10 @@ async fn run_http_server_with_auth(
     Ok(())
 }
 #[cfg(feature = "axum")]
-fn base_router<S>(root: axum::routing::MethodRouter<S>) -> axum::Router<S>
+fn base_router<S>(root: axum::routing::MethodRouter<S>) -> Router<S>
 where
     S: Clone + Send + Sync + 'static,
 {
-    use axum::{routing::get, Router};
     Router::new()
         .route("/", root)
         .route("/health", get(health_check))
@@ -109,7 +114,6 @@ where
 
 #[cfg(all(feature = "axum", feature = "mcp-oauth"))]
 fn oauth_router(server: VtMcpServer, oauth_state: OAuthState) -> axum::Router {
-    use axum::routing::{get, post};
     base_router(post(handle_http_request_oauth))
         .route("/oauth/authorize", get(oauth_authorize))
         .with_state((server, oauth_state))
@@ -118,7 +122,6 @@ fn oauth_router(server: VtMcpServer, oauth_state: OAuthState) -> axum::Router {
 
 #[cfg(all(feature = "axum", feature = "mcp-jwt"))]
 fn jwt_router(server: VtMcpServer, jwt_manager: JwtManager) -> axum::Router {
-    use axum::routing::post;
     base_router(post(handle_http_request_jwt))
         .route("/auth/token", post(generate_token))
         .route("/auth/refresh", post(refresh_token))
@@ -129,7 +132,6 @@ fn jwt_router(server: VtMcpServer, jwt_manager: JwtManager) -> axum::Router {
 
 #[cfg(feature = "axum")]
 fn plain_router(server: VtMcpServer) -> axum::Router {
-    use axum::routing::post;
     base_router(post(handle_http_request)).with_state(server)
 }
 
