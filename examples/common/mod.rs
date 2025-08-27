@@ -819,10 +819,8 @@ pub mod error_handling {
     ) -> Result<T, Box<dyn std::error::Error>> {
         result.map_err(|e| {
             eprintln!("Error {}: {}", context, e);
-            Box::new(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("{}: {}", context, e),
-            )) as Box<dyn std::error::Error>
+            Box::new(std::io::Error::other(format!("{}: {}", context, e)))
+                as Box<dyn std::error::Error>
         })
     }
 }

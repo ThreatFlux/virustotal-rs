@@ -293,7 +293,7 @@ async fn download_html_report(feeds: &FeedsClient, token: &str) {
 }
 
 /// Download memory dump
-async fn download_memory_dump(feeds: &FeedsClient<'_>, token: &str) {
+async fn download_memory_dump(feeds: &FeedsClient, token: &str) {
     println!("\nDownloading memory dump...");
     match feeds.download_behaviour_memdump(token).await {
         Ok(memdump_data) => {
@@ -323,7 +323,7 @@ fn print_artifact_error(artifact_type: &str, error: &virustotal_rs::Error) {
 }
 
 /// Test deprecated methods for backward compatibility
-async fn test_deprecated_methods(feeds: &FeedsClient<'_>) {
+async fn test_deprecated_methods(feeds: &FeedsClient) {
     println!("\n6. BACKWARD COMPATIBILITY");
     println!("-------------------------");
     println!("Testing deprecated method names...");
@@ -333,7 +333,7 @@ async fn test_deprecated_methods(feeds: &FeedsClient<'_>) {
 }
 
 /// Test deprecated sandbox feed method
-async fn test_deprecated_sandbox_feed(feeds: &FeedsClient<'_>) {
+async fn test_deprecated_sandbox_feed(feeds: &FeedsClient) {
     let feed_time = "202312010802";
     #[allow(deprecated)]
     match feeds.get_sandbox_feed_batch(feed_time).await {
@@ -346,7 +346,7 @@ async fn test_deprecated_sandbox_feed(feeds: &FeedsClient<'_>) {
 }
 
 /// Test deprecated hourly feed method
-async fn test_deprecated_hourly_feed(feeds: &FeedsClient<'_>) {
+async fn test_deprecated_hourly_feed(feeds: &FeedsClient) {
     let hourly_time = "2023120108";
     #[allow(deprecated)]
     match feeds.get_hourly_sandbox_feed_batch(hourly_time).await {

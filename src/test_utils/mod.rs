@@ -13,14 +13,12 @@ pub mod responses;
 
 #[cfg(test)]
 //pub use assertions::*;
-
-#[cfg(test)]
 /// Re-exports for backward compatibility
 pub mod test_utilities {
     pub use super::builders::{
         AnalysisStatsBuilder, DomainResponseBuilder, FileResponseBuilder, IpResponseBuilder,
     };
-    pub use super::constants::constants;
+    pub use super::constants;
     pub use super::environment::TestEnvironment;
     pub use super::mock_client::MockApiClient;
     pub use super::responses::{create_json_response, create_mock_response, ResponseFactory};

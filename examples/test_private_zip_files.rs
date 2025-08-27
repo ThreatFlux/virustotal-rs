@@ -152,13 +152,30 @@ fn display_download_result(zip_bytes: &[u8]) {
 async fn test_simple_zip(private_files: &PrivateFilesClient<'_>) -> Result<()> {
     print_step_header(6, "CREATE ZIP WITHOUT PASSWORD");
 
-    let simple_request = CreatePrivateZipRequest::new(vec![
+    let simple_request = create_simple_zip_request();
+    print_simple_zip_info();
+
+    execute_simple_zip_creation(private_files, &simple_request).await
+}
+
+/// Create a simple ZIP request with a single hash
+fn create_simple_zip_request() -> CreatePrivateZipRequest {
+    CreatePrivateZipRequest::new(vec![
         "275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f".to_string(),
-    ]);
+    ])
+}
 
+/// Print information about simple ZIP creation
+fn print_simple_zip_info() {
     println!("Creating simple ZIP file (no password)...");
+}
 
-    match private_files.create_zip(&simple_request).await {
+/// Execute the simple ZIP creation and handle the result
+async fn execute_simple_zip_creation(
+    private_files: &PrivateFilesClient<'_>,
+    request: &CreatePrivateZipRequest,
+) -> Result<()> {
+    match private_files.create_zip(request).await {
         Ok(zip_file) => {
             display_simple_zip_result(&zip_file);
         }

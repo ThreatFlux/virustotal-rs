@@ -1,6 +1,8 @@
 use std::env;
-use virustotal_rs::file_behaviours::{DnsLookup, HttpConversation, IpTraffic};
-use virustotal_rs::files::{FileBehaviorSummary, FileBehaviorSummaryResponse};
+use virustotal_rs::files::{
+    DnsLookup, FileBehaviorSummary, FileBehaviorSummaryResponse, HttpConversation, IpTraffic,
+    MitreAttackTechnique,
+};
 use virustotal_rs::{ApiTier, ClientBuilder};
 
 #[tokio::main]
@@ -100,7 +102,7 @@ fn display_processes_created(processes_created: &Option<Vec<String>>) {
 }
 
 /// Display process tree
-fn display_process_tree(processes_tree: &Option<Vec<virustotal_rs::ProcessInfo>>) {
+fn display_process_tree(processes_tree: &Option<Vec<virustotal_rs::files::ProcessTreeNode>>) {
     if let Some(tree) = processes_tree {
         if !tree.is_empty() {
             println!("\n🌲 Process Tree:");
@@ -112,7 +114,7 @@ fn display_process_tree(processes_tree: &Option<Vec<virustotal_rs::ProcessInfo>>
 }
 
 /// Display individual process node
-fn display_process_node(node: &virustotal_rs::ProcessInfo) {
+fn display_process_node(node: &virustotal_rs::files::ProcessTreeNode) {
     println!(
         "  • {} (PID: {})",
         node.name.as_ref().unwrap_or(&"Unknown".to_string()),
@@ -271,7 +273,7 @@ fn display_behavioral_tags(tags: &Option<Vec<String>>) {
 }
 
 /// Display MITRE ATT&CK techniques
-fn display_mitre_techniques(techniques: &Option<Vec<virustotal_rs::MitreTechnique>>) {
+fn display_mitre_techniques(techniques: &Option<Vec<MitreAttackTechnique>>) {
     if let Some(techniques) = techniques {
         if !techniques.is_empty() {
             println!("\n⚔️ MITRE ATT&CK Techniques:");
@@ -283,19 +285,11 @@ fn display_mitre_techniques(techniques: &Option<Vec<virustotal_rs::MitreTechniqu
 }
 
 /// Display individual MITRE technique
-fn display_mitre_technique(technique: &virustotal_rs::MitreTechnique) {
+fn display_mitre_technique(technique: &MitreAttackTechnique) {
     println!(
         "  • {} - {}",
-        technique
-            .id
-            .as_ref()
-            .map(|s| s.as_str())
-            .unwrap_or("Unknown"),
-        technique
-            .name
-            .as_ref()
-            .map(|s| s.as_str())
-            .unwrap_or("Unknown")
+        technique.id.as_ref().unwrap_or(&"Unknown".to_string()),
+        technique.name.as_ref().unwrap_or(&"Unknown".to_string())
     );
 
     if let Some(ref desc) = technique.description {

@@ -218,6 +218,38 @@ fn restore_environment_state(original_vt_key: Option<String>, original_vti_key: 
     env::remove_var("VT_PRIVATE_API_KEY");
 }
 
+/// Runs core utility tests (API key, client creation, string utilities)
+async fn run_core_utility_tests() -> ExampleResult<()> {
+    test_api_key_utilities().await?;
+    test_client_creation_utilities().await?;
+    test_string_utilities().await?;
+    Ok(())
+}
+
+/// Runs display and formatting tests
+async fn run_display_tests() -> ExampleResult<()> {
+    test_display_utilities().await?;
+    test_result_handling_utilities().await?;
+    test_file_size_formatting().await?;
+    Ok(())
+}
+
+/// Runs analysis and data processing tests
+async fn run_analysis_tests() -> ExampleResult<()> {
+    test_analysis_stats_utilities().await?;
+    test_rate_limiting_utilities().await?;
+    test_constants().await?;
+    Ok(())
+}
+
+/// Orchestrates all test execution
+async fn execute_all_tests() -> ExampleResult<()> {
+    run_core_utility_tests().await?;
+    run_display_tests().await?;
+    run_analysis_tests().await?;
+    Ok(())
+}
+
 /// Prints the final test summary
 fn print_final_summary() {
     print_separator(Some(80));
@@ -239,17 +271,7 @@ fn print_final_summary() {
 #[tokio::main]
 async fn main() -> ExampleResult<()> {
     print_header("Testing Common Utilities Module");
-
-    test_api_key_utilities().await?;
-    test_client_creation_utilities().await?;
-    test_string_utilities().await?;
-    test_display_utilities().await?;
-    test_result_handling_utilities().await?;
-    test_analysis_stats_utilities().await?;
-    test_file_size_formatting().await?;
-    test_rate_limiting_utilities().await?;
-    test_constants().await?;
-
+    execute_all_tests().await?;
     print_final_summary();
     Ok(())
 }

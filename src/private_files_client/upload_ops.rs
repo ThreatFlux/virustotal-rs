@@ -37,6 +37,19 @@ impl<'a> PrivateFilesClient<'a> {
         mut form: reqwest::multipart::Form,
         params: PrivateFileUploadParams,
     ) -> Result<reqwest::multipart::Form> {
+        form = self.add_sandbox_params(form, &params);
+        form = self.add_execution_params(form, &params);
+        form = self.add_storage_params(form, &params);
+        form = self.add_interaction_params(form, &params);
+        Ok(form)
+    }
+
+    /// Add sandbox-related parameters to form
+    fn add_sandbox_params(
+        &self,
+        mut form: reqwest::multipart::Form,
+        params: &PrivateFileUploadParams,
+    ) -> reqwest::multipart::Form {
         if let Some(disable_sandbox) = params.disable_sandbox {
             form = form.text("disable_sandbox", disable_sandbox.to_string());
         }
@@ -46,28 +59,55 @@ impl<'a> PrivateFilesClient<'a> {
         if let Some(intercept_tls) = params.intercept_tls {
             form = form.text("intercept_tls", intercept_tls.to_string());
         }
-        if let Some(command_line) = params.command_line {
-            form = form.text("command_line", command_line);
+        form
+    }
+
+    /// Add execution-related parameters to form
+    fn add_execution_params(
+        &self,
+        mut form: reqwest::multipart::Form,
+        params: &PrivateFileUploadParams,
+    ) -> reqwest::multipart::Form {
+        if let Some(command_line) = &params.command_line {
+            form = form.text("command_line", command_line.clone());
         }
-        if let Some(password) = params.password {
-            form = form.text("password", password);
+        if let Some(password) = &params.password {
+            form = form.text("password", password.clone());
         }
+        form
+    }
+
+    /// Add storage-related parameters to form
+    fn add_storage_params(
+        &self,
+        mut form: reqwest::multipart::Form,
+        params: &PrivateFileUploadParams,
+    ) -> reqwest::multipart::Form {
         if let Some(retention_period_days) = params.retention_period_days {
             form = form.text("retention_period_days", retention_period_days.to_string());
         }
-        if let Some(storage_region) = params.storage_region {
-            form = form.text("storage_region", storage_region);
+        if let Some(storage_region) = &params.storage_region {
+            form = form.text("storage_region", storage_region.clone());
         }
-        if let Some(interaction_sandbox) = params.interaction_sandbox {
-            form = form.text("interaction_sandbox", interaction_sandbox);
+        form
+    }
+
+    /// Add interaction-related parameters to form
+    fn add_interaction_params(
+        &self,
+        mut form: reqwest::multipart::Form,
+        params: &PrivateFileUploadParams,
+    ) -> reqwest::multipart::Form {
+        if let Some(interaction_sandbox) = &params.interaction_sandbox {
+            form = form.text("interaction_sandbox", interaction_sandbox.clone());
         }
         if let Some(interaction_timeout) = params.interaction_timeout {
             form = form.text("interaction_timeout", interaction_timeout.to_string());
         }
-        if let Some(locale) = params.locale {
-            form = form.text("locale", locale);
+        if let Some(locale) = &params.locale {
+            form = form.text("locale", locale.clone());
         }
-        Ok(form)
+        form
     }
 
     /// Create an upload URL for large files (>32MB, up to 650MB)

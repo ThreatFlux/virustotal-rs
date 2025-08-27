@@ -180,14 +180,8 @@ async fn test_url_feeds(
     Ok(())
 }
 
-/// Test parsing example feed lines
-fn test_feed_line_parsing(
-    feeds: &virustotal_rs::FeedsClient,
-) -> Result<(), Box<dyn std::error::Error>> {
-    println!("\n4. PARSE EXAMPLE FEED LINES");
-    println!("----------------------------");
-
-    // Example domain feed line
+/// Test parsing domain feed lines
+fn test_domain_feed_parsing(feeds: &virustotal_rs::FeedsClient) {
     let domain_line = r#"{
         "id": "malicious.example.com",
         "type": "domain",
@@ -215,8 +209,10 @@ fn test_feed_line_parsing(
         }
         Err(e) => println!("✗ Error parsing domain: {}", e),
     }
+}
 
-    // Example IP feed line
+/// Test parsing IP feed lines
+fn test_ip_feed_parsing(feeds: &virustotal_rs::FeedsClient) {
     let ip_line = r#"{
         "id": "203.0.113.42",
         "type": "ip_address",
@@ -242,8 +238,10 @@ fn test_feed_line_parsing(
         }
         Err(e) => println!("✗ Error parsing IP: {}", e),
     }
+}
 
-    // Example URL feed line with submitter
+/// Test parsing URL feed lines
+fn test_url_feed_parsing(feeds: &virustotal_rs::FeedsClient) {
     let url_line = r#"{
         "id": "https://phishing.example.com/login",
         "type": "url",
@@ -282,6 +280,18 @@ fn test_feed_line_parsing(
         }
         Err(e) => println!("✗ Error parsing URL: {}", e),
     }
+}
+
+/// Test parsing example feed lines
+fn test_feed_line_parsing(
+    feeds: &virustotal_rs::FeedsClient,
+) -> Result<(), Box<dyn std::error::Error>> {
+    println!("\n4. PARSE EXAMPLE FEED LINES");
+    println!("----------------------------");
+
+    test_domain_feed_parsing(feeds);
+    test_ip_feed_parsing(feeds);
+    test_url_feed_parsing(feeds);
 
     Ok(())
 }

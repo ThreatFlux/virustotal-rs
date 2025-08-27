@@ -140,7 +140,7 @@ fn is_debug_enabled() -> bool {
 
 /// Print startup information
 #[cfg(feature = "mcp-jwt")]
-fn print_startup_info(addr: &std::net::SocketAddr, debug: bool) {
+fn print_startup_info(addr: &std::net::SocketAddr, _debug: bool) {
     print_server_header(addr);
     print_endpoints_info();
     print_credentials_info();

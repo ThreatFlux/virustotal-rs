@@ -197,9 +197,9 @@ fn collect_tactics_and_techniques(
 ) {
     for sandbox_data in mitre_trees.data.values() {
         for tactic in &sandbox_data.tactics {
-            stats.unique_tactics.insert(&tactic.id);
+            stats.unique_tactics.insert(tactic.id.clone());
             for technique in &tactic.techniques {
-                stats.unique_techniques.insert(&technique.id);
+                stats.unique_techniques.insert(technique.id.clone());
                 count_signature_severities(technique, stats);
             }
         }

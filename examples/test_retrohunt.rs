@@ -1,7 +1,11 @@
 use virustotal_rs::{ApiTier, Corpus, CreateRetrohuntJobRequest, JobStatus};
 
 mod common;
-use common::*;
+use common::{
+    create_client_from_env, handle_result, print_error, print_header, print_step_header,
+    print_success, print_warning, truncate_string,
+};
+
 mod matching_files_helper;
 use matching_files_helper::*;
 

@@ -5,7 +5,7 @@ use virustotal_rs::{ApiTier, ClientBuilder};
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client = setup_client()?;
-    let (file_hash, sandbox_name, sandbox_id) = setup_sandbox_info();
+    let (_file_hash, _sandbox_name, sandbox_id) = setup_sandbox_info();
 
     print_header(&sandbox_id);
     test_behavior_report(&client, &sandbox_id).await;
@@ -138,7 +138,7 @@ fn display_files_written(files: &Option<Vec<String>>) {
 }
 
 /// Display files dropped
-fn display_files_dropped(files: &Option<Vec<virustotal_rs::DroppedFile>>) {
+fn display_files_dropped(files: &Option<Vec<virustotal_rs::files::FileDrop>>) {
     if let Some(files) = files {
         if !files.is_empty() {
             println!("\n📦 Files Dropped ({}):", files.len());
@@ -150,14 +150,11 @@ fn display_files_dropped(files: &Option<Vec<virustotal_rs::DroppedFile>>) {
 }
 
 /// Display individual dropped file
-fn display_dropped_file(file_drop: &virustotal_rs::DroppedFile) {
-    if let Some(path) = &file_drop.object.attributes.path {
+fn display_dropped_file(file_drop: &virustotal_rs::files::FileDrop) {
+    if let Some(path) = &file_drop.path {
         print!("  • {}", path);
-        if let Some(sha) = &file_drop.object.attributes.sha256 {
+        if let Some(sha) = &file_drop.sha256 {
             print!(" (SHA256: {}...)", &sha[..16]);
-        }
-        if let Some(size) = file_drop.object.attributes.size {
-            print!(" [size: {} bytes]", size);
         }
         println!();
     }

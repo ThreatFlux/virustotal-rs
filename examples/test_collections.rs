@@ -190,28 +190,26 @@ async fn test_add_items(client: &virustotal_rs::CollectionsClient<'_>, collectio
     }
 }
 
-/// Test comment management
-async fn test_comment_management(
+/// Add a comment to a collection
+async fn add_collection_comment(
     client: &virustotal_rs::CollectionsClient<'_>,
     collection_id: &str,
+    comment_text: &str,
 ) {
-    println!("\n5. Managing comments");
-    println!("--------------------");
-
-    match client
-        .add_comment(
-            collection_id,
-            "This collection contains high-priority IOCs #apt #critical",
-        )
-        .await
-    {
+    match client.add_comment(collection_id, comment_text).await {
         Ok(comment) => {
             print_success("Added comment to collection");
             println!("   - Comment: {}", &comment.object.attributes.text);
         }
         Err(e) => print_error(&format!("Error adding comment: {}", e)),
     }
+}
 
+/// Retrieve and display comments from a collection
+async fn retrieve_collection_comments(
+    client: &virustotal_rs::CollectionsClient<'_>,
+    collection_id: &str,
+) {
     match client.get_comments(collection_id).await {
         Ok(comments) => {
             print_success("Retrieved comments");
@@ -223,6 +221,26 @@ async fn test_comment_management(
         }
         Err(e) => print_error(&format!("Error getting comments: {}", e)),
     }
+}
+
+/// Test comment management
+async fn test_comment_management(
+    client: &virustotal_rs::CollectionsClient<'_>,
+    collection_id: &str,
+) {
+    println!("\n5. Managing comments");
+    println!("--------------------");
+
+    // Add a comment with important tags
+    add_collection_comment(
+        client,
+        collection_id,
+        "This collection contains high-priority IOCs #apt #critical",
+    )
+    .await;
+
+    // Retrieve and display all comments
+    retrieve_collection_comments(client, collection_id).await;
 }
 
 /// Test relationship retrieval

@@ -189,21 +189,39 @@ fn display_editor_descriptors(descriptors: &[GraphRelationshipDescriptor]) {
 }
 
 async fn get_full_editor_information(graph_client: &GraphClient<'_>, graph_id: &str) {
+    print_editor_info_header();
+
+    match fetch_graph_editors(graph_client, graph_id).await {
+        Ok(editors) => handle_editor_success(&editors.data),
+        Err(e) => handle_editor_error(&e),
+    }
+}
+
+/// Print header for editor information section
+fn print_editor_info_header() {
     println!("\n4. GETTING FULL EDITOR INFORMATION");
     println!("-----------------------------------");
+}
 
-    match graph_client
+/// Fetch graph editors from the API
+async fn fetch_graph_editors(
+    graph_client: &GraphClient<'_>,
+    graph_id: &str,
+) -> Result<virustotal_rs::Collection<virustotal_rs::graphs::GraphOwner>, virustotal_rs::Error> {
+    graph_client
         .get_graph_editors(graph_id, Some(10), None)
         .await
-    {
-        Ok(editors) => {
-            println!("✓ Retrieved full editor information");
-            display_full_editor_info(&editors.data);
-        }
-        Err(e) => {
-            println!("✗ Error getting full editor information: {}", e);
-        }
-    }
+}
+
+/// Handle successful editor information retrieval
+fn handle_editor_success(editors: &[GraphOwner]) {
+    println!("✓ Retrieved full editor information");
+    display_full_editor_info(editors);
+}
+
+/// Handle error in editor information retrieval
+fn handle_editor_error(error: &virustotal_rs::Error) {
+    println!("✗ Error getting full editor information: {}", error);
 }
 
 fn display_full_editor_info(editors: &[GraphOwner]) {

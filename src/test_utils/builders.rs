@@ -6,7 +6,7 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 
 #[cfg(test)]
-use super::constants::constants;
+use super::constants;
 
 #[cfg(test)]
 /// Builder pattern for creating test AnalysisStats

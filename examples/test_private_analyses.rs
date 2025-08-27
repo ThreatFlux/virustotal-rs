@@ -156,7 +156,7 @@ async fn get_analysis_relationships(private_client: &PrivateFilesClient<'_>, ana
     print_step_header(3, "ANALYSIS RELATIONSHIPS");
 
     match private_client
-        .get_analysis_relationship::<serde_json::Value>(analysis_id, "item")
+        .get_relationship::<serde_json::Value>(analysis_id, "item", Some(5), None)
         .await
     {
         Ok(items) => {
@@ -239,7 +239,7 @@ async fn get_specific_behavior_report(private_client: &PrivateFilesClient<'_>, s
 async fn fetch_behavior_report(
     private_client: &PrivateFilesClient<'_>,
     sandbox_id: &str,
-) -> Result<virustotal_rs::FileBehavior, virustotal_rs::Error> {
+) -> Result<virustotal_rs::PrivateFileBehavior, virustotal_rs::Error> {
     private_client.get_file_behavior(sandbox_id).await
 }
 
@@ -378,7 +378,7 @@ async fn get_behavior_relationships(private_client: &PrivateFilesClient<'_>, san
     print_step_header(11, "BEHAVIOR RELATIONSHIPS");
 
     match private_client
-        .get_behavior_relationship::<serde_json::Value>(sandbox_id, "file", Some(5), None)
+        .get_relationship::<serde_json::Value>(sandbox_id, "file", Some(5), None)
         .await
     {
         Ok(relationships) => {

@@ -1,5 +1,5 @@
 use crate::objects::{Collection, CollectionIterator, Object};
-use crate::{Client, Result};
+use crate::{impl_enum_to_string, Client, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -100,13 +100,10 @@ pub enum Corpus {
     Goodware,
 }
 
-impl Corpus {
-    /// Convert to API parameter string
-    pub fn to_string(&self) -> &'static str {
-        match self {
-            Corpus::Main => "main",
-            Corpus::Goodware => "goodware",
-        }
+impl_enum_to_string! {
+    Corpus {
+        Main => "main",
+        Goodware => "goodware",
     }
 }
 

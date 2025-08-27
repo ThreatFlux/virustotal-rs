@@ -1,4 +1,4 @@
-use crate::objects::Object;
+use crate::{impl_enum_to_string, objects::Object};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -166,13 +166,10 @@ pub enum GraphVisibility {
     Private,
 }
 
-impl GraphVisibility {
-    /// Convert to API parameter string
-    pub fn to_string(&self) -> &'static str {
-        match self {
-            GraphVisibility::Public => "public",
-            GraphVisibility::Private => "private",
-        }
+impl_enum_to_string! {
+    GraphVisibility {
+        Public => "public",
+        Private => "private",
     }
 }
 
@@ -252,18 +249,15 @@ pub enum GraphOrder {
     NodesCountDesc,
 }
 
-impl GraphOrder {
-    /// Convert to API parameter string
-    pub fn to_string(&self) -> &'static str {
-        match self {
-            GraphOrder::NameAsc => "name+",
-            GraphOrder::NameDesc => "name-",
-            GraphOrder::CreationDateAsc => "creation_date+",
-            GraphOrder::CreationDateDesc => "creation_date-",
-            GraphOrder::ModificationDateAsc => "modification_date+",
-            GraphOrder::ModificationDateDesc => "modification_date-",
-            GraphOrder::NodesCountAsc => "nodes_count+",
-            GraphOrder::NodesCountDesc => "nodes_count-",
-        }
+impl_enum_to_string! {
+    GraphOrder {
+        NameAsc => "name+",
+        NameDesc => "name-",
+        CreationDateAsc => "creation_date+",
+        CreationDateDesc => "creation_date-",
+        ModificationDateAsc => "modification_date+",
+        ModificationDateDesc => "modification_date-",
+        NodesCountAsc => "nodes_count+",
+        NodesCountDesc => "nodes_count-",
     }
 }

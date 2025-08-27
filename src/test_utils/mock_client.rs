@@ -10,7 +10,7 @@ use std::time::Duration;
 use wiremock::MockServer;
 
 #[cfg(test)]
-use super::constants::constants;
+use super::constants;
 
 #[cfg(test)]
 /// Mock API client for testing without real API calls

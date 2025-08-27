@@ -1,5 +1,5 @@
 use virustotal_rs::file_behaviours::FileBehaviourAttributes;
-use virustotal_rs::objects::Meta;
+use virustotal_rs::objects::CollectionMeta;
 use virustotal_rs::{ApiTier, ClientBuilder};
 
 #[tokio::main]
@@ -227,7 +227,7 @@ async fn test_get_dropped_files(
 }
 
 /// Display relationship count from metadata
-fn display_relationship_count(meta: &Option<Meta>, relationship_type: &str) {
+fn display_relationship_count(meta: &Option<CollectionMeta>, relationship_type: &str) {
     if let Some(meta) = meta {
         if let Some(count) = meta.count {
             println!("   - Number of {}: {}", relationship_type, count);

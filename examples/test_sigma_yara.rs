@@ -36,40 +36,50 @@ fn display_sigma_rule_details(rule: &SigmaRuleResponse) {
 
 /// Display Sigma rule attributes
 fn display_sigma_rule_attributes(attributes: &SigmaRuleAttributes) {
-    if let Some(name) = &attributes.rule_name {
-        println!("  Name: {}", name);
-    }
-    if let Some(title) = &attributes.rule_title {
-        println!("  Title: {}", title);
-    }
-    if let Some(author) = &attributes.rule_author {
-        println!("  Author: {}", author);
-    }
-    if let Some(desc) = &attributes.rule_description {
-        println!("  Description: {}", desc);
-    }
-    if let Some(level) = &attributes.rule_level {
-        println!("  Level: {}", level);
-    }
-    if let Some(status) = &attributes.rule_status {
-        println!("  Status: {}", status);
-    }
+    display_basic_rule_info(attributes);
+    display_rule_metadata(attributes);
+    display_ruleset_info(attributes);
+    display_threat_hunting_flag(attributes);
+}
+
+/// Display basic rule information
+fn display_basic_rule_info(attributes: &SigmaRuleAttributes) {
+    print_optional_field("Name", &attributes.rule_name);
+    print_optional_field("Title", &attributes.rule_title);
+    print_optional_field("Author", &attributes.rule_author);
+    print_optional_field("Description", &attributes.rule_description);
+}
+
+/// Display rule metadata information
+fn display_rule_metadata(attributes: &SigmaRuleAttributes) {
+    print_optional_field("Level", &attributes.rule_level);
+    print_optional_field("Status", &attributes.rule_status);
+    print_optional_field("Source", &attributes.rule_source);
+
     if let Some(tags) = &attributes.rule_tags {
         println!("  Tags: {}", tags.join(", "));
     }
-    if let Some(source) = &attributes.rule_source {
-        println!("  Source: {}", source);
-    }
-    if let Some(ruleset) = &attributes.ruleset_name {
-        println!("  Ruleset: {}", ruleset);
-    }
-    if let Some(version) = &attributes.ruleset_version {
-        println!("  Ruleset Version: {}", version);
-    }
+}
+
+/// Display ruleset information
+fn display_ruleset_info(attributes: &SigmaRuleAttributes) {
+    print_optional_field("Ruleset", &attributes.ruleset_name);
+    print_optional_field("Ruleset Version", &attributes.ruleset_version);
+}
+
+/// Display threat hunting flag if applicable
+fn display_threat_hunting_flag(attributes: &SigmaRuleAttributes) {
     if let Some(is_threat_hunting) = &attributes.threat_hunting_ruleset {
         if *is_threat_hunting {
             println!("  🎯 This is a threat hunting ruleset!");
         }
+    }
+}
+
+/// Helper function to print optional string fields
+fn print_optional_field(label: &str, value: &Option<String>) {
+    if let Some(v) = value {
+        println!("  {}: {}", label, v);
     }
 }
 

@@ -20,6 +20,7 @@ pub mod ioc_stream;
 pub mod ip_addresses;
 pub mod iterator_utils;
 pub mod livehunt;
+pub mod macros;
 pub mod metadata;
 pub mod objects;
 pub mod popular_threat_categories;

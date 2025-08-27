@@ -119,7 +119,7 @@ mod tests {
 
         // Test that builder can be created and configured without errors
         // Internal state testing is not needed since this is an implementation detail
-        assert!(true, "Builder configuration completed successfully");
+        // Configuration completed successfully
     }
 
     #[test]
@@ -180,21 +180,21 @@ mod tests {
     fn test_client_utils_builder_creation() {
         let _builder = ClientUtils::builder();
         // Test that builder can be created successfully
-        assert!(true, "Builder created successfully");
+        // Builder created successfully
     }
 
     #[test]
     fn test_client_utils_testing_config() {
         let _builder = ClientUtils::testing_config("test_key");
         // Test that testing config can be created successfully
-        assert!(true, "Testing config created successfully");
+        // Testing config created successfully
     }
 
     #[test]
     fn test_client_utils_production_config() {
         let _builder = ClientUtils::production_config("prod_key");
         // Test that production config can be created successfully
-        assert!(true, "Production config created successfully");
+        // Production config created successfully
     }
 
     #[tokio::test]

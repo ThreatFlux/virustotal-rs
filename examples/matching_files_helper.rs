@@ -1,7 +1,19 @@
-#[path = "common/mod.rs"]
-mod common;
+// Helper functions needed by this module
+fn print_error(message: &str) {
+    println!("❌ {}", message);
+}
 
-use common::*;
+fn print_success(message: &str) {
+    println!("✅ {}", message);
+}
+
+fn truncate_string(s: &str, max_len: usize) -> String {
+    if s.len() > max_len {
+        format!("{}...", &s[..max_len])
+    } else {
+        s.to_string()
+    }
+}
 use virustotal_rs::RetrohuntMatchingFile;
 
 /// Display detailed information about a single matching file
@@ -101,6 +113,7 @@ pub fn handle_matching_files_result(
     }
 }
 
+#[allow(dead_code)]
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("This is a utility module for matching files operations.");

@@ -1,6 +1,6 @@
 use crate::objects::{Collection, CollectionIterator};
 use crate::url_utils::EndpointBuilder;
-use crate::{Client, Result};
+use crate::{impl_enum_to_string, Client, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -140,27 +140,24 @@ pub enum SearchOrder {
     LastUpdateDateDesc,
 }
 
-impl SearchOrder {
-    /// Convert to API parameter string
-    pub fn to_string(&self) -> &'static str {
-        match self {
-            SearchOrder::FirstSubmissionDateAsc => "first_submission_date+",
-            SearchOrder::FirstSubmissionDateDesc => "first_submission_date-",
-            SearchOrder::LastSubmissionDateAsc => "last_submission_date+",
-            SearchOrder::LastSubmissionDateDesc => "last_submission_date-",
-            SearchOrder::PositivesAsc => "positives+",
-            SearchOrder::PositivesDesc => "positives-",
-            SearchOrder::TimesSubmittedAsc => "times_submitted+",
-            SearchOrder::TimesSubmittedDesc => "times_submitted-",
-            SearchOrder::SizeAsc => "size+",
-            SearchOrder::SizeDesc => "size-",
-            SearchOrder::CreationDateAsc => "creation_date+",
-            SearchOrder::CreationDateDesc => "creation_date-",
-            SearchOrder::LastModificationDateAsc => "last_modification_date+",
-            SearchOrder::LastModificationDateDesc => "last_modification_date-",
-            SearchOrder::LastUpdateDateAsc => "last_update_date+",
-            SearchOrder::LastUpdateDateDesc => "last_update_date-",
-        }
+impl_enum_to_string! {
+    SearchOrder {
+        FirstSubmissionDateAsc => "first_submission_date+",
+        FirstSubmissionDateDesc => "first_submission_date-",
+        LastSubmissionDateAsc => "last_submission_date+",
+        LastSubmissionDateDesc => "last_submission_date-",
+        PositivesAsc => "positives+",
+        PositivesDesc => "positives-",
+        TimesSubmittedAsc => "times_submitted+",
+        TimesSubmittedDesc => "times_submitted-",
+        SizeAsc => "size+",
+        SizeDesc => "size-",
+        CreationDateAsc => "creation_date+",
+        CreationDateDesc => "creation_date-",
+        LastModificationDateAsc => "last_modification_date+",
+        LastModificationDateDesc => "last_modification_date-",
+        LastUpdateDateAsc => "last_update_date+",
+        LastUpdateDateDesc => "last_update_date-",
     }
 }
 
