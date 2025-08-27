@@ -111,6 +111,14 @@ fn base_router<S>(root: axum::routing::MethodRouter<S>) -> Router<S>
 where
     S: Clone + Send + Sync + 'static,
 {
+    configure_core_routes(root)
+}
+
+#[cfg(feature = "axum")]
+fn configure_core_routes<S>(root: axum::routing::MethodRouter<S>) -> Router<S>
+where
+    S: Clone + Send + Sync + 'static,
+{
     Router::new()
         .route("/", root)
         .route("/health", get(health_check))
@@ -118,6 +126,11 @@ where
 
 #[cfg(all(feature = "axum", feature = "mcp-oauth"))]
 fn oauth_router(server: VtMcpServer, oauth_state: OAuthState) -> axum::Router {
+    configure_oauth_routes(server, oauth_state)
+}
+
+#[cfg(all(feature = "axum", feature = "mcp-oauth"))]
+fn configure_oauth_routes(server: VtMcpServer, oauth_state: OAuthState) -> axum::Router {
     base_router(post(handle_http_request_oauth))
         .route("/oauth/authorize", get(oauth_authorize))
         .with_state((server, oauth_state))
@@ -126,6 +139,11 @@ fn oauth_router(server: VtMcpServer, oauth_state: OAuthState) -> axum::Router {
 
 #[cfg(all(feature = "axum", feature = "mcp-jwt"))]
 fn jwt_router(server: VtMcpServer, jwt_manager: JwtManager) -> axum::Router {
+    configure_jwt_routes(server, jwt_manager)
+}
+
+#[cfg(all(feature = "axum", feature = "mcp-jwt"))]
+fn configure_jwt_routes(server: VtMcpServer, jwt_manager: JwtManager) -> axum::Router {
     base_router(post(handle_http_request_jwt))
         .route("/auth/token", post(generate_token))
         .route("/auth/refresh", post(refresh_token))
@@ -136,6 +154,11 @@ fn jwt_router(server: VtMcpServer, jwt_manager: JwtManager) -> axum::Router {
 
 #[cfg(feature = "axum")]
 fn plain_router(server: VtMcpServer) -> axum::Router {
+    configure_plain_routes(server)
+}
+
+#[cfg(feature = "axum")]
+fn configure_plain_routes(server: VtMcpServer) -> axum::Router {
     base_router(post(handle_http_request)).with_state(server)
 }
 

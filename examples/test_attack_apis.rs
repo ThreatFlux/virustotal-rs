@@ -39,21 +39,34 @@ fn display_tactic_details(tactic: &virustotal_rs::AttackTactic) {
     }
 }
 
+/// Display tactic techniques header
+fn display_techniques_header(tactic_id: &str) {
+    println!("\n   Getting techniques for tactic {}:", tactic_id);
+}
+
+/// Display techniques metadata information
+fn display_techniques_metadata(techniques: &virustotal_rs::Collection<serde_json::Value>) {
+    if let Some(meta) = &techniques.meta {
+        if let Some(count) = meta.count {
+            println!("   - Number of techniques: {}", count);
+        }
+    }
+}
+
+/// Handle successful techniques retrieval
+fn handle_techniques_success(techniques: &virustotal_rs::Collection<serde_json::Value>) {
+    print_success("Retrieved techniques");
+    display_techniques_metadata(techniques);
+}
+
 /// Test getting techniques for a tactic
 async fn test_tactic_techniques(
     tactics_client: &virustotal_rs::AttackTacticClient<'_>,
     tactic_id: &str,
 ) {
-    println!("\n   Getting techniques for tactic {}:", tactic_id);
+    display_techniques_header(tactic_id);
     match tactics_client.get_techniques(tactic_id).await {
-        Ok(techniques) => {
-            print_success("Retrieved techniques");
-            if let Some(meta) = &techniques.meta {
-                if let Some(count) = meta.count {
-                    println!("   - Number of techniques: {}", count);
-                }
-            }
-        }
+        Ok(techniques) => handle_techniques_success(&techniques),
         Err(e) => print_error(&format!("Error: {}", e)),
     }
 }

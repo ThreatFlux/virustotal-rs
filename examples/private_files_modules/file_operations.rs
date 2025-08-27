@@ -4,18 +4,35 @@ use crate::common::*;
 /// Test listing private files
 pub async fn test_list_files(private_client: &virustotal_rs::PrivateFilesClient<'_>) {
     print_step_header(3, "LIST PRIVATE FILES");
+    execute_file_listing_operation(private_client).await;
+}
 
+/// Execute file listing operation with error handling
+async fn execute_file_listing_operation(private_client: &virustotal_rs::PrivateFilesClient<'_>) {
     println!("Listing previously analyzed private files...");
-    match private_client.list_files(Some(10), None).await {
-        Ok(files) => {
-            print_success(&format!("Retrieved {} private files", files.data.len()));
-            display_file_list(&files);
-        }
-        Err(e) => {
-            print_error(&format!("Error listing files: {}", e));
-            println!("  Note: This requires private scanning privileges");
-        }
+    match fetch_private_files(private_client).await {
+        Ok(files) => handle_successful_file_listing(files),
+        Err(e) => handle_file_listing_error(e),
     }
+}
+
+/// Fetch private files from the client
+async fn fetch_private_files(
+    private_client: &virustotal_rs::PrivateFilesClient<'_>,
+) -> Result<virustotal_rs::Collection<virustotal_rs::PrivateFile>, Box<dyn std::error::Error>> {
+    Ok(private_client.list_files(Some(10), None).await?)
+}
+
+/// Handle successful file listing response
+fn handle_successful_file_listing(files: virustotal_rs::Collection<virustotal_rs::PrivateFile>) {
+    print_success(&format!("Retrieved {} private files", files.data.len()));
+    display_file_list(&files);
+}
+
+/// Handle file listing errors
+fn handle_file_listing_error(error: Box<dyn std::error::Error>) {
+    print_error(&format!("Error listing files: {}", error));
+    println!("  Note: This requires private scanning privileges");
 }
 
 /// Display file list information

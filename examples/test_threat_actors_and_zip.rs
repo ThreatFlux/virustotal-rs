@@ -137,45 +137,77 @@ fn create_sample_reference_request() -> CreateReferenceRequest {
     ])
 }
 
-/// Tests the full reference lifecycle (create, get, delete)
-async fn test_reference_lifecycle(
+/// Helper function to create a reference
+async fn create_reference(
     references_client: &virustotal_rs::ReferencesClient<'_>,
     reference_request: &CreateReferenceRequest,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<String, Box<dyn std::error::Error>> {
     match references_client.create(reference_request).await {
         Ok(reference) => {
             println!("   ✓ Reference created successfully");
             println!("   - ID: {}", reference.object.id);
-            let ref_id = &reference.object.id;
-
-            // Get the reference
-            println!("\nGetting the reference:");
-            match references_client.get(ref_id).await {
-                Ok(ref_data) => {
-                    println!("   ✓ Retrieved reference");
-                    if let Some(title) = &ref_data.object.attributes.title {
-                        println!("   - Title: {}", title);
-                    }
-                    if let Some(url) = &ref_data.object.attributes.url {
-                        println!("   - URL: {}", url);
-                    }
-                }
-                Err(e) => println!("   ✗ Error getting reference: {}", e),
-            }
-
-            // Delete the reference
-            println!("\nDeleting the reference:");
-            match references_client.delete(ref_id).await {
-                Ok(_) => println!("   ✓ Reference deleted successfully"),
-                Err(e) => println!("   ✗ Error deleting reference: {}", e),
-            }
+            Ok(reference.object.id)
         }
         Err(e) => {
             println!("   ✗ Error creating reference: {}", e);
             println!(
                 "   Note: Creating references requires special VT partner/contributor privileges"
             );
+            Err(e.into())
         }
+    }
+}
+
+/// Helper function to retrieve and display a reference
+async fn get_and_display_reference(
+    references_client: &virustotal_rs::ReferencesClient<'_>,
+    ref_id: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    println!("\nGetting the reference:");
+    match references_client.get(ref_id).await {
+        Ok(ref_data) => {
+            println!("   ✓ Retrieved reference");
+            if let Some(title) = &ref_data.object.attributes.title {
+                println!("   - Title: {}", title);
+            }
+            if let Some(url) = &ref_data.object.attributes.url {
+                println!("   - URL: {}", url);
+            }
+            Ok(())
+        }
+        Err(e) => {
+            println!("   ✗ Error getting reference: {}", e);
+            Err(e.into())
+        }
+    }
+}
+
+/// Helper function to delete a reference
+async fn delete_reference(
+    references_client: &virustotal_rs::ReferencesClient<'_>,
+    ref_id: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    println!("\nDeleting the reference:");
+    match references_client.delete(ref_id).await {
+        Ok(_) => {
+            println!("   ✓ Reference deleted successfully");
+            Ok(())
+        }
+        Err(e) => {
+            println!("   ✗ Error deleting reference: {}", e);
+            Err(e.into())
+        }
+    }
+}
+
+/// Tests the full reference lifecycle (create, get, delete)
+async fn test_reference_lifecycle(
+    references_client: &virustotal_rs::ReferencesClient<'_>,
+    reference_request: &CreateReferenceRequest,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if let Ok(ref_id) = create_reference(references_client, reference_request).await {
+        let _ = get_and_display_reference(references_client, &ref_id).await;
+        let _ = delete_reference(references_client, &ref_id).await;
     }
     Ok(())
 }

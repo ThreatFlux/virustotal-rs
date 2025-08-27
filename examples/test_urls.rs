@@ -95,9 +95,8 @@ async fn test_basic_url_operations(url_client: &UrlClient<'_>, test_url: &str, b
     test_rescan_url(url_client, base64_id).await;
 }
 
-/// Test comment and voting functionality
-async fn test_comments_and_votes(url_client: &UrlClient<'_>, base64_id: &str) {
-    // Test getting comments
+/// Test getting comments on URL
+async fn test_get_comments(url_client: &UrlClient<'_>, base64_id: &str) {
     print_test_header("6. Getting comments on URL");
     handle_result_with(
         url_client.get_comments(base64_id).await,
@@ -115,8 +114,10 @@ async fn test_comments_and_votes(url_client: &UrlClient<'_>, base64_id: &str) {
         },
         "Failed to get comments",
     );
+}
 
-    // Test adding a comment
+/// Test adding a comment
+async fn test_add_comment(url_client: &UrlClient<'_>, base64_id: &str) {
     print_test_header("7. Adding a comment");
     handle_result_with(
         url_client
@@ -132,8 +133,10 @@ async fn test_comments_and_votes(url_client: &UrlClient<'_>, base64_id: &str) {
         },
         "Failed to add comment",
     );
+}
 
-    // Test getting votes
+/// Test getting votes on URL
+async fn test_get_votes(url_client: &UrlClient<'_>, base64_id: &str) {
     print_test_header("8. Getting votes on URL");
     handle_result_with(
         url_client.get_votes(base64_id).await,
@@ -147,8 +150,10 @@ async fn test_comments_and_votes(url_client: &UrlClient<'_>, base64_id: &str) {
         },
         "Failed to get votes",
     );
+}
 
-    // Test adding a vote
+/// Test adding a vote
+async fn test_add_vote(url_client: &UrlClient<'_>, base64_id: &str) {
     print_test_header("9. Adding a vote (harmless)");
     handle_result_with(
         url_client.add_vote(base64_id, VoteVerdict::Harmless).await,
@@ -158,6 +163,14 @@ async fn test_comments_and_votes(url_client: &UrlClient<'_>, base64_id: &str) {
         },
         "Failed to add vote",
     );
+}
+
+/// Test comment and voting functionality
+async fn test_comments_and_votes(url_client: &UrlClient<'_>, base64_id: &str) {
+    test_get_comments(url_client, base64_id).await;
+    test_add_comment(url_client, base64_id).await;
+    test_get_votes(url_client, base64_id).await;
+    test_add_vote(url_client, base64_id).await;
 }
 
 /// Get URL analyses

@@ -229,15 +229,14 @@ impl<'a> IocStreamClient<'a> {
         self.client.get(&url).await
     }
 
-    /// Get IoC Stream with pagination support
-    pub fn get_stream_iterator(
-        &self,
+    /// Configure query URL builder with stream parameters
+    fn configure_stream_builder(
+        builder: crate::iterator_utils::QueryUrlBuilder,
         filter: Option<&str>,
         order: Option<IocStreamOrder>,
         descriptors_only: Option<bool>,
-    ) -> CollectionIterator<'_, IocStreamObject> {
-        use crate::iterator_utils::QueryUrlBuilder;
-        let mut builder = QueryUrlBuilder::new("ioc_stream");
+    ) -> crate::iterator_utils::QueryUrlBuilder {
+        let mut builder = builder;
 
         if let Some(f) = filter {
             builder = builder.filter(f);
@@ -249,7 +248,23 @@ impl<'a> IocStreamClient<'a> {
             builder = builder.param("descriptors_only", d);
         }
 
-        let url = builder.build_clean();
+        builder
+    }
+
+    /// Get IoC Stream with pagination support
+    pub fn get_stream_iterator(
+        &self,
+        filter: Option<&str>,
+        order: Option<IocStreamOrder>,
+        descriptors_only: Option<bool>,
+    ) -> CollectionIterator<'_, IocStreamObject> {
+        use crate::iterator_utils::QueryUrlBuilder;
+
+        let builder = QueryUrlBuilder::new("ioc_stream");
+        let configured_builder =
+            Self::configure_stream_builder(builder, filter, order, descriptors_only);
+        let url = configured_builder.build_clean();
+
         CollectionIterator::new(self.client, url)
     }
 }

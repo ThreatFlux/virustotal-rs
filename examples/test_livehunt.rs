@@ -51,21 +51,33 @@ fn handle_rulesets_result(
     }
 }
 
-/// Test listing existing rulesets
-async fn test_list_rulesets(livehunt: &virustotal_rs::LivehuntClient<'_>) {
-    print_step_header(1, "LISTING RULESETS");
-
-    let result = livehunt
+/// Execute the list rulesets API call
+async fn execute_list_rulesets_api_call(
+    livehunt: &virustotal_rs::LivehuntClient<'_>,
+) -> Result<virustotal_rs::Collection<virustotal_rs::LivehuntRuleset>, virustotal_rs::Error> {
+    livehunt
         .list_rulesets(
             Some("enabled:true"),
             Some(LivehuntRulesetOrder::ModificationDateDesc),
             Some(10),
             None,
         )
-        .await;
+        .await
+}
 
+/// Process and display rulesets list result
+fn process_rulesets_list_result(
+    result: Result<virustotal_rs::Collection<virustotal_rs::LivehuntRuleset>, virustotal_rs::Error>,
+) {
     let rulesets_result = handle_result(result, "Retrieved rulesets", "Error listing rulesets");
     handle_rulesets_result(rulesets_result);
+}
+
+/// Test listing existing rulesets
+async fn test_list_rulesets(livehunt: &virustotal_rs::LivehuntClient<'_>) {
+    print_step_header(1, "LISTING RULESETS");
+    let result = execute_list_rulesets_api_call(livehunt).await;
+    process_rulesets_list_result(result);
 }
 
 /// Display ruleset information
@@ -84,28 +96,45 @@ fn display_rulesets(rulesets: &[virustotal_rs::LivehuntRuleset]) {
     }
 }
 
+/// Build the ruleset creation request
+fn build_create_ruleset_request() -> CreateLivehuntRulesetRequest {
+    let yara_rule = create_test_yara_rule();
+    CreateLivehuntRulesetRequest::new("SDK Test Ruleset".to_string(), yara_rule)
+        .with_enabled(true)
+        .with_limit(100)
+        .with_notification_emails(vec!["notifications@example.com".to_string()])
+        .with_match_object_type(MatchObjectType::File)
+}
+
+/// Display created ruleset information
+fn display_created_ruleset_info(ruleset: &virustotal_rs::LivehuntRuleset) {
+    print_success("Ruleset created successfully");
+    println!("   - ID: {}", ruleset.object.id);
+    if let Some(name) = &ruleset.object.attributes.name {
+        println!("   - Name: {}", name);
+    }
+    if let Some(creation_date) = &ruleset.object.attributes.creation_date {
+        println!("   - Created: {}", creation_date);
+    }
+}
+
+/// Execute ruleset creation API call
+async fn execute_create_ruleset_api_call(
+    livehunt: &virustotal_rs::LivehuntClient<'_>,
+    request: &CreateLivehuntRulesetRequest,
+) -> Result<virustotal_rs::LivehuntRuleset, virustotal_rs::Error> {
+    livehunt.create_ruleset(request).await
+}
+
 /// Create a test ruleset and return its ID
 async fn test_create_ruleset(livehunt: &virustotal_rs::LivehuntClient<'_>) -> Option<String> {
     print_step_header(2, "CREATING RULESET");
 
-    let yara_rule = create_test_yara_rule();
-    let create_request =
-        CreateLivehuntRulesetRequest::new("SDK Test Ruleset".to_string(), yara_rule)
-            .with_enabled(true)
-            .with_limit(100)
-            .with_notification_emails(vec!["notifications@example.com".to_string()])
-            .with_match_object_type(MatchObjectType::File);
+    let create_request = build_create_ruleset_request();
 
-    match livehunt.create_ruleset(&create_request).await {
+    match execute_create_ruleset_api_call(livehunt, &create_request).await {
         Ok(ruleset) => {
-            print_success("Ruleset created successfully");
-            println!("   - ID: {}", ruleset.object.id);
-            if let Some(name) = &ruleset.object.attributes.name {
-                println!("   - Name: {}", name);
-            }
-            if let Some(creation_date) = &ruleset.object.attributes.creation_date {
-                println!("   - Created: {}", creation_date);
-            }
+            display_created_ruleset_info(&ruleset);
             Some(ruleset.object.id)
         }
         Err(e) => {
@@ -115,11 +144,9 @@ async fn test_create_ruleset(livehunt: &virustotal_rs::LivehuntClient<'_>) -> Op
     }
 }
 
-/// Update an existing ruleset
-async fn test_update_ruleset(livehunt: &virustotal_rs::LivehuntClient<'_>, ruleset_id: &str) {
-    print_step_header(3, "UPDATING RULESET");
-
-    let update_request = UpdateLivehuntRulesetRequest {
+/// Build the ruleset update request
+fn build_update_ruleset_request(ruleset_id: &str) -> UpdateLivehuntRulesetRequest {
+    UpdateLivehuntRulesetRequest {
         data: virustotal_rs::livehunt::UpdateLivehuntRulesetData {
             object_type: "hunting_ruleset".to_string(),
             id: ruleset_id.to_string(),
@@ -130,18 +157,28 @@ async fn test_update_ruleset(livehunt: &virustotal_rs::LivehuntClient<'_>, rules
                 ..Default::default()
             },
         },
-    };
+    }
+}
+
+/// Display updated ruleset information
+fn display_updated_ruleset_info(updated: &virustotal_rs::LivehuntRuleset) {
+    print_success("Ruleset updated successfully");
+    if let Some(name) = &updated.object.attributes.name {
+        println!("   - New name: {}", name);
+    }
+    if let Some(enabled) = &updated.object.attributes.enabled {
+        println!("   - Enabled: {}", enabled);
+    }
+}
+
+/// Update an existing ruleset
+async fn test_update_ruleset(livehunt: &virustotal_rs::LivehuntClient<'_>, ruleset_id: &str) {
+    print_step_header(3, "UPDATING RULESET");
+
+    let update_request = build_update_ruleset_request(ruleset_id);
 
     match livehunt.update_ruleset(ruleset_id, &update_request).await {
-        Ok(updated) => {
-            print_success("Ruleset updated successfully");
-            if let Some(name) = &updated.object.attributes.name {
-                println!("   - New name: {}", name);
-            }
-            if let Some(enabled) = &updated.object.attributes.enabled {
-                println!("   - Enabled: {}", enabled);
-            }
-        }
+        Ok(updated) => display_updated_ruleset_info(&updated),
         Err(e) => print_error(&format!("Error updating ruleset: {}", e)),
     }
 }
@@ -214,11 +251,11 @@ async fn test_permission_operations(
     revoke_permissions(livehunt, ruleset_id).await;
 }
 
-/// Test notifications listing
-async fn test_list_notifications(livehunt: &virustotal_rs::LivehuntClient<'_>) {
-    print_step_header(5, "NOTIFICATIONS");
-
-    let result = livehunt
+/// Execute the list notifications API call
+async fn execute_list_notifications_api_call(
+    livehunt: &virustotal_rs::LivehuntClient<'_>,
+) -> Result<virustotal_rs::Collection<virustotal_rs::LivehuntNotification>, virustotal_rs::Error> {
+    livehunt
         .list_notifications(
             Some("date:2024-01-01+"),
             Some(NotificationOrder::DateDesc),
@@ -226,20 +263,41 @@ async fn test_list_notifications(livehunt: &virustotal_rs::LivehuntClient<'_>) {
             Some(100),
             None,
         )
-        .await;
+        .await
+}
 
-    if let Some(notifications) = handle_result(
+/// Display notifications metadata
+fn display_notifications_metadata(
+    notifications: &virustotal_rs::Collection<virustotal_rs::LivehuntNotification>,
+) {
+    if let Some(meta) = &notifications.meta {
+        if let Some(count) = meta.count {
+            println!("   - Total notifications: {}", count);
+        }
+    }
+}
+
+/// Process and display notifications result
+fn process_notifications_result(
+    notifications_option: Option<virustotal_rs::Collection<virustotal_rs::LivehuntNotification>>,
+) {
+    if let Some(notifications) = notifications_option {
+        display_notifications_metadata(&notifications);
+        display_notifications(&notifications.data);
+    }
+}
+
+/// Test notifications listing
+async fn test_list_notifications(livehunt: &virustotal_rs::LivehuntClient<'_>) {
+    print_step_header(5, "NOTIFICATIONS");
+
+    let result = execute_list_notifications_api_call(livehunt).await;
+    let notifications_result = handle_result(
         result,
         "Retrieved notifications",
         "Error listing notifications",
-    ) {
-        if let Some(meta) = &notifications.meta {
-            if let Some(count) = meta.count {
-                println!("   - Total notifications: {}", count);
-            }
-        }
-        display_notifications(&notifications.data);
-    }
+    );
+    process_notifications_result(notifications_result);
 }
 
 /// Display notification information
@@ -313,29 +371,43 @@ async fn test_cleanup(livehunt: &virustotal_rs::LivehuntClient<'_>, ruleset_id: 
     }
 }
 
+/// Create a rulesets iterator for pagination
+fn create_rulesets_iterator<'a>(
+    livehunt: &'a virustotal_rs::LivehuntClient<'a>,
+) -> virustotal_rs::CollectionIterator<'a, virustotal_rs::LivehuntRuleset> {
+    livehunt.list_rulesets_iterator(Some("enabled:true"), Some(LivehuntRulesetOrder::NameAsc))
+}
+
+/// Display batch results
+fn display_pagination_batch_results(batch: &[virustotal_rs::LivehuntRuleset]) {
+    print_success(&format!(
+        "Retrieved {} rulesets in first batch",
+        batch.len()
+    ));
+    for ruleset in batch.iter().take(3) {
+        if let Some(name) = &ruleset.object.attributes.name {
+            println!("   - {}", name);
+        }
+    }
+}
+
+/// Execute pagination batch fetch
+async fn execute_pagination_batch_fetch(
+    iterator: &mut virustotal_rs::CollectionIterator<'_, virustotal_rs::LivehuntRuleset>,
+) -> Result<Vec<virustotal_rs::LivehuntRuleset>, virustotal_rs::Error> {
+    iterator.next_batch().await
+}
+
 /// Test pagination with iterators
 async fn test_pagination(livehunt: &virustotal_rs::LivehuntClient<'_>) {
     print_step_header(9, "PAGINATION TEST");
 
-    let mut ruleset_iterator =
-        livehunt.list_rulesets_iterator(Some("enabled:true"), Some(LivehuntRulesetOrder::NameAsc));
+    let mut ruleset_iterator = create_rulesets_iterator(livehunt);
 
     println!("Fetching first batch of rulesets:");
-    match ruleset_iterator.next_batch().await {
-        Ok(batch) => {
-            print_success(&format!(
-                "Retrieved {} rulesets in first batch",
-                batch.len()
-            ));
-            for ruleset in batch.iter().take(3) {
-                if let Some(name) = &ruleset.object.attributes.name {
-                    println!("   - {}", name);
-                }
-            }
-        }
-        Err(e) => {
-            print_error(&format!("Error fetching batch: {}", e));
-        }
+    match execute_pagination_batch_fetch(&mut ruleset_iterator).await {
+        Ok(batch) => display_pagination_batch_results(&batch),
+        Err(e) => print_error(&format!("Error fetching batch: {}", e)),
     }
 }
 
