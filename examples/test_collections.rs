@@ -7,15 +7,10 @@ use virustotal_rs::{
 mod common;
 use common::*;
 
-#[tokio::main]
-async fn main() -> ExampleResult<()> {
-    let client = create_client_from_env("VT_API_KEY", ApiTier::Premium)?; // Collections API requires premium privileges
-
-    print_header("Testing VirusTotal Collections API");
-
-    let collections_client = client.collections();
-
-    // 1. Create a new collection
+/// Create a sample collection with test data
+async fn create_test_collection(
+    collections_client: &virustotal_rs::CollectionsClient<'_>,
+) -> ExampleResult<String> {
     print_test_header("1. Creating a new collection");
 
     let create_request = CreateCollectionRequest::new(
@@ -39,20 +34,18 @@ async fn main() -> ExampleResult<()> {
                 println!("   - Name: {}", name);
             }
             println!("   - ID: {}", &collection.object.id);
-
-            // Store the ID for further operations
-            test_collection_operations(&collections_client, &collection.object.id).await?;
+            Ok(collection.object.id)
         }
         Err(e) => {
             print_error(&format!("Error creating collection: {}", e));
-
-            // Test with a mock collection ID
             println!("\n   Using mock collection ID for demonstration...");
-            test_collection_operations(&collections_client, "mock-collection-id").await?;
+            Ok("mock-collection-id".to_string())
         }
     }
+}
 
-    // 2. List collections (requires special privileges)
+/// List existing collections
+async fn list_collections(collections_client: &virustotal_rs::CollectionsClient<'_>) {
     println!("\n2. Listing collections");
     println!("----------------------");
 
@@ -83,6 +76,24 @@ async fn main() -> ExampleResult<()> {
             println!("   Note: This endpoint requires special Threat Landscape privileges");
         }
     }
+}
+
+#[tokio::main]
+async fn main() -> ExampleResult<()> {
+    let client = create_client_from_env("VT_API_KEY", ApiTier::Premium)?; // Collections API requires premium privileges
+
+    print_header("Testing VirusTotal Collections API");
+
+    let collections_client = client.collections();
+
+    // Create collection and get its ID
+    let collection_id = create_test_collection(&collections_client).await?;
+
+    // Test collection operations
+    test_collection_operations(&collections_client, &collection_id).await?;
+
+    // List existing collections
+    list_collections(&collections_client).await;
 
     println!("\n===================================");
     println!("Collections API testing complete!");

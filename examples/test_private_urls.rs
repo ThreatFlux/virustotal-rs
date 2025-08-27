@@ -1,45 +1,63 @@
-use virustotal_rs::{ApiTier, ClientBuilder, PrivateUrlScanParams};
+//! VirusTotal Private URL Scanning API Example
+//!
+//! This example demonstrates the VirusTotal Private URL Scanning API capabilities.
+//! It shows how to scan URLs with custom parameters, retrieve analysis reports,
+//! explore relationships, and work with pagination.
+
+mod common;
+
+use base64::{engine::general_purpose, Engine as _};
+use common::{create_client_from_env, print_header, print_test_header, ExampleResult};
+use virustotal_rs::{ApiTier, PrivateUrlAttributes, PrivateUrlScanParams, PrivateUrlsClient};
+
+/// Test URLs for various scenarios
+const TEST_URLS: &[&str] = &[
+    "https://www.example.com",
+    "https://www.google.com",
+    "https://www.wikipedia.org",
+    "https://www.example.org",
+    "https://www.suspicious-example.com",
+];
+
+/// Known test URLs for malicious scanning
+const MALICIOUS_TEST_URL: &str = "http://malware.testing.google.test/testing/malware/";
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // NOTE: Private URL scanning requires special privileges
-    let api_key = std::env::var("VT_PRIVATE_API_KEY")
-        .or_else(|_| std::env::var("VT_API_KEY"))
-        .unwrap_or_else(|_| "test_key".to_string());
+async fn main() -> ExampleResult<()> {
+    let client = create_client_from_env("VT_PRIVATE_API_KEY", ApiTier::Premium)?;
 
-    let client = ClientBuilder::new()
-        .api_key(api_key)
-        .tier(ApiTier::Premium)
-        .build()?;
-
-    println!("Testing VirusTotal Private URL Scanning API");
-    println!("===========================================");
-    println!("⚠️  NOTE: Requires Private Scanning License");
-    println!("===========================================\n");
+    print_header("VirusTotal Private URL Scanning API");
+    println!("⚠️  NOTE: Requires Private Scanning License\n");
 
     let private_urls = client.private_urls();
 
-    // 1. Test URL scanning with parameters
-    println!("1. SCAN URL WITH PARAMETERS");
-    println!("---------------------------");
+    // Execute all test scenarios
+    test_url_scanning_with_parameters(&private_urls).await;
+    test_url_identifier_generation().await;
+    test_url_report_retrieval(&private_urls).await;
+    test_malicious_url_analysis(&private_urls).await;
+    test_url_relationships(&private_urls).await;
+    test_minimal_scan(&private_urls).await;
+    test_comprehensive_scan(&private_urls).await;
+    test_relationship_pagination(&private_urls).await;
+    test_relationship_descriptors(&private_urls).await;
+    print_important_notes();
 
-    let test_url = "https://www.example.com";
+    println!("\n===========================================");
+    println!("Private URL Scanning API Testing Complete!");
+    println!("NOTE: Most features require a Private Scanning License.");
 
-    // Create scan parameters for comprehensive analysis
-    let scan_params = PrivateUrlScanParams::new()
-        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36".to_string())
-        .with_chrome_headless() // Add Chrome Headless for comprehensive analysis
-        .add_sandbox("cape_win")
-        .retention_period_days(7)
-        .storage_region("US".to_string())
-        .interaction_timeout(120);
+    Ok(())
+}
 
-    println!("Scanning URL: {}", test_url);
-    println!("  - User Agent: Mozilla/5.0...");
-    println!("  - Sandboxes: chrome_headless_linux, cape_win");
-    println!("  - Retention: 7 days");
-    println!("  - Storage: US");
-    println!("  - Interaction timeout: 120 seconds");
+/// Test URL scanning with comprehensive parameters
+async fn test_url_scanning_with_parameters(private_urls: &PrivateUrlsClient) {
+    print_test_header("SCAN URL WITH PARAMETERS");
+
+    let test_url = TEST_URLS[0];
+    let scan_params = create_comprehensive_scan_params();
+
+    display_scan_parameters(test_url, &scan_params);
 
     match private_urls.scan_url(test_url, Some(scan_params)).await {
         Ok(response) => {
@@ -50,44 +68,66 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("  Self link: {}", links.self_link);
             }
 
-            // Wait a bit for analysis to start
+            // Wait for analysis to start
             tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
-
-            // You could check the analysis status using the analysis ID
-            println!(
-                "\n  To check analysis status, use the analysis ID with the analysis endpoint"
-            );
+            println!("\n  Use the analysis ID with the analysis endpoint to check status");
         }
         Err(e) => {
             println!("✗ Error scanning URL: {}", e);
             println!("  Note: Private URL scanning requires special API privileges");
         }
     }
+}
 
-    // 2. Test URL identifier generation
-    println!("\n2. URL IDENTIFIER GENERATION");
-    println!("----------------------------");
+/// Create comprehensive scan parameters
+fn create_comprehensive_scan_params() -> PrivateUrlScanParams {
+    PrivateUrlScanParams::new()
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36".to_string())
+        .with_chrome_headless()
+        .add_sandbox("cape_win")
+        .retention_period_days(7)
+        .storage_region("US".to_string())
+        .interaction_timeout(120)
+}
 
-    use base64::{engine::general_purpose, Engine as _};
+/// Display scan parameters for user reference
+fn display_scan_parameters(url: &str, _params: &PrivateUrlScanParams) {
+    println!("Scanning URL: {}", url);
+    println!("  - User Agent: Mozilla/5.0...");
+    println!("  - Sandboxes: chrome_headless_linux, cape_win");
+    println!("  - Retention: 7 days");
+    println!("  - Storage: US");
+    println!("  - Interaction timeout: 120 seconds");
+}
 
-    let urls = vec![
+/// Test URL identifier generation using base64 encoding
+async fn test_url_identifier_generation() {
+    print_test_header("URL IDENTIFIER GENERATION");
+
+    let test_urls = vec![
         "http://www.example.com",
         "https://www.virustotal.com/gui/home/upload",
         "http://suspicious-site.com/malware.exe",
     ];
 
-    for url in &urls {
-        let url_id = general_purpose::URL_SAFE_NO_PAD.encode(url.as_bytes());
+    for url in &test_urls {
+        let url_id = encode_url_to_base64(url);
         println!("URL: {}", url);
         println!("  Base64 ID: {}", url_id);
     }
+}
 
-    // 3. Get URL analysis report using base64 identifier
-    println!("\n3. GET URL REPORT (BASE64 ID)");
-    println!("------------------------------");
+/// Encode URL to base64 identifier
+fn encode_url_to_base64(url: &str) -> String {
+    general_purpose::URL_SAFE_NO_PAD.encode(url.as_bytes())
+}
 
-    let test_url = "https://www.google.com";
-    let url_id = general_purpose::URL_SAFE_NO_PAD.encode(test_url.as_bytes());
+/// Test URL report retrieval using base64 identifier
+async fn test_url_report_retrieval(private_urls: &PrivateUrlsClient) {
+    print_test_header("GET URL REPORT (BASE64 ID)");
+
+    let test_url = TEST_URLS[1]; // google.com
+    let url_id = encode_url_to_base64(test_url);
 
     println!("Getting report for: {}", test_url);
     println!("Using Base64 ID: {}", url_id);
@@ -95,128 +135,164 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match private_urls.get_url(&url_id).await {
         Ok(url_report) => {
             println!("✓ URL report retrieved");
-
-            let attrs = &url_report.data.object.attributes;
-
-            if let Some(url) = &attrs.url {
-                println!("  URL: {}", url);
-            }
-            if let Some(final_url) = &attrs.final_url {
-                println!("  Final URL: {}", final_url);
-            }
-            if let Some(title) = &attrs.title {
-                println!("  Title: {}", title);
-            }
-            if let Some(reputation) = &attrs.reputation {
-                println!("  Reputation: {}", reputation);
-            }
-            if let Some(stats) = &attrs.last_analysis_stats {
-                println!("  Last analysis stats:");
-                if let Some(malicious) = stats.malicious {
-                    println!("    - Malicious: {}", malicious);
-                }
-                if let Some(suspicious) = stats.suspicious {
-                    println!("    - Suspicious: {}", suspicious);
-                }
-                if let Some(harmless) = stats.harmless {
-                    println!("    - Harmless: {}", harmless);
-                }
-                if let Some(undetected) = stats.undetected {
-                    println!("    - Undetected: {}", undetected);
-                }
-            }
-            if let Some(categories) = &attrs.categories {
-                if !categories.is_empty() {
-                    println!("  Categories:");
-                    for (source, category) in categories.iter().take(3) {
-                        println!("    - {}: {}", source, category);
-                    }
-                }
-            }
-            if let Some(response_code) = &attrs.last_http_response_code {
-                println!("  Last HTTP response: {}", response_code);
-            }
-            if let Some(chain) = &attrs.redirection_chain {
-                if !chain.is_empty() {
-                    println!("  Redirection chain: {} redirects", chain.len());
-                }
-            }
+            display_url_report_details(&url_report.data.object.attributes);
         }
         Err(e) => {
             println!("✗ Error getting URL report: {}", e);
             println!("  Note: URL may not have been scanned privately");
         }
     }
+}
 
-    // 4. Test with a known malicious URL (using EICAR test URL)
-    println!("\n4. KNOWN MALICIOUS URL TEST");
-    println!("---------------------------");
+/// Display URL report details
+fn display_url_report_details(attrs: &PrivateUrlAttributes) {
+    display_basic_url_info(attrs);
+    display_analysis_stats(attrs);
+    display_url_categories(attrs);
+    display_response_info(attrs);
+}
 
-    // This is a safe test URL that's known to be flagged
-    let malicious_url = "http://malware.testing.google.test/testing/malware/";
-    let malicious_id = general_purpose::URL_SAFE_NO_PAD.encode(malicious_url.as_bytes());
+/// Display basic URL information
+fn display_basic_url_info(attrs: &PrivateUrlAttributes) {
+    if let Some(url) = &attrs.url {
+        println!("  URL: {}", url);
+    }
+    if let Some(final_url) = &attrs.final_url {
+        println!("  Final URL: {}", final_url);
+    }
+    if let Some(title) = &attrs.title {
+        println!("  Title: {}", title);
+    }
+    if let Some(reputation) = &attrs.reputation {
+        println!("  Reputation: {}", reputation);
+    }
+}
+
+/// Display analysis statistics
+fn display_analysis_stats(attrs: &PrivateUrlAttributes) {
+    if let Some(stats) = &attrs.last_analysis_stats {
+        println!("  Last analysis stats:");
+        if let Some(malicious) = stats.malicious {
+            println!("    - Malicious: {}", malicious);
+        }
+        if let Some(suspicious) = stats.suspicious {
+            println!("    - Suspicious: {}", suspicious);
+        }
+        if let Some(harmless) = stats.harmless {
+            println!("    - Harmless: {}", harmless);
+        }
+        if let Some(undetected) = stats.undetected {
+            println!("    - Undetected: {}", undetected);
+        }
+    }
+}
+
+/// Display URL categories
+fn display_url_categories(attrs: &PrivateUrlAttributes) {
+    if let Some(categories) = &attrs.categories {
+        if !categories.is_empty() {
+            println!("  Categories:");
+            for (source, category) in categories.iter().take(3) {
+                println!("    - {}: {}", source, category);
+            }
+        }
+    }
+}
+
+/// Display response information
+fn display_response_info(attrs: &PrivateUrlAttributes) {
+    if let Some(response_code) = &attrs.last_http_response_code {
+        println!("  Last HTTP response: {}", response_code);
+    }
+    if let Some(chain) = &attrs.redirection_chain {
+        if !chain.is_empty() {
+            println!("  Redirection chain: {} redirects", chain.len());
+        }
+    }
+}
+
+/// Test analysis of known malicious URL
+async fn test_malicious_url_analysis(private_urls: &PrivateUrlsClient) {
+    print_test_header("KNOWN MALICIOUS URL TEST");
+
+    let malicious_id = encode_url_to_base64(MALICIOUS_TEST_URL);
 
     println!("Testing with known malicious URL");
-    println!("URL: {}", malicious_url);
+    println!("URL: {}", MALICIOUS_TEST_URL);
 
     match private_urls.get_url(&malicious_id).await {
         Ok(url_report) => {
             println!("✓ Malicious URL report retrieved");
-
-            let attrs = &url_report.data.object.attributes;
-
-            if let Some(stats) = &attrs.last_analysis_stats {
-                if let Some(malicious) = stats.malicious {
-                    println!("  Malicious detections: {}", malicious);
-                }
-            }
-
-            if let Some(threat_names) = &attrs.threat_names {
-                if !threat_names.is_empty() {
-                    println!("  Threat names:");
-                    for name in threat_names.iter().take(5) {
-                        println!("    - {}", name);
-                    }
-                }
-            }
-
-            if let Some(results) = &attrs.last_analysis_results {
-                println!("  Detection engines: {} total", results.len());
-
-                let detections: Vec<_> = results
-                    .iter()
-                    .filter(|(_, r)| r.category == Some("malicious".to_string()))
-                    .take(5)
-                    .collect();
-
-                if !detections.is_empty() {
-                    println!("  Engines detecting as malicious:");
-                    for (engine, result) in detections {
-                        if let Some(res) = &result.result {
-                            println!("    - {}: {}", engine, res);
-                        }
-                    }
-                }
-            }
+            display_malicious_analysis(&url_report.data.object.attributes);
         }
         Err(e) => {
             println!("✗ Error getting malicious URL report: {}", e);
         }
     }
+}
 
-    // 5. Test URL relationships
-    println!("\n5. URL RELATIONSHIPS");
-    println!("--------------------");
+/// Display malicious analysis results
+fn display_malicious_analysis(attrs: &PrivateUrlAttributes) {
+    if let Some(stats) = &attrs.last_analysis_stats {
+        if let Some(malicious) = stats.malicious {
+            println!("  Malicious detections: {}", malicious);
+        }
+    }
 
-    let popular_url = "https://www.wikipedia.org";
-    let popular_id = general_purpose::URL_SAFE_NO_PAD.encode(popular_url.as_bytes());
+    if let Some(threat_names) = &attrs.threat_names {
+        if !threat_names.is_empty() {
+            println!("  Threat names:");
+            for name in threat_names.iter().take(5) {
+                println!("    - {}", name);
+            }
+        }
+    }
+
+    display_detection_engines(attrs);
+}
+
+/// Display detection engine results
+fn display_detection_engines(attrs: &PrivateUrlAttributes) {
+    if let Some(results) = &attrs.last_analysis_results {
+        println!("  Detection engines: {} total", results.len());
+
+        let detections: Vec<_> = results
+            .iter()
+            .filter(|(_, r)| r.category.as_deref() == Some("malicious"))
+            .take(5)
+            .collect();
+
+        if !detections.is_empty() {
+            println!("  Engines detecting as malicious:");
+            for (engine, result) in detections {
+                if let Some(res) = &result.result {
+                    println!("    - {}: {}", engine, res);
+                }
+            }
+        }
+    }
+}
+
+/// Test URL relationship analysis
+async fn test_url_relationships(private_urls: &PrivateUrlsClient) {
+    print_test_header("URL RELATIONSHIPS");
+
+    let popular_url = TEST_URLS[2]; // wikipedia.org
+    let popular_id = encode_url_to_base64(popular_url);
 
     println!("Getting relationships for: {}", popular_url);
 
-    // Get analyses
+    test_analyses_relationship(private_urls, &popular_id).await;
+    test_downloaded_files_relationship(private_urls, &popular_id).await;
+    test_redirecting_urls_relationship(private_urls, &popular_id).await;
+    test_serving_ip_relationship(private_urls, &popular_id).await;
+}
+
+/// Test analyses relationship
+async fn test_analyses_relationship(private_urls: &PrivateUrlsClient, url_id: &str) {
     println!("\nGetting URL analyses...");
     match private_urls
-        .get_relationship::<serde_json::Value>(&popular_id, "analyses", Some(5), None)
+        .get_relationship::<serde_json::Value>(url_id, "analyses", Some(5), None)
         .await
     {
         Ok(analyses) => {
@@ -231,11 +307,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("✗ Error getting analyses: {}", e);
         }
     }
+}
 
-    // Get downloaded files
+/// Test downloaded files relationship
+async fn test_downloaded_files_relationship(private_urls: &PrivateUrlsClient, url_id: &str) {
     println!("\nGetting downloaded files...");
     match private_urls
-        .get_relationship::<serde_json::Value>(&popular_id, "downloaded_files", Some(5), None)
+        .get_relationship::<serde_json::Value>(url_id, "downloaded_files", Some(5), None)
         .await
     {
         Ok(files) => {
@@ -254,11 +332,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("✗ Error getting downloaded files: {}", e);
         }
     }
+}
 
-    // Get redirecting URLs
+/// Test redirecting URLs relationship
+async fn test_redirecting_urls_relationship(private_urls: &PrivateUrlsClient, url_id: &str) {
     println!("\nGetting redirecting URLs...");
     match private_urls
-        .get_relationship::<serde_json::Value>(&popular_id, "redirecting_urls", Some(5), None)
+        .get_relationship::<serde_json::Value>(url_id, "redirecting_urls", Some(5), None)
         .await
     {
         Ok(urls) => {
@@ -272,16 +352,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("✗ Error getting redirecting URLs: {}", e);
         }
     }
+}
 
-    // Get last serving IP address
+/// Test serving IP relationship
+async fn test_serving_ip_relationship(private_urls: &PrivateUrlsClient, url_id: &str) {
     println!("\nGetting last serving IP address...");
     match private_urls
-        .get_relationship::<serde_json::Value>(
-            &popular_id,
-            "last_serving_ip_address",
-            Some(1),
-            None,
-        )
+        .get_relationship::<serde_json::Value>(url_id, "last_serving_ip_address", Some(1), None)
         .await
     {
         Ok(ips) => {
@@ -298,12 +375,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("✗ Error getting last serving IP: {}", e);
         }
     }
+}
 
-    // 6. Test minimal scan (without parameters)
-    println!("\n6. MINIMAL URL SCAN");
-    println!("-------------------");
+/// Test minimal URL scan without parameters
+async fn test_minimal_scan(private_urls: &PrivateUrlsClient) {
+    print_test_header("MINIMAL URL SCAN");
 
-    let simple_url = "https://www.example.org";
+    let simple_url = TEST_URLS[3]; // example.org
 
     println!("Scanning URL with default settings: {}", simple_url);
 
@@ -317,29 +395,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("✗ Error scanning URL: {}", e);
         }
     }
+}
 
-    // 7. Test comprehensive scan with all sandboxes
-    println!("\n7. COMPREHENSIVE SCAN");
-    println!("---------------------");
+/// Test comprehensive scan with all sandboxes
+async fn test_comprehensive_scan(private_urls: &PrivateUrlsClient) {
+    print_test_header("COMPREHENSIVE SCAN");
 
-    let comprehensive_url = "https://www.suspicious-example.com";
+    let comprehensive_url = TEST_URLS[4]; // suspicious-example.com
+    let comprehensive_params = create_comprehensive_scan_with_all_sandboxes();
 
-    let comprehensive_params = PrivateUrlScanParams::new()
-        .sandboxes(vec![
-            "chrome_headless_linux".to_string(),
-            "cape_win".to_string(),
-            "zenbox_windows".to_string(),
-        ])
-        .retention_period_days(28) // Maximum retention
-        .storage_region("EU".to_string())
-        .interaction_sandbox("cape_win".to_string())
-        .interaction_timeout(600); // 10 minutes
-
-    println!("Comprehensive scan of: {}", comprehensive_url);
-    println!("  - All sandboxes enabled");
-    println!("  - Maximum retention (28 days)");
-    println!("  - EU storage region");
-    println!("  - Extended interaction timeout (10 min)");
+    display_comprehensive_scan_info(comprehensive_url);
 
     match private_urls
         .scan_url(comprehensive_url, Some(comprehensive_params))
@@ -353,20 +418,42 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("✗ Error with comprehensive scan: {}", e);
         }
     }
+}
 
-    // 8. Test pagination with relationship iterator
-    println!("\n8. RELATIONSHIP PAGINATION");
-    println!("--------------------------");
+/// Create comprehensive scan parameters with all sandboxes
+fn create_comprehensive_scan_with_all_sandboxes() -> PrivateUrlScanParams {
+    PrivateUrlScanParams::new()
+        .sandboxes(vec![
+            "chrome_headless_linux".to_string(),
+            "cape_win".to_string(),
+            "zenbox_windows".to_string(),
+        ])
+        .retention_period_days(28) // Maximum retention
+        .storage_region("EU".to_string())
+        .interaction_sandbox("cape_win".to_string())
+        .interaction_timeout(600) // 10 minutes
+}
 
-    let paginated_url = "https://www.google.com";
-    let paginated_id = general_purpose::URL_SAFE_NO_PAD.encode(paginated_url.as_bytes());
+/// Display comprehensive scan information
+fn display_comprehensive_scan_info(url: &str) {
+    println!("Comprehensive scan of: {}", url);
+    println!("  - All sandboxes enabled");
+    println!("  - Maximum retention (28 days)");
+    println!("  - EU storage region");
+    println!("  - Extended interaction timeout (10 min)");
+}
+
+/// Test relationship pagination
+async fn test_relationship_pagination(private_urls: &PrivateUrlsClient) {
+    print_test_header("RELATIONSHIP PAGINATION");
+
+    let paginated_url = TEST_URLS[1]; // google.com
+    let paginated_id = encode_url_to_base64(paginated_url);
 
     println!("Testing pagination for URL submissions...");
 
-    let mut submissions_iter = private_urls.get_relationship_iterator::<serde_json::Value>(
-        paginated_id.clone(),
-        "submissions".to_string(),
-    );
+    let mut submissions_iter = private_urls
+        .get_relationship_iterator::<serde_json::Value>(paginated_id, "submissions".to_string());
 
     match submissions_iter.next_batch().await {
         Ok(batch) => {
@@ -380,15 +467,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("✗ Error with pagination: {}", e);
         }
     }
+}
 
-    // 9. Get relationship descriptors (IDs only)
-    println!("\n9. RELATIONSHIP DESCRIPTORS");
-    println!("---------------------------");
+/// Test relationship descriptors
+async fn test_relationship_descriptors(private_urls: &PrivateUrlsClient) {
+    print_test_header("RELATIONSHIP DESCRIPTORS");
+
+    let test_url = TEST_URLS[1]; // google.com
+    let url_id = encode_url_to_base64(test_url);
 
     println!("Getting graph descriptors for URL...");
 
     match private_urls
-        .get_relationship_descriptors(&paginated_id, "graphs", Some(5), None)
+        .get_relationship_descriptors(&url_id, "graphs", Some(5), None)
         .await
     {
         Ok(descriptors) => {
@@ -396,24 +487,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("  No graphs found");
             } else {
                 println!("✓ Found {} graph descriptors", descriptors.data.len());
-                for descriptor in descriptors.data.iter().take(2) {
-                    if let Some(id) = descriptor.get("id") {
-                        println!("  - Graph ID: {}", id);
-                    }
-                    if let Some(context) = descriptor.get("context") {
-                        println!("    Context: {}", context);
-                    }
-                }
+                display_graph_descriptors(&descriptors.data);
             }
         }
         Err(e) => {
             println!("✗ Error getting descriptors: {}", e);
         }
     }
+}
 
-    // 10. Important notes
-    println!("\n10. IMPORTANT NOTES");
-    println!("-------------------");
+/// Display graph descriptors
+fn display_graph_descriptors(descriptors: &[std::collections::HashMap<String, serde_json::Value>]) {
+    for descriptor in descriptors.iter().take(2) {
+        if let Some(id) = descriptor.get("id") {
+            println!("  - Graph ID: {}", id);
+        }
+        if let Some(context) = descriptor.get("context") {
+            println!("    Context: {}", context);
+        }
+    }
+}
+
+/// Print important notes and best practices
+fn print_important_notes() {
+    print_test_header("IMPORTANT NOTES");
 
     println!("📘 URL Identifiers:");
     println!("  1. SHA-256 of canonized URL (returned by API)");
@@ -435,11 +532,4 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  - Use chrome_headless_linux for comprehensive analysis");
     println!("  - Set appropriate retention based on needs");
     println!("  - Choose storage region based on compliance requirements");
-
-    println!("\n===========================================");
-    println!("Private URL Scanning API Testing Complete!");
-    println!("\nNOTE: Most features require a Private Scanning License.");
-    println!("Without proper privileges, operations will fail.");
-
-    Ok(())
 }

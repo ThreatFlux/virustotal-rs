@@ -2,50 +2,54 @@ use virustotal_rs::comments::Comment;
 use virustotal_rs::graphs::{Graph, GraphAttributes, GraphOwner, GraphRelationshipDescriptor};
 use virustotal_rs::objects::CollectionMeta;
 use virustotal_rs::{
-    ApiTier, ClientBuilder, CreateGraphRequest, GraphClient, GraphOrder, GraphVisibility,
-    PermissionDescriptor, UpdateGraphRequest,
+    CreateGraphRequest, GraphClient, GraphOrder, GraphVisibility, PermissionDescriptor,
+    UpdateGraphRequest,
 };
+
+mod common;
+use common::{print_step_header, setup_client};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let api_key = std::env::var("VT_API_KEY").unwrap_or_else(|_| "test_key".to_string());
-
-    let client = ClientBuilder::new()
-        .api_key(api_key)
-        .tier(ApiTier::Premium) // Some graph features may require premium privileges
-        .build()?;
+    let client = setup_client(virustotal_rs::ApiTier::Premium)?;
 
     println!("Testing VirusTotal Graph API");
     println!("=============================\n");
 
     let graph_client = client.graphs();
-
-    // List existing graphs
-    list_graphs(&graph_client).await;
-
-    // Create and manage a graph
-    if let Some(graph_id) = create_test_graph(&graph_client).await {
-        test_graph_operations(&graph_client, &graph_id).await;
-        test_comment_operations(&graph_client, &graph_id).await;
-        test_permission_management(&graph_client, &graph_id).await;
-        test_relationship_operations(&graph_client, &graph_id).await;
-        cleanup_graph(&graph_client, &graph_id).await;
-    }
-
-    // Additional graph operations
-    search_graphs(&graph_client).await;
-    test_pagination(&graph_client).await;
-    test_graph_filters(&graph_client).await;
+    execute_graph_tests(&graph_client).await;
 
     println!("\n=============================");
     println!("Graph API testing complete!");
-
     Ok(())
 }
 
+async fn execute_graph_tests(graph_client: &GraphClient<'_>) {
+    list_graphs(graph_client).await;
+
+    if let Some(graph_id) = create_test_graph(graph_client).await {
+        run_graph_management_tests(graph_client, &graph_id).await;
+        cleanup_graph(graph_client, &graph_id).await;
+    }
+
+    run_additional_graph_tests(graph_client).await;
+}
+
+async fn run_graph_management_tests(graph_client: &GraphClient<'_>, graph_id: &str) {
+    test_graph_operations(graph_client, graph_id).await;
+    test_comment_operations(graph_client, graph_id).await;
+    test_permission_management(graph_client, graph_id).await;
+    test_relationship_operations(graph_client, graph_id).await;
+}
+
+async fn run_additional_graph_tests(graph_client: &GraphClient<'_>) {
+    search_graphs(graph_client).await;
+    test_pagination(graph_client).await;
+    test_graph_filters(graph_client).await;
+}
+
 async fn list_graphs(graph_client: &GraphClient<'_>) {
-    println!("1. LISTING GRAPHS");
-    println!("-----------------");
+    print_step_header(1, "LISTING GRAPHS");
 
     match graph_client
         .list_graphs(
@@ -115,8 +119,7 @@ fn display_graph_owner(attributes: &GraphAttributes) {
 }
 
 async fn create_test_graph(graph_client: &GraphClient<'_>) -> Option<String> {
-    println!("\n2. CREATING GRAPH");
-    println!("-----------------");
+    print_step_header(2, "CREATING GRAPH");
 
     let graph_data = create_sample_graph_data();
     let create_request = build_create_request(graph_data);
@@ -205,8 +208,7 @@ async fn test_graph_operations(graph_client: &GraphClient<'_>, graph_id: &str) {
 }
 
 async fn retrieve_graph(graph_client: &GraphClient<'_>, graph_id: &str) {
-    println!("\n3. RETRIEVING GRAPH");
-    println!("-------------------");
+    print_step_header(3, "RETRIEVING GRAPH");
 
     match graph_client.get_graph(graph_id).await {
         Ok(graph) => {
@@ -240,8 +242,7 @@ fn display_graph_details(attributes: &GraphAttributes) {
 }
 
 async fn update_graph(graph_client: &GraphClient<'_>, graph_id: &str) {
-    println!("\n4. UPDATING GRAPH");
-    println!("-----------------");
+    print_step_header(4, "UPDATING GRAPH");
 
     let update_request = build_update_request(graph_id);
 
@@ -282,8 +283,7 @@ async fn test_comment_operations(graph_client: &GraphClient<'_>, graph_id: &str)
 }
 
 async fn add_graph_comments(graph_client: &GraphClient<'_>, graph_id: &str) {
-    println!("\n5. ADDING COMMENTS");
-    println!("------------------");
+    print_step_header(5, "ADDING COMMENTS");
 
     let comments = [
         "This is a test comment on the graph",
@@ -291,30 +291,38 @@ async fn add_graph_comments(graph_client: &GraphClient<'_>, graph_id: &str) {
     ];
 
     for (i, comment_text) in comments.iter().enumerate() {
-        match graph_client.add_graph_comment(graph_id, comment_text).await {
-            Ok(comment) => {
-                if i == 0 {
-                    println!("   ✓ Comment added successfully");
-                    println!("   - Comment ID: {}", comment.object.id);
-                    println!("   - Text: {}", comment.object.attributes.text);
-                } else {
-                    println!("   ✓ Second comment added successfully");
-                }
+        handle_comment_addition(graph_client, graph_id, comment_text, i).await;
+    }
+}
+
+async fn handle_comment_addition(
+    graph_client: &GraphClient<'_>,
+    graph_id: &str,
+    comment_text: &str,
+    index: usize,
+) {
+    match graph_client.add_graph_comment(graph_id, comment_text).await {
+        Ok(comment) => {
+            if index == 0 {
+                println!("   ✓ Comment added successfully");
+                println!("   - Comment ID: {}", comment.object.id);
+                println!("   - Text: {}", comment.object.attributes.text);
+            } else {
+                println!("   ✓ Second comment added successfully");
             }
-            Err(e) => {
-                println!(
-                    "   ✗ Error adding {} comment: {}",
-                    if i == 0 { "first" } else { "second" },
-                    e
-                );
-            }
+        }
+        Err(e) => {
+            println!(
+                "   ✗ Error adding {} comment: {}",
+                if index == 0 { "first" } else { "second" },
+                e
+            );
         }
     }
 }
 
 async fn retrieve_graph_comments(graph_client: &GraphClient<'_>, graph_id: &str) {
-    println!("\n6. RETRIEVING COMMENTS");
-    println!("----------------------");
+    print_step_header(6, "RETRIEVING COMMENTS");
 
     match graph_client
         .get_graph_comments(graph_id, Some(10), None)
@@ -347,8 +355,7 @@ fn display_comment_list(comments: &[Comment]) {
 }
 
 async fn search_graphs(graph_client: &GraphClient<'_>) {
-    println!("\n7. SEARCHING GRAPHS");
-    println!("-------------------");
+    print_step_header(7, "SEARCHING GRAPHS");
 
     match graph_client.search_graphs("malware", Some(5), None).await {
         Ok(results) => {
@@ -372,9 +379,7 @@ fn display_search_results(graphs: &[Graph]) {
 }
 
 async fn test_pagination(graph_client: &GraphClient<'_>) {
-    println!("\n8. PAGINATION TEST");
-    println!("------------------");
-
+    print_step_header(8, "PAGINATION TEST");
     test_graph_pagination(graph_client).await;
 }
 
@@ -403,8 +408,7 @@ fn display_paginated_graphs(batch: &[Graph]) {
 }
 
 async fn test_comment_pagination(graph_client: &GraphClient<'_>, graph_id: &str) {
-    println!("\n9. COMMENT PAGINATION");
-    println!("---------------------");
+    print_step_header(9, "COMMENT PAGINATION");
 
     let mut comment_iterator = graph_client.get_graph_comments_iterator(graph_id);
 
@@ -428,9 +432,11 @@ fn display_paginated_comments(batch: &[Comment]) {
 }
 
 async fn test_permission_management(graph_client: &GraphClient<'_>, graph_id: &str) {
-    println!("\n10. PERMISSION MANAGEMENT");
-    println!("-------------------------");
+    print_step_header(10, "PERMISSION MANAGEMENT");
+    execute_permission_tests(graph_client, graph_id).await;
+}
 
+async fn execute_permission_tests(graph_client: &GraphClient<'_>, graph_id: &str) {
     grant_view_permissions(graph_client, graph_id).await;
     check_view_permission(graph_client, graph_id).await;
     grant_edit_permissions(graph_client, graph_id).await;
@@ -529,9 +535,11 @@ async fn revoke_permission(graph_client: &GraphClient<'_>, graph_id: &str) {
 }
 
 async fn test_relationship_operations(graph_client: &GraphClient<'_>, graph_id: &str) {
-    println!("\n11. GRAPH RELATIONSHIPS");
-    println!("-----------------------");
+    print_step_header(11, "GRAPH RELATIONSHIPS");
+    execute_relationship_tests(graph_client, graph_id).await;
+}
 
+async fn execute_relationship_tests(graph_client: &GraphClient<'_>, graph_id: &str) {
     get_graph_owner(graph_client, graph_id).await;
     get_graph_editors(graph_client, graph_id).await;
     get_relationship_descriptors(graph_client, graph_id).await;
@@ -620,8 +628,7 @@ fn display_relationship_descriptors(descriptors: &[GraphRelationshipDescriptor])
 }
 
 async fn cleanup_graph(graph_client: &GraphClient<'_>, graph_id: &str) {
-    println!("\n12. CLEANUP");
-    println!("-----------");
+    print_step_header(12, "CLEANUP");
 
     match graph_client.delete_graph(graph_id).await {
         Ok(_) => {
@@ -634,14 +641,10 @@ async fn cleanup_graph(graph_client: &GraphClient<'_>, graph_id: &str) {
 }
 
 async fn test_graph_filters(graph_client: &GraphClient<'_>) {
-    println!("\n13. FILTERING BY OWNER");
-    println!("----------------------");
-
+    print_step_header(13, "FILTERING BY OWNER");
     filter_graphs_by_owner(graph_client).await;
 
-    println!("\n14. FILTERING BY TAG");
-    println!("--------------------");
-
+    print_step_header(14, "FILTERING BY TAG");
     filter_graphs_by_tag(graph_client).await;
 }
 

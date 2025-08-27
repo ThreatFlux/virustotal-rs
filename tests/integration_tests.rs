@@ -3,11 +3,9 @@ use virustotal_rs::{ApiTier, ClientBuilder};
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-#[tokio::test]
-async fn test_ip_address_get() {
-    let mock_server = MockServer::start().await;
-
-    let ip_response = json!({
+/// Helper function to create sample IP response
+fn create_sample_ip_response() -> serde_json::Value {
+    json!({
         "data": {
             "type": "ip_address",
             "id": "8.8.8.8",
@@ -34,7 +32,23 @@ async fn test_ip_address_get() {
                 }
             }
         }
-    });
+    })
+}
+
+/// Helper function to create test client
+async fn create_test_client(mock_server: &MockServer) -> virustotal_rs::Client {
+    ClientBuilder::new()
+        .api_key("test_key")
+        .tier(ApiTier::Public)
+        .base_url(mock_server.uri())
+        .build()
+        .unwrap()
+}
+
+#[tokio::test]
+async fn test_ip_address_get() {
+    let mock_server = MockServer::start().await;
+    let ip_response = create_sample_ip_response();
 
     Mock::given(method("GET"))
         .and(path("/ip_addresses/8.8.8.8"))
@@ -43,13 +57,7 @@ async fn test_ip_address_get() {
         .mount(&mock_server)
         .await;
 
-    let client = ClientBuilder::new()
-        .api_key("test_key")
-        .tier(ApiTier::Public)
-        .base_url(mock_server.uri())
-        .build()
-        .unwrap();
-
+    let client = create_test_client(&mock_server).await;
     let ip = client.ip_addresses().get("8.8.8.8").await.unwrap();
 
     assert_eq!(ip.object.id, "8.8.8.8");

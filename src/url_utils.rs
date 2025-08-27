@@ -335,10 +335,8 @@ pub fn validate_hash(hash: &str) -> Result<()> {
     }
 }
 
-/// Validate a domain name
-pub fn validate_domain(domain: &str) -> Result<()> {
-    let domain = domain.trim();
-
+/// Check basic domain properties (empty, length)
+fn validate_domain_basic(domain: &str) -> Result<()> {
     if domain.is_empty() {
         return Err(Error::bad_request("Domain cannot be empty"));
     }
@@ -349,7 +347,11 @@ pub fn validate_domain(domain: &str) -> Result<()> {
         ));
     }
 
-    // Basic domain validation
+    Ok(())
+}
+
+/// Check domain format rules (dots and dashes at edges)
+fn validate_domain_format(domain: &str) -> Result<()> {
     if domain.starts_with('.') || domain.ends_with('.') {
         return Err(Error::bad_request("Domain cannot start or end with '.'"));
     }
@@ -358,13 +360,28 @@ pub fn validate_domain(domain: &str) -> Result<()> {
         return Err(Error::bad_request("Domain cannot start or end with '-'"));
     }
 
-    // Check for valid characters (simplified validation)
+    Ok(())
+}
+
+/// Check domain character validity
+fn validate_domain_characters(domain: &str) -> Result<()> {
     if !domain
         .chars()
         .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-')
     {
         return Err(Error::bad_request("Domain contains invalid characters"));
     }
+
+    Ok(())
+}
+
+/// Validate a domain name
+pub fn validate_domain(domain: &str) -> Result<()> {
+    let domain = domain.trim();
+
+    validate_domain_basic(domain)?;
+    validate_domain_format(domain)?;
+    validate_domain_characters(domain)?;
 
     Ok(())
 }

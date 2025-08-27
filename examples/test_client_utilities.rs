@@ -9,11 +9,8 @@
 use std::time::Duration;
 use virustotal_rs::{ApiTier, ClientUtils, RateLimiter, RetryConfig, TokenBucketLimiter};
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("=== VirusTotal Client Utilities Demo ===\n");
-
-    // Example 1: Basic client creation from environment
+/// Demonstrate basic client creation from environment variables
+fn demo_environment_client() -> Result<(), Box<dyn std::error::Error>> {
     println!("1. Creating client from environment variable:");
     match ClientUtils::from_env("VT_API_KEY") {
         Ok(builder) => {
@@ -30,7 +27,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // Example 2: Using common environment variables
+    Ok(())
+}
+
+/// Demonstrate common environment variable usage
+fn demo_common_env_client() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n2. Trying common environment variables:");
     match ClientUtils::from_common_env() {
         Ok(builder) => {
@@ -45,7 +46,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // Example 3: Advanced client configuration
+    Ok(())
+}
+
+/// Demonstrate advanced client configuration
+fn demo_advanced_client() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n3. Advanced client configuration:");
     let _client = ClientUtils::builder()
         .api_key("demo_api_key_12345")
@@ -62,7 +67,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("     - 5 retry attempts with 2s initial delay");
     println!("     - Custom headers and user agent");
 
-    // Example 4: Preset configurations
+    Ok(())
+}
+
+/// Demonstrate preset configurations
+fn demo_preset_configs() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n4. Using preset configurations:");
 
     // Testing configuration
@@ -73,7 +82,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _prod_client = ClientUtils::production_config("prod_key_456").build()?;
     println!("   ✓ Production client created with robust settings");
 
-    // Example 5: Rate limiter demonstration
+    Ok(())
+}
+
+/// Demonstrate rate limiter functionality
+fn demo_rate_limiter() {
     println!("\n5. Rate limiter demonstration:");
     let rate_limiter = TokenBucketLimiter::new(ApiTier::Public);
     let status = rate_limiter.status();
@@ -81,8 +94,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("     - Requests per minute: {}", status.requests_per_minute);
     println!("     - Daily limit: {:?}", status.daily_limit);
     println!("     - Requests remaining: {:?}", status.requests_remaining);
+}
 
-    // Example 6: Retry configuration
+/// Demonstrate retry configuration options
+fn demo_retry_config() {
     println!("\n6. Retry configuration examples:");
 
     let basic_retry = RetryConfig::new(3, Duration::from_millis(1000));
@@ -116,8 +131,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let delay = advanced_retry.calculate_delay(attempt);
         println!("   Attempt {}: {}ms delay", attempt, delay.as_millis());
     }
+}
 
-    // Example 8: Environment variable constants
+/// Show available environment variable constants
+fn demo_env_constants() {
     println!("\n8. Available environment variable constants:");
     println!(
         "   Common API key vars: {:?}",
@@ -127,8 +144,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "   Private API key vars: {:?}",
         virustotal_rs::PRIVATE_API_KEY_VARS
     );
+}
 
-    // Example 9: API tier detection
+/// Demonstrate API tier detection
+fn demo_tier_detection() {
     println!("\n9. API tier detection demonstration:");
     let public_key = virustotal_rs::ApiKey::new("short_key");
     let premium_key =
@@ -142,6 +161,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "   Long key detected as: {:?}",
         virustotal_rs::detect_api_tier(&premium_key)
     );
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    println!("=== VirusTotal Client Utilities Demo ===\n");
+
+    demo_environment_client()?;
+    demo_common_env_client()?;
+    demo_advanced_client()?;
+    demo_preset_configs()?;
+    demo_rate_limiter();
+    demo_retry_config();
+    demo_env_constants();
+    demo_tier_detection();
 
     println!("\n✅ Client utilities demonstration completed!");
     println!("   All utilities are ready for use in your VirusTotal applications.");

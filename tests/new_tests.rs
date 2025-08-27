@@ -127,39 +127,48 @@ async fn test_ip_address_get_comments_with_pagination() {
     assert_eq!(comments.data[0].object.attributes.text, "First comment");
 }
 
+/// Helper function to create test comment data
+fn create_comment_page(
+    comment_id: &str,
+    text: &str,
+    date: i64,
+    cursor: Option<&str>,
+) -> serde_json::Value {
+    let mut page = json!({
+        "data": [{
+            "type": "comment",
+            "id": comment_id,
+            "attributes": {
+                "text": text,
+                "date": date
+            }
+        }],
+        "meta": {}
+    });
+
+    if let Some(cursor_value) = cursor {
+        page["meta"]["cursor"] = json!(cursor_value);
+    }
+
+    page
+}
+
+/// Helper function to create test client
+async fn create_test_client_for_comments(mock_server: &MockServer) -> virustotal_rs::Client {
+    ClientBuilder::new()
+        .api_key("test_key")
+        .tier(ApiTier::Public)
+        .base_url(mock_server.uri())
+        .build()
+        .unwrap()
+}
+
 #[tokio::test]
 async fn test_comment_iterator() {
     let mock_server = MockServer::start().await;
 
-    let page1 = json!({
-        "data": [
-            {
-                "type": "comment",
-                "id": "c-1",
-                "attributes": {
-                    "text": "Comment 1",
-                    "date": 1234567890
-                }
-            }
-        ],
-        "meta": {
-            "cursor": "page2"
-        }
-    });
-
-    let page2 = json!({
-        "data": [
-            {
-                "type": "comment",
-                "id": "c-2",
-                "attributes": {
-                    "text": "Comment 2",
-                    "date": 1234567891
-                }
-            }
-        ],
-        "meta": {}
-    });
+    let page1 = create_comment_page("c-1", "Comment 1", 1234567890, Some("page2"));
+    let page2 = create_comment_page("c-2", "Comment 2", 1234567891, None);
 
     Mock::given(method("GET"))
         .and(path("/ip_addresses/8.8.8.8/comments"))
@@ -173,13 +182,7 @@ async fn test_comment_iterator() {
         .mount(&mock_server)
         .await;
 
-    let client = ClientBuilder::new()
-        .api_key("test_key")
-        .tier(ApiTier::Public)
-        .base_url(mock_server.uri())
-        .build()
-        .unwrap();
-
+    let client = create_test_client_for_comments(&mock_server).await;
     let ip_client = client.ip_addresses();
     let mut iterator = ip_client.get_comments_iterator("8.8.8.8").await;
 

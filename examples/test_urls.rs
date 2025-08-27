@@ -4,25 +4,19 @@ use virustotal_rs::{ApiTier, UrlClient, VoteVerdict};
 mod common;
 use common::*;
 
-#[tokio::main]
-async fn main() -> ExampleResult<()> {
-    let client = create_client_from_env("VT_API_KEY", ApiTier::Public)?;
-
-    let url_client = client.urls();
-
-    // Example URL to test
-    let test_url = "http://www.example.com/test";
-
-    print_header("Testing URL API methods");
-
-    // Test URL identifier generation
+/// Demonstrate URL identifier generation
+fn demo_url_identifier_generation(_url_client: &UrlClient, test_url: &str) -> String {
     print_test_header("1. URL Identifier Generation");
     let base64_id = UrlClient::generate_url_id(test_url);
     let sha256_id = UrlClient::generate_url_sha256(test_url);
     println!("   URL: {}", test_url);
     println!("   Base64 ID (no padding): {}", base64_id);
     println!("   SHA256 ID: {}", sha256_id);
+    base64_id
+}
 
+/// Test basic URL operations (scan, get report, rescan)
+async fn test_basic_url_operations(url_client: &UrlClient<'_>, test_url: &str, base64_id: &str) {
     // Test scanning a URL
     print_test_header("2. Scanning URL");
     handle_result_with(
@@ -38,7 +32,7 @@ async fn main() -> ExampleResult<()> {
     // Test getting URL report by ID
     print_test_header("3. Getting URL report");
     handle_result_with(
-        url_client.get(&base64_id).await,
+        url_client.get(base64_id).await,
         |url_report| {
             print_success("Successfully retrieved URL report");
             println!("   - URL: {:?}", url_report.object.attributes.url);
@@ -81,18 +75,21 @@ async fn main() -> ExampleResult<()> {
     // Test rescanning a URL
     print_test_header("5. Requesting URL rescan");
     handle_result_with(
-        url_client.rescan(&base64_id).await,
+        url_client.rescan(base64_id).await,
         |analysis| {
             print_success("URL rescan requested");
             println!("   - New analysis ID: {}", analysis.data.id);
         },
         "Failed to request rescan",
     );
+}
 
+/// Test comment and voting functionality
+async fn test_comments_and_votes(url_client: &UrlClient<'_>, base64_id: &str) {
     // Test getting comments
     print_test_header("6. Getting comments on URL");
     handle_result_with(
-        url_client.get_comments(&base64_id).await,
+        url_client.get_comments(base64_id).await,
         |comments| {
             print_success("Successfully retrieved comments");
             if let Some(meta) = &comments.meta {
@@ -112,7 +109,7 @@ async fn main() -> ExampleResult<()> {
     print_test_header("7. Adding a comment");
     handle_result_with(
         url_client
-            .add_comment(&base64_id, "This is a test comment #testing")
+            .add_comment(base64_id, "This is a test comment #testing")
             .await,
         |comment| {
             print_success("Successfully added comment");
@@ -128,7 +125,7 @@ async fn main() -> ExampleResult<()> {
     // Test getting votes
     print_test_header("8. Getting votes on URL");
     handle_result_with(
-        url_client.get_votes(&base64_id).await,
+        url_client.get_votes(base64_id).await,
         |votes| {
             print_success("Successfully retrieved votes");
             if let Some(meta) = &votes.meta {
@@ -143,20 +140,22 @@ async fn main() -> ExampleResult<()> {
     // Test adding a vote
     print_test_header("9. Adding a vote (harmless)");
     handle_result_with(
-        url_client.add_vote(&base64_id, VoteVerdict::Harmless).await,
+        url_client.add_vote(base64_id, VoteVerdict::Harmless).await,
         |vote| {
             print_success("Successfully added vote");
             println!("   - Vote verdict: {:?}", vote.object.attributes.verdict);
         },
         "Failed to add vote",
     );
+}
 
-    // Test getting relationships
+/// Test URL relationship retrieval
+async fn test_url_relationships(url_client: &UrlClient<'_>, base64_id: &str) {
     print_test_header("10. Getting URL relationships");
 
     // Get analyses
     handle_result_with(
-        url_client.get_analyses(&base64_id).await,
+        url_client.get_analyses(base64_id).await,
         |analyses| {
             print_success("Retrieved analyses");
             if let Some(meta) = &analyses.meta {
@@ -170,7 +169,7 @@ async fn main() -> ExampleResult<()> {
 
     // Get downloaded files
     handle_result_with(
-        url_client.get_downloaded_files(&base64_id).await,
+        url_client.get_downloaded_files(base64_id).await,
         |files| {
             print_success("Retrieved downloaded files");
             if let Some(meta) = &files.meta {
@@ -184,7 +183,7 @@ async fn main() -> ExampleResult<()> {
 
     // Get redirecting URLs
     handle_result_with(
-        url_client.get_redirecting_urls(&base64_id).await,
+        url_client.get_redirecting_urls(base64_id).await,
         |urls| {
             print_success("Retrieved redirecting URLs");
             if let Some(meta) = &urls.meta {
@@ -195,10 +194,12 @@ async fn main() -> ExampleResult<()> {
         },
         "Error getting redirecting URLs",
     );
+}
 
-    // Test using iterators for paginated results
+/// Test paginated results with iterators
+async fn test_pagination(url_client: &UrlClient<'_>, base64_id: &str) {
     print_test_header("11. Testing pagination with comments iterator");
-    let mut comments_iter = url_client.get_comments_iterator(&base64_id);
+    let mut comments_iter = url_client.get_comments_iterator(base64_id);
     handle_result_with(
         comments_iter.next_batch().await,
         |batch| {
@@ -211,6 +212,30 @@ async fn main() -> ExampleResult<()> {
         },
         "Failed to get comments batch",
     );
+}
+
+#[tokio::main]
+async fn main() -> ExampleResult<()> {
+    let client = create_client_from_env("VT_API_KEY", ApiTier::Public)?;
+    let url_client = client.urls();
+    let test_url = "http://www.example.com/test";
+
+    print_header("Testing URL API methods");
+
+    // Generate URL identifiers
+    let base64_id = demo_url_identifier_generation(&url_client, test_url);
+
+    // Test basic operations
+    test_basic_url_operations(&url_client, test_url, &base64_id).await;
+
+    // Test comments and voting
+    test_comments_and_votes(&url_client, &base64_id).await;
+
+    // Test relationships
+    test_url_relationships(&url_client, &base64_id).await;
+
+    // Test pagination
+    test_pagination(&url_client, &base64_id).await;
 
     print_separator(Some(60));
     print_success("URL API testing complete!");

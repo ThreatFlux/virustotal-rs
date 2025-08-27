@@ -7,7 +7,19 @@ use virustotal_rs::{
 fn main() {
     println!("=== VirusTotal Display Utilities Demo ===\n");
 
-    // Test analysis stats display
+    test_analysis_stats();
+    test_vote_stats();
+    test_file_size_formatting();
+    test_reputation_formatting();
+    test_timestamp_formatting();
+    test_hash_truncation();
+    test_text_truncation();
+    test_json_pretty_printing();
+
+    println!("\n✅ Display utilities demo completed!");
+}
+
+fn test_analysis_stats() {
     let stats = AnalysisStats {
         harmless: 45,
         malicious: 2,
@@ -25,8 +37,9 @@ fn main() {
     println!("Detection Rate: {:.1}%", stats.detection_rate());
     println!("\nDetailed Analysis:");
     println!("{}\n", stats.display_detailed());
+}
 
-    // Test vote stats display
+fn test_vote_stats() {
     let votes = VoteStats {
         harmless: 25,
         malicious: 5,
@@ -37,40 +50,46 @@ fn main() {
     println!("Consensus: {}", votes.consensus());
     println!("Detailed Votes:");
     println!("{}\n", votes.display_detailed());
+}
 
-    // Test file size formatting
+fn test_file_size_formatting() {
     println!("📦 File Size Formatting:");
     let sizes = [512, 1024, 1048576, 2147483648, 1099511627776];
     for size in &sizes {
         println!("  {} bytes = {}", size, format_file_size(*size));
     }
+}
 
-    // Test reputation formatting
+fn test_reputation_formatting() {
     println!("\n🏆 Reputation Formatting:");
     let reputations = [85, 65, 35, 0, -25, -60];
     for rep in &reputations {
         println!("  {}", format_reputation(*rep));
     }
+}
 
-    // Test timestamp formatting
+fn test_timestamp_formatting() {
     println!("\n⏰ Timestamp Formatting:");
     let timestamp = 1609459200; // 2021-01-01 00:00:00 UTC
     println!("  Unix {} = {}", timestamp, format_timestamp(timestamp));
+}
 
-    // Test hash truncation
+fn test_hash_truncation() {
     println!("\n🔢 Hash Truncation:");
     let hash = "02032ea322036e66f2825a0342979ad942ad5e201a674dc1c0085617467d661c";
     println!("  Original: {}", hash);
     println!("  Truncated (16): {}", truncate_hash(hash, Some(16)));
     println!("  Truncated (32): {}", truncate_hash(hash, Some(32)));
+}
 
-    // Test text truncation
+fn test_text_truncation() {
     println!("\n✂️  Text Truncation:");
     let long_text = "This is a very long comment that demonstrates text truncation functionality in the display utilities module.";
     println!("  Original ({}): {}", long_text.len(), long_text);
     println!("  Truncated (50): {}", truncate_text(long_text, 50));
+}
 
-    // Test JSON pretty printing
+fn test_json_pretty_printing() {
     println!("\n🎨 JSON Pretty Printing:");
     let json_data = serde_json::json!({
         "file_id": "abc123",
@@ -87,6 +106,4 @@ fn main() {
 
     println!("Pretty JSON:");
     println!("{}", pretty_print_json(&json_data));
-
-    println!("\n✅ Display utilities demo completed!");
 }

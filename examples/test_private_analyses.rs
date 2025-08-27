@@ -2,19 +2,14 @@ use virustotal_rs::private_files::{
     AnalysisStats, FileInfo, PrivateAnalysis, PrivateAnalysisAttributes, PrivateAnalysisMeta,
     PrivateAnalysisResponse, PrivateFileBehaviorAttributes, ProcessInfo,
 };
-use virustotal_rs::{ApiTier, ClientBuilder, PrivateFilesClient};
+use virustotal_rs::{ApiTier, PrivateFilesClient};
+
+mod common;
+use common::{print_step_header, setup_client};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // NOTE: Private file scanning requires special privileges
-    let api_key = std::env::var("VT_PRIVATE_API_KEY")
-        .or_else(|_| std::env::var("VT_API_KEY"))
-        .unwrap_or_else(|_| "test_key".to_string());
-
-    let client = ClientBuilder::new()
-        .api_key(api_key)
-        .tier(ApiTier::Premium)
-        .build()?;
+    let client = setup_client(ApiTier::Premium)?;
 
     println!("Testing VirusTotal Private Analyses & Behavior Reports");
     println!("======================================================");
@@ -23,16 +18,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let private_client = client.private_files();
 
-    // Test core private analysis functionality
-    test_private_analyses(&private_client).await;
-    test_mitre_attack_data(&private_client).await;
-    test_behavior_reports(&private_client).await;
-    test_analysis_pagination(&private_client).await;
-    test_alternate_endpoints(&private_client).await;
-
+    run_all_tests(&private_client).await;
     display_completion_message();
 
     Ok(())
+}
+
+async fn run_all_tests(private_client: &PrivateFilesClient<'_>) {
+    test_private_analyses(private_client).await;
+    test_mitre_attack_data(private_client).await;
+    test_behavior_reports(private_client).await;
+    test_analysis_pagination(private_client).await;
+    test_alternate_endpoints(private_client).await;
 }
 
 async fn test_private_analyses(private_client: &PrivateFilesClient<'_>) {
@@ -40,8 +37,7 @@ async fn test_private_analyses(private_client: &PrivateFilesClient<'_>) {
 }
 
 async fn list_private_analyses(private_client: &PrivateFilesClient<'_>) {
-    println!("1. LIST PRIVATE ANALYSES");
-    println!("------------------------");
+    print_step_header(1, "LIST PRIVATE ANALYSES");
     println!("Listing recent private analyses...");
 
     match private_client
@@ -94,8 +90,7 @@ fn display_analysis_stats(stats: &Option<AnalysisStats>) {
 }
 
 async fn test_single_analysis(private_client: &PrivateFilesClient<'_>, analysis_id: &str) {
-    println!("\n2. GET SINGLE ANALYSIS");
-    println!("----------------------");
+    print_step_header(2, "GET SINGLE ANALYSIS");
 
     match private_client.get_single_analysis(analysis_id).await {
         Ok(response) => {
@@ -142,8 +137,7 @@ fn display_file_details(file_info: &FileInfo) {
 }
 
 async fn get_analysis_relationships(private_client: &PrivateFilesClient<'_>, analysis_id: &str) {
-    println!("\n3. ANALYSIS RELATIONSHIPS");
-    println!("-------------------------");
+    print_step_header(3, "ANALYSIS RELATIONSHIPS");
 
     match private_client
         .get_analysis_relationship::<serde_json::Value>(analysis_id, "item")
@@ -161,8 +155,7 @@ async fn get_analysis_relationships(private_client: &PrivateFilesClient<'_>, ana
 async fn test_mitre_attack_data(private_client: &PrivateFilesClient<'_>) {
     let eicar_hash = "275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f";
 
-    println!("\n4. MITRE ATT&CK DATA");
-    println!("--------------------");
+    print_step_header(4, "MITRE ATT&CK DATA");
     println!("Getting MITRE ATT&CK tactics and techniques...");
 
     match private_client.get_mitre_attack_data(eicar_hash).await {
@@ -180,8 +173,7 @@ async fn test_mitre_attack_data(private_client: &PrivateFilesClient<'_>) {
 async fn test_behavior_reports(private_client: &PrivateFilesClient<'_>) {
     let eicar_hash = "275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f";
 
-    println!("\n5. BEHAVIOR REPORTS");
-    println!("-------------------");
+    print_step_header(5, "BEHAVIOR REPORTS");
 
     match private_client
         .get_behaviors(eicar_hash, Some(5), None)
@@ -216,8 +208,7 @@ async fn test_detailed_behavior_analysis(
 }
 
 async fn get_specific_behavior_report(private_client: &PrivateFilesClient<'_>, sandbox_id: &str) {
-    println!("\n6. SPECIFIC BEHAVIOR REPORT");
-    println!("---------------------------");
+    print_step_header(6, "SPECIFIC BEHAVIOR REPORT");
 
     match private_client.get_file_behavior(sandbox_id).await {
         Ok(behavior) => {
@@ -289,8 +280,7 @@ async fn get_behavior_artifacts(private_client: &PrivateFilesClient<'_>, sandbox
 }
 
 async fn get_html_report(private_client: &PrivateFilesClient<'_>, sandbox_id: &str) {
-    println!("\n7. HTML BEHAVIOR REPORT");
-    println!("-----------------------");
+    print_step_header(7, "HTML BEHAVIOR REPORT");
 
     match private_client.get_behavior_html_report(sandbox_id).await {
         Ok(html) => {
@@ -305,8 +295,7 @@ async fn get_html_report(private_client: &PrivateFilesClient<'_>, sandbox_id: &s
 }
 
 async fn get_evtx_file(private_client: &PrivateFilesClient<'_>, sandbox_id: &str) {
-    println!("\n8. EVTX FILE");
-    println!("------------");
+    print_step_header(8, "EVTX FILE");
 
     match private_client.get_behavior_evtx(sandbox_id).await {
         Ok(evtx) => {
@@ -322,8 +311,7 @@ async fn get_evtx_file(private_client: &PrivateFilesClient<'_>, sandbox_id: &str
 }
 
 async fn get_pcap_file(private_client: &PrivateFilesClient<'_>, sandbox_id: &str) {
-    println!("\n9. PCAP FILE");
-    println!("------------");
+    print_step_header(9, "PCAP FILE");
 
     match private_client.get_behavior_pcap(sandbox_id).await {
         Ok(pcap) => {
@@ -339,8 +327,7 @@ async fn get_pcap_file(private_client: &PrivateFilesClient<'_>, sandbox_id: &str
 }
 
 async fn get_memory_dump(private_client: &PrivateFilesClient<'_>, sandbox_id: &str) {
-    println!("\n10. MEMORY DUMP");
-    println!("---------------");
+    print_step_header(10, "MEMORY DUMP");
 
     match private_client.get_behavior_memdump(sandbox_id).await {
         Ok(memdump) => {
@@ -356,8 +343,7 @@ async fn get_memory_dump(private_client: &PrivateFilesClient<'_>, sandbox_id: &s
 }
 
 async fn get_behavior_relationships(private_client: &PrivateFilesClient<'_>, sandbox_id: &str) {
-    println!("\n11. BEHAVIOR RELATIONSHIPS");
-    println!("--------------------------");
+    print_step_header(11, "BEHAVIOR RELATIONSHIPS");
 
     match private_client
         .get_behavior_relationship::<serde_json::Value>(sandbox_id, "file", Some(5), None)
@@ -374,8 +360,7 @@ async fn get_behavior_relationships(private_client: &PrivateFilesClient<'_>, san
 }
 
 async fn test_analysis_pagination(private_client: &PrivateFilesClient<'_>) {
-    println!("\n12. ANALYSIS PAGINATION");
-    println!("------------------------");
+    print_step_header(12, "ANALYSIS PAGINATION");
 
     let mut analysis_iterator = private_client.list_analyses_iterator();
 
@@ -397,8 +382,7 @@ fn display_pagination_info(batch: &[PrivateAnalysis]) {
 }
 
 async fn test_alternate_endpoints(private_client: &PrivateFilesClient<'_>) {
-    println!("\n13. ALTERNATE BEHAVIOR ENDPOINT");
-    println!("-------------------------------");
+    print_step_header(13, "ALTERNATE BEHAVIOR ENDPOINT");
 
     let eicar_hash = "275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f";
 

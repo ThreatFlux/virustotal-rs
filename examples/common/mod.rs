@@ -254,6 +254,28 @@ pub fn print_section_header(title: &str, width: usize) {
     println!("{}", "=".repeat(width));
 }
 
+/// Print a test section header with step number
+#[allow(dead_code)]
+pub fn print_step_header(step: u8, title: &str) {
+    println!("\n{}. {}", step, title);
+    println!("{}", "-".repeat(title.len() + 4));
+}
+
+/// Simple function to create a client
+#[allow(dead_code)]
+pub fn setup_client(
+    tier: virustotal_rs::ApiTier,
+) -> Result<virustotal_rs::Client, Box<dyn std::error::Error>> {
+    let api_key = std::env::var("VT_PRIVATE_API_KEY")
+        .or_else(|_| std::env::var("VT_API_KEY"))
+        .unwrap_or_else(|_| "test_key".to_string());
+
+    Ok(virustotal_rs::ClientBuilder::new()
+        .api_key(api_key)
+        .tier(tier)
+        .build()?)
+}
+
 /// Print a formatted section header with default width
 ///
 /// Convenience function that uses a default width of 60 characters.

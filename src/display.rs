@@ -159,24 +159,10 @@ pub struct DisplayOptions {
 // Trait Implementations
 // ============================================================================
 
-impl DisplayStats for AnalysisStats {
-    fn display_summary(&self) -> String {
-        let total = self.total_engines();
-        let threats = self.malicious + self.suspicious;
-
-        if threats == 0 {
-            format!("Clean ({} engines)", total)
-        } else {
-            format!("{}/{} engines detected threats", threats, total)
-        }
-    }
-
-    fn display_detailed(&self) -> String {
-        let total = self.total_engines();
-        let mut result = String::new();
-
-        result.push_str(&format!("Analysis Results ({} engines):\n", total));
-
+// Helper functions for AnalysisStats
+impl AnalysisStats {
+    /// Append core detection categories to the result string
+    fn append_core_detections(&self, result: &mut String, total: u32) {
         if self.malicious > 0 {
             let pct = (self.malicious as f64 / total as f64) * 100.0;
             result.push_str(&format!(
@@ -210,7 +196,10 @@ impl DisplayStats for AnalysisStats {
             let pct = (self.timeout as f64 / total as f64) * 100.0;
             result.push_str(&format!("  ⏱️  Timeout: {} ({:.1}%)\n", self.timeout, pct));
         }
+    }
 
+    /// Append optional detection categories to the result string
+    fn append_optional_detections(&self, result: &mut String, total: u32) {
         if let Some(failure) = self.failure {
             if failure > 0 {
                 let pct = (failure as f64 / total as f64) * 100.0;
@@ -237,7 +226,10 @@ impl DisplayStats for AnalysisStats {
                 ));
             }
         }
+    }
 
+    /// Append the overall detection rate to the result string
+    fn append_detection_rate(&self, result: &mut String) {
         let detection_rate = self.detection_rate();
         if detection_rate > 0.0 {
             result.push_str(&format!(
@@ -245,6 +237,58 @@ impl DisplayStats for AnalysisStats {
                 detection_rate
             ));
         }
+    }
+
+    /// Add a formatted category to the result string
+    fn add_formatted_category(
+        &self,
+        result: &mut String,
+        category: &str,
+        count: u32,
+        total: u32,
+        prefix: &str,
+        show_percentages: bool,
+    ) {
+        if count > 0 {
+            if show_percentages {
+                let pct = (count as f64 / total as f64) * 100.0;
+                result.push_str(&format!(
+                    "{}{}: {} ({:.1}%)\n",
+                    prefix, category, count, pct
+                ));
+            } else {
+                result.push_str(&format!("{}{}: {}\n", prefix, category, count));
+            }
+        }
+    }
+}
+
+impl DisplayStats for AnalysisStats {
+    fn display_summary(&self) -> String {
+        let total = self.total_engines();
+        let threats = self.malicious + self.suspicious;
+
+        if threats == 0 {
+            format!("Clean ({} engines)", total)
+        } else {
+            format!("{}/{} engines detected threats", threats, total)
+        }
+    }
+
+    fn display_detailed(&self) -> String {
+        let total = self.total_engines();
+        let mut result = String::new();
+
+        result.push_str(&format!("Analysis Results ({} engines):\n", total));
+
+        // Add core detection categories
+        self.append_core_detections(&mut result, total);
+
+        // Add optional categories
+        self.append_optional_detections(&mut result, total);
+
+        // Add overall detection rate
+        self.append_detection_rate(&mut result);
 
         result.trim_end().to_string()
     }
@@ -253,65 +297,47 @@ impl DisplayStats for AnalysisStats {
         let total = self.total_engines();
         let mut result = String::new();
 
-        if self.malicious > 0 {
-            if show_percentages {
-                let pct = (self.malicious as f64 / total as f64) * 100.0;
-                result.push_str(&format!(
-                    "{}Malicious: {} ({:.1}%)\n",
-                    prefix, self.malicious, pct
-                ));
-            } else {
-                result.push_str(&format!("{}Malicious: {}\n", prefix, self.malicious));
-            }
-        }
-
-        if self.suspicious > 0 {
-            if show_percentages {
-                let pct = (self.suspicious as f64 / total as f64) * 100.0;
-                result.push_str(&format!(
-                    "{}Suspicious: {} ({:.1}%)\n",
-                    prefix, self.suspicious, pct
-                ));
-            } else {
-                result.push_str(&format!("{}Suspicious: {}\n", prefix, self.suspicious));
-            }
-        }
-
-        if self.harmless > 0 {
-            if show_percentages {
-                let pct = (self.harmless as f64 / total as f64) * 100.0;
-                result.push_str(&format!(
-                    "{}Harmless: {} ({:.1}%)\n",
-                    prefix, self.harmless, pct
-                ));
-            } else {
-                result.push_str(&format!("{}Harmless: {}\n", prefix, self.harmless));
-            }
-        }
-
-        if self.undetected > 0 {
-            if show_percentages {
-                let pct = (self.undetected as f64 / total as f64) * 100.0;
-                result.push_str(&format!(
-                    "{}Undetected: {} ({:.1}%)\n",
-                    prefix, self.undetected, pct
-                ));
-            } else {
-                result.push_str(&format!("{}Undetected: {}\n", prefix, self.undetected));
-            }
-        }
-
-        if self.timeout > 0 {
-            if show_percentages {
-                let pct = (self.timeout as f64 / total as f64) * 100.0;
-                result.push_str(&format!(
-                    "{}Timeout: {} ({:.1}%)\n",
-                    prefix, self.timeout, pct
-                ));
-            } else {
-                result.push_str(&format!("{}Timeout: {}\n", prefix, self.timeout));
-            }
-        }
+        // Add each category using helper function
+        self.add_formatted_category(
+            &mut result,
+            "Malicious",
+            self.malicious,
+            total,
+            prefix,
+            show_percentages,
+        );
+        self.add_formatted_category(
+            &mut result,
+            "Suspicious",
+            self.suspicious,
+            total,
+            prefix,
+            show_percentages,
+        );
+        self.add_formatted_category(
+            &mut result,
+            "Harmless",
+            self.harmless,
+            total,
+            prefix,
+            show_percentages,
+        );
+        self.add_formatted_category(
+            &mut result,
+            "Undetected",
+            self.undetected,
+            total,
+            prefix,
+            show_percentages,
+        );
+        self.add_formatted_category(
+            &mut result,
+            "Timeout",
+            self.timeout,
+            total,
+            prefix,
+            show_percentages,
+        );
 
         result.trim_end().to_string()
     }

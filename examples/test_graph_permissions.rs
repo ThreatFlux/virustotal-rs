@@ -17,20 +17,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let graph_client = client.graphs();
 
-    // Create a test graph first
     if let Some(graph_id) = setup_test_graph(&graph_client).await {
-        test_editor_permissions(&graph_client, &graph_id).await;
-        test_viewer_permissions(&graph_client, &graph_id).await;
-        test_permission_revocation(&graph_client, &graph_id).await;
-        test_mixed_permissions(&graph_client, &graph_id).await;
-        get_graph_owner_info(&graph_client, &graph_id).await;
+        run_permission_tests(&graph_client, &graph_id).await;
         cleanup_test_graph(&graph_client, &graph_id).await;
     }
 
     println!("\n==============================================");
     println!("Graph Permission Management Testing Complete!");
-
     Ok(())
+}
+
+async fn run_permission_tests(graph_client: &GraphClient<'_>, graph_id: &str) {
+    test_editor_permissions(graph_client, graph_id).await;
+    test_viewer_permissions(graph_client, graph_id).await;
+    test_permission_revocation(graph_client, graph_id).await;
+    test_mixed_permissions(graph_client, graph_id).await;
+    get_graph_owner_info(graph_client, graph_id).await;
 }
 
 async fn setup_test_graph(graph_client: &GraphClient<'_>) -> Option<String> {
@@ -55,7 +57,7 @@ async fn setup_test_graph(graph_client: &GraphClient<'_>) -> Option<String> {
 
 async fn test_editor_permissions(graph_client: &GraphClient<'_>, graph_id: &str) {
     println!("\n1. EDITOR PERMISSION MANAGEMENT");
-    println!("--------------------------------");
+    println!("{}", "-".repeat("EDITOR PERMISSION MANAGEMENT".len() + 4));
 
     grant_editor_permissions(graph_client, graph_id).await;
     check_editor_permissions(graph_client, graph_id).await;

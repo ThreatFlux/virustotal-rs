@@ -360,6 +360,36 @@ impl EnhancedClientBuilder {
         }
     }
 
+    /// Determine the API tier to use (either explicit or detected)
+    fn determine_api_tier(&self) -> Result<ApiTier> {
+        if let Some(tier) = self.tier {
+            Ok(tier)
+        } else if self.tier_detection {
+            let api_key = self
+                .api_key
+                .as_ref()
+                .ok_or_else(|| Error::bad_request("API key is required"))?;
+            Ok(detect_api_tier(api_key))
+        } else {
+            Ok(ApiTier::Public) // Default fallback
+        }
+    }
+
+    /// Apply client configuration options
+    fn apply_client_config(&self, mut client: Client) -> Result<Client> {
+        // Apply timeout if specified
+        if let Some(timeout) = self.timeout {
+            client = client.with_timeout(timeout)?;
+        }
+
+        // Apply base URL if specified
+        if let Some(base_url) = &self.base_url {
+            client = client.with_base_url(base_url)?;
+        }
+
+        Ok(client)
+    }
+
     /// Set the API key
     pub fn api_key<K: Into<ApiKey>>(mut self, key: K) -> Self {
         self.api_key = Some(key.into());
@@ -438,30 +468,14 @@ impl EnhancedClientBuilder {
     pub fn build(self) -> Result<Client> {
         let api_key = self
             .api_key
-            .ok_or_else(|| Error::bad_request("API key is required"))?;
+            .as_ref()
+            .ok_or_else(|| Error::bad_request("API key is required"))?
+            .clone();
 
-        // Detect tier if requested and not explicitly set
-        let tier = if let Some(tier) = self.tier {
-            tier
-        } else if self.tier_detection {
-            detect_api_tier(&api_key)
-        } else {
-            ApiTier::Public // Default fallback
-        };
+        let tier = self.determine_api_tier()?;
+        let client = Client::new(api_key, tier)?;
 
-        let mut client = Client::new(api_key, tier)?;
-
-        // Apply timeout if specified
-        if let Some(timeout) = self.timeout {
-            client = client.with_timeout(timeout)?;
-        }
-
-        // Apply base URL if specified
-        if let Some(base_url) = self.base_url {
-            client = client.with_base_url(&base_url)?;
-        }
-
-        Ok(client)
+        self.apply_client_config(client)
     }
 }
 
