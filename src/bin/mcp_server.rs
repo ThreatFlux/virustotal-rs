@@ -45,11 +45,25 @@ fn main() {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     use std::env;
-    use std::net::SocketAddr;
-    use virustotal_rs::mcp::{run_http_server, run_stdio_server};
-    use virustotal_rs::{ApiTier, ClientBuilder};
 
-    // Initialize logging
+    initialize_logging();
+    tracing::info!("Starting `VirusTotal` MCP Server...");
+
+    let api_key = get_api_key()?;
+    let api_tier = determine_api_tier();
+    let client = create_virustotal_client(api_key, api_tier)?;
+
+    let server_mode = env::var("SERVER_MODE").unwrap_or_else(|_| "http".to_string());
+    run_server_by_mode(client, &server_mode).await?;
+
+    tracing::info!("MCP server shutting down");
+    Ok(())
+}
+
+#[cfg(feature = "mcp")]
+fn initialize_logging() {
+    use std::env;
+
     let log_level = env::var("LOG_LEVEL").unwrap_or_else(|_| "info".to_string());
     let env_filter = tracing_subscriber::EnvFilter::from_default_env()
         .add_directive(format!("virustotal_rs={}", log_level).parse().unwrap())
@@ -62,15 +76,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .with_thread_ids(true)
         .with_line_number(true)
         .init();
+}
 
-    tracing::info!("Starting `VirusTotal` MCP Server...");
+#[cfg(feature = "mcp")]
+fn get_api_key() -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    use std::env;
 
-    // Get API key from environment
-    let api_key = env::var("VIRUSTOTAL_API_KEY")
-        .map_err(|_| "VIRUSTOTAL_API_KEY environment variable is required")?;
+    env::var("VIRUSTOTAL_API_KEY")
+        .map_err(|_| "VIRUSTOTAL_API_KEY environment variable is required".into())
+}
 
-    // Determine API tier
-    let api_tier = match env::var("VIRUSTOTAL_API_TIER").as_deref() {
+#[cfg(feature = "mcp")]
+fn determine_api_tier() -> virustotal_rs::ApiTier {
+    use std::env;
+    use virustotal_rs::ApiTier;
+
+    match env::var("VIRUSTOTAL_API_TIER").as_deref() {
         Ok("Premium") | Ok("premium") => {
             tracing::info!("Using Premium API tier");
             ApiTier::Premium
@@ -81,9 +102,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             );
             ApiTier::Public
         }
-    };
+    }
+}
 
-    // Create `VirusTotal` client
+#[cfg(feature = "mcp")]
+fn create_virustotal_client(
+    api_key: String,
+    api_tier: virustotal_rs::ApiTier,
+) -> Result<virustotal_rs::Client, Box<dyn std::error::Error + Send + Sync>> {
+    use virustotal_rs::ClientBuilder;
+
     tracing::info!("Initializing `VirusTotal` client...");
     let client = ClientBuilder::new()
         .api_key(api_key)
@@ -92,49 +120,73 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .map_err(|e| format!("Failed to create `VirusTotal` client: {}", e))?;
 
     tracing::info!("`VirusTotal` client initialized successfully");
+    Ok(client)
+}
 
-    // Determine server mode
-    let server_mode = env::var("SERVER_MODE").unwrap_or_else(|_| "http".to_string());
-
+#[cfg(feature = "mcp")]
+async fn run_server_by_mode(
+    client: virustotal_rs::Client,
+    server_mode: &str,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     match server_mode.to_lowercase().as_str() {
         "stdio" => {
-            tracing::info!("Starting MCP server in stdio mode...");
-            tracing::info!("Ready to accept MCP messages on stdin/stdout");
-            run_stdio_server(client).await?;
+            run_stdio_mode(client).await?;
         }
         _ => {
-            let addr: SocketAddr = env::var("HTTP_ADDR")
-                .unwrap_or_else(|_| "127.0.0.1:8080".to_string())
-                .parse()
-                .map_err(|e| format!("Invalid HTTP_ADDR: {}", e))?;
-
-            tracing::info!("Starting MCP server in HTTP mode...");
-            tracing::info!("Server will listen on: http://{}", addr);
-            tracing::info!("Health check endpoint: http://{}/health", addr);
-            tracing::info!(
-                "Connect using: npx @modelcontextprotocol/inspector http://{}",
-                addr
-            );
-
-            // Print authentication info based on features
-            #[cfg(feature = "mcp-jwt")]
-            tracing::info!("JWT authentication is available (feature: mcp-jwt)");
-
-            #[cfg(feature = "mcp-oauth")]
-            tracing::info!("OAuth 2.1 authentication is available (feature: mcp-oauth)");
-
-            #[cfg(not(any(feature = "mcp-jwt", feature = "mcp-oauth")))]
-            tracing::info!(
-                "Running without authentication (use features mcp-jwt or mcp-oauth for auth)"
-            );
-
-            tracing::info!("Server starting...");
-            run_http_server(client, addr).await?;
+            run_http_mode(client).await?;
         }
     }
-
-    tracing::info!("MCP server shutting down");
     Ok(())
+}
+
+#[cfg(feature = "mcp")]
+async fn run_stdio_mode(
+    client: virustotal_rs::Client,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    use virustotal_rs::mcp::run_stdio_server;
+
+    tracing::info!("Starting MCP server in stdio mode...");
+    tracing::info!("Ready to accept MCP messages on stdin/stdout");
+    run_stdio_server(client).await.map_err(|e| e.into())
+}
+
+#[cfg(feature = "mcp")]
+async fn run_http_mode(
+    client: virustotal_rs::Client,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    use std::{env, net::SocketAddr};
+    use virustotal_rs::mcp::run_http_server;
+
+    let addr: SocketAddr = env::var("HTTP_ADDR")
+        .unwrap_or_else(|_| "127.0.0.1:8080".to_string())
+        .parse()
+        .map_err(|e| format!("Invalid HTTP_ADDR: {}", e))?;
+
+    log_http_server_info(&addr);
+    run_http_server(client, addr).await.map_err(|e| e.into())
+}
+
+#[cfg(feature = "mcp")]
+fn log_http_server_info(addr: &std::net::SocketAddr) {
+    tracing::info!("Starting MCP server in HTTP mode...");
+    tracing::info!("Server will listen on: http://{}", addr);
+    tracing::info!("Health check endpoint: http://{}/health", addr);
+    tracing::info!(
+        "Connect using: npx @modelcontextprotocol/inspector http://{}",
+        addr
+    );
+
+    // Print authentication info based on features
+    #[cfg(feature = "mcp-jwt")]
+    tracing::info!("JWT authentication is available (feature: mcp-jwt)");
+
+    #[cfg(feature = "mcp-oauth")]
+    tracing::info!("OAuth 2.1 authentication is available (feature: mcp-oauth)");
+
+    #[cfg(not(any(feature = "mcp-jwt", feature = "mcp-oauth")))]
+    tracing::info!("Running without authentication (use features mcp-jwt or mcp-oauth for auth)");
+
+    tracing::info!("Server starting...");
 }
 
 #[cfg(all(feature = "mcp", test))]

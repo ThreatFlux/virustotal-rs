@@ -1,6 +1,9 @@
+use virustotal_rs::comments::Comment;
+use virustotal_rs::graphs::{Graph, GraphAttributes, GraphOwner, GraphRelationshipDescriptor};
+use virustotal_rs::objects::CollectionMeta;
 use virustotal_rs::{
-    ApiTier, ClientBuilder, CreateGraphRequest, GraphOrder, GraphVisibility, PermissionDescriptor,
-    UpdateGraphRequest,
+    ApiTier, ClientBuilder, CreateGraphRequest, GraphClient, GraphOrder, GraphVisibility,
+    PermissionDescriptor, UpdateGraphRequest,
 };
 
 #[tokio::main]
@@ -17,7 +20,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let graph_client = client.graphs();
 
-    // 1. List existing graphs
+    // List existing graphs
+    list_graphs(&graph_client).await;
+
+    // Create and manage a graph
+    if let Some(graph_id) = create_test_graph(&graph_client).await {
+        test_graph_operations(&graph_client, &graph_id).await;
+        test_comment_operations(&graph_client, &graph_id).await;
+        test_permission_management(&graph_client, &graph_id).await;
+        test_relationship_operations(&graph_client, &graph_id).await;
+        cleanup_graph(&graph_client, &graph_id).await;
+    }
+
+    // Additional graph operations
+    search_graphs(&graph_client).await;
+    test_pagination(&graph_client).await;
+    test_graph_filters(&graph_client).await;
+
+    println!("\n=============================");
+    println!("Graph API testing complete!");
+
+    Ok(())
+}
+
+async fn list_graphs(graph_client: &GraphClient<'_>) {
     println!("1. LISTING GRAPHS");
     println!("-----------------");
 
@@ -32,50 +58,84 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         Ok(graphs) => {
             println!("   ✓ Retrieved graphs");
-            if let Some(meta) = &graphs.meta {
-                if let Some(cursor) = &meta.cursor {
-                    println!(
-                        "   - Cursor for pagination: {}",
-                        &cursor[..20.min(cursor.len())]
-                    );
-                }
-            }
-
-            for graph in graphs.data.iter().take(5) {
-                println!("   - Graph ID: {}", graph.object.id);
-                if let Some(name) = &graph.object.attributes.name {
-                    print!("     Name: {}", name);
-                }
-                if let Some(visibility) = &graph.object.attributes.visibility {
-                    print!(" [{}]", visibility);
-                }
-                println!();
-
-                if let Some(nodes) = &graph.object.attributes.nodes_count {
-                    print!("     Nodes: {}", nodes);
-                }
-                if let Some(edges) = &graph.object.attributes.edges_count {
-                    print!(", Edges: {}", edges);
-                }
-                println!();
-
-                if let Some(owner) = &graph.object.attributes.owner {
-                    println!("     Owner: {}", owner);
-                }
-            }
+            display_pagination_info(&graphs.meta);
+            display_graph_list(&graphs.data);
         }
         Err(e) => {
             println!("   ✗ Error listing graphs: {}", e);
             println!("   Note: Graph API may require specific privileges");
         }
     }
+}
 
-    // 2. Create a new graph
+fn display_pagination_info(meta: &Option<CollectionMeta>) {
+    if let Some(meta) = meta {
+        if let Some(cursor) = &meta.cursor {
+            println!(
+                "   - Cursor for pagination: {}",
+                &cursor[..20.min(cursor.len())]
+            );
+        }
+    }
+}
+
+fn display_graph_list(graphs: &[Graph]) {
+    for graph in graphs.iter().take(5) {
+        println!("   - Graph ID: {}", graph.object.id);
+        display_graph_basic_info(&graph.object.attributes);
+        display_graph_metrics(&graph.object.attributes);
+        display_graph_owner(&graph.object.attributes);
+    }
+}
+
+fn display_graph_basic_info(attributes: &GraphAttributes) {
+    if let Some(name) = &attributes.name {
+        print!("     Name: {}", name);
+    }
+    if let Some(visibility) = &attributes.visibility {
+        print!(" [{}]", visibility);
+    }
+    println!();
+}
+
+fn display_graph_metrics(attributes: &GraphAttributes) {
+    if let Some(nodes) = &attributes.nodes_count {
+        print!("     Nodes: {}", nodes);
+    }
+    if let Some(edges) = &attributes.edges_count {
+        print!(", Edges: {}", edges);
+    }
+    println!();
+}
+
+fn display_graph_owner(attributes: &GraphAttributes) {
+    if let Some(owner) = &attributes.owner {
+        println!("     Owner: {}", owner);
+    }
+}
+
+async fn create_test_graph(graph_client: &GraphClient<'_>) -> Option<String> {
     println!("\n2. CREATING GRAPH");
     println!("-----------------");
 
-    // Create graph data structure
-    let graph_data = serde_json::json!({
+    let graph_data = create_sample_graph_data();
+    let create_request = build_create_request(graph_data);
+
+    match graph_client.create_graph(&create_request).await {
+        Ok(graph) => {
+            println!("   ✓ Graph created successfully");
+            display_created_graph_info(&graph);
+            Some(graph.object.id)
+        }
+        Err(e) => {
+            println!("   ✗ Error creating graph: {}", e);
+            None
+        }
+    }
+}
+
+fn create_sample_graph_data() -> serde_json::Value {
+    serde_json::json!({
         "nodes": [
             {
                 "id": "file_1",
@@ -117,162 +177,176 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "type": "dns"
             }
         ]
-    });
+    })
+}
 
-    let create_request = CreateGraphRequest::new("SDK Test Graph".to_string())
+fn build_create_request(graph_data: serde_json::Value) -> CreateGraphRequest {
+    CreateGraphRequest::new("SDK Test Graph".to_string())
         .with_description("Test graph created by Rust SDK".to_string())
         .with_graph_type("malware_analysis".to_string())
         .with_visibility(GraphVisibility::Private)
         .with_tags(vec!["test".to_string(), "rust_sdk".to_string()])
-        .with_graph_data(graph_data);
+        .with_graph_data(graph_data)
+}
 
-    let created_graph_id = match graph_client.create_graph(&create_request).await {
+fn display_created_graph_info(graph: &Graph) {
+    println!("   - ID: {}", graph.object.id);
+    if let Some(name) = &graph.object.attributes.name {
+        println!("   - Name: {}", name);
+    }
+    if let Some(creation_date) = &graph.object.attributes.creation_date {
+        println!("   - Created: {}", creation_date);
+    }
+}
+
+async fn test_graph_operations(graph_client: &GraphClient<'_>, graph_id: &str) {
+    retrieve_graph(graph_client, graph_id).await;
+    update_graph(graph_client, graph_id).await;
+}
+
+async fn retrieve_graph(graph_client: &GraphClient<'_>, graph_id: &str) {
+    println!("\n3. RETRIEVING GRAPH");
+    println!("-------------------");
+
+    match graph_client.get_graph(graph_id).await {
         Ok(graph) => {
-            println!("   ✓ Graph created successfully");
-            println!("   - ID: {}", graph.object.id);
-            if let Some(name) = &graph.object.attributes.name {
-                println!("   - Name: {}", name);
-            }
-            if let Some(creation_date) = &graph.object.attributes.creation_date {
-                println!("   - Created: {}", creation_date);
-            }
-            Some(graph.object.id)
+            println!("   ✓ Graph retrieved successfully");
+            display_graph_details(&graph.object.attributes);
         }
         Err(e) => {
-            println!("   ✗ Error creating graph: {}", e);
-            None
-        }
-    };
-
-    // 3. Get the created graph
-    if let Some(graph_id) = &created_graph_id {
-        println!("\n3. RETRIEVING GRAPH");
-        println!("-------------------");
-
-        match graph_client.get_graph(graph_id).await {
-            Ok(graph) => {
-                println!("   ✓ Graph retrieved successfully");
-                if let Some(name) = &graph.object.attributes.name {
-                    println!("   - Name: {}", name);
-                }
-                if let Some(description) = &graph.object.attributes.description {
-                    println!("   - Description: {}", description);
-                }
-                if let Some(graph_type) = &graph.object.attributes.graph_type {
-                    println!("   - Type: {}", graph_type);
-                }
-                if let Some(visibility) = &graph.object.attributes.visibility {
-                    println!("   - Visibility: {}", visibility);
-                }
-                if let Some(tags) = &graph.object.attributes.tags {
-                    if !tags.is_empty() {
-                        println!("   - Tags: {}", tags.join(", "));
-                    }
-                }
-            }
-            Err(e) => {
-                println!("   ✗ Error retrieving graph: {}", e);
-            }
+            println!("   ✗ Error retrieving graph: {}", e);
         }
     }
+}
 
-    // 4. Update the graph
-    if let Some(graph_id) = &created_graph_id {
-        println!("\n4. UPDATING GRAPH");
-        println!("-----------------");
-
-        let update_request = UpdateGraphRequest::new(graph_id.clone())
-            .with_name("Updated SDK Test Graph".to_string())
-            .with_description("Updated description for the test graph".to_string())
-            .with_visibility(GraphVisibility::Public)
-            .with_tags(vec!["updated".to_string(), "public".to_string()]);
-
-        match graph_client.update_graph(graph_id, &update_request).await {
-            Ok(updated) => {
-                println!("   ✓ Graph updated successfully");
-                if let Some(name) = &updated.object.attributes.name {
-                    println!("   - New name: {}", name);
-                }
-                if let Some(visibility) = &updated.object.attributes.visibility {
-                    println!("   - New visibility: {}", visibility);
-                }
-                if let Some(modification_date) = &updated.object.attributes.modification_date {
-                    println!("   - Modified: {}", modification_date);
-                }
-            }
-            Err(e) => {
-                println!("   ✗ Error updating graph: {}", e);
-            }
+fn display_graph_details(attributes: &GraphAttributes) {
+    if let Some(name) = &attributes.name {
+        println!("   - Name: {}", name);
+    }
+    if let Some(description) = &attributes.description {
+        println!("   - Description: {}", description);
+    }
+    if let Some(graph_type) = &attributes.graph_type {
+        println!("   - Type: {}", graph_type);
+    }
+    if let Some(visibility) = &attributes.visibility {
+        println!("   - Visibility: {}", visibility);
+    }
+    if let Some(tags) = &attributes.tags {
+        if !tags.is_empty() {
+            println!("   - Tags: {}", tags.join(", "));
         }
     }
+}
 
-    // 5. Add comments to the graph
-    if let Some(graph_id) = &created_graph_id {
-        println!("\n5. ADDING COMMENTS");
-        println!("------------------");
+async fn update_graph(graph_client: &GraphClient<'_>, graph_id: &str) {
+    println!("\n4. UPDATING GRAPH");
+    println!("-----------------");
 
-        // Add first comment
-        match graph_client
-            .add_graph_comment(graph_id, "This is a test comment on the graph")
-            .await
-        {
+    let update_request = build_update_request(graph_id);
+
+    match graph_client.update_graph(graph_id, &update_request).await {
+        Ok(updated) => {
+            println!("   ✓ Graph updated successfully");
+            display_updated_graph_info(&updated.object.attributes);
+        }
+        Err(e) => {
+            println!("   ✗ Error updating graph: {}", e);
+        }
+    }
+}
+
+fn build_update_request(graph_id: &str) -> UpdateGraphRequest {
+    UpdateGraphRequest::new(graph_id.to_string())
+        .with_name("Updated SDK Test Graph".to_string())
+        .with_description("Updated description for the test graph".to_string())
+        .with_visibility(GraphVisibility::Public)
+        .with_tags(vec!["updated".to_string(), "public".to_string()])
+}
+
+fn display_updated_graph_info(attributes: &GraphAttributes) {
+    if let Some(name) = &attributes.name {
+        println!("   - New name: {}", name);
+    }
+    if let Some(visibility) = &attributes.visibility {
+        println!("   - New visibility: {}", visibility);
+    }
+    if let Some(modification_date) = &attributes.modification_date {
+        println!("   - Modified: {}", modification_date);
+    }
+}
+
+async fn test_comment_operations(graph_client: &GraphClient<'_>, graph_id: &str) {
+    add_graph_comments(graph_client, graph_id).await;
+    retrieve_graph_comments(graph_client, graph_id).await;
+}
+
+async fn add_graph_comments(graph_client: &GraphClient<'_>, graph_id: &str) {
+    println!("\n5. ADDING COMMENTS");
+    println!("------------------");
+
+    let comments = [
+        "This is a test comment on the graph",
+        "This graph shows malware network connections",
+    ];
+
+    for (i, comment_text) in comments.iter().enumerate() {
+        match graph_client.add_graph_comment(graph_id, comment_text).await {
             Ok(comment) => {
-                println!("   ✓ Comment added successfully");
-                println!("   - Comment ID: {}", comment.object.id);
-                println!("   - Text: {}", comment.object.attributes.text);
-            }
-            Err(e) => {
-                println!("   ✗ Error adding comment: {}", e);
-            }
-        }
-
-        // Add second comment
-        match graph_client
-            .add_graph_comment(graph_id, "This graph shows malware network connections")
-            .await
-        {
-            Ok(_) => {
-                println!("   ✓ Second comment added successfully");
-            }
-            Err(e) => {
-                println!("   ✗ Error adding second comment: {}", e);
-            }
-        }
-    }
-
-    // 6. Get comments on the graph
-    if let Some(graph_id) = &created_graph_id {
-        println!("\n6. RETRIEVING COMMENTS");
-        println!("----------------------");
-
-        match graph_client
-            .get_graph_comments(graph_id, Some(10), None)
-            .await
-        {
-            Ok(comments) => {
-                println!("   ✓ Retrieved graph comments");
-                println!("   - Total comments: {}", comments.data.len());
-
-                for comment in comments.data.iter().take(5) {
-                    println!("\n   Comment ID: {}", comment.object.id);
+                if i == 0 {
+                    println!("   ✓ Comment added successfully");
+                    println!("   - Comment ID: {}", comment.object.id);
                     println!("   - Text: {}", comment.object.attributes.text);
-                    if let Some(date) = &comment.object.attributes.date {
-                        println!("   - Date: {}", date);
-                    }
-                    if let Some(votes) = &comment.object.attributes.votes {
-                        print!("   - Votes: +{}", votes.positive);
-                        print!(" -{}", votes.negative);
-                        println!();
-                    }
+                } else {
+                    println!("   ✓ Second comment added successfully");
                 }
             }
             Err(e) => {
-                println!("   ✗ Error getting comments: {}", e);
+                println!(
+                    "   ✗ Error adding {} comment: {}",
+                    if i == 0 { "first" } else { "second" },
+                    e
+                );
             }
         }
     }
+}
 
-    // 7. Search for graphs
+async fn retrieve_graph_comments(graph_client: &GraphClient<'_>, graph_id: &str) {
+    println!("\n6. RETRIEVING COMMENTS");
+    println!("----------------------");
+
+    match graph_client
+        .get_graph_comments(graph_id, Some(10), None)
+        .await
+    {
+        Ok(comments) => {
+            println!("   ✓ Retrieved graph comments");
+            println!("   - Total comments: {}", comments.data.len());
+            display_comment_list(&comments.data);
+        }
+        Err(e) => {
+            println!("   ✗ Error getting comments: {}", e);
+        }
+    }
+}
+
+fn display_comment_list(comments: &[Comment]) {
+    for comment in comments.iter().take(5) {
+        println!("\n   Comment ID: {}", comment.object.id);
+        println!("   - Text: {}", comment.object.attributes.text);
+
+        if let Some(date) = &comment.object.attributes.date {
+            println!("   - Date: {}", date);
+        }
+
+        if let Some(votes) = &comment.object.attributes.votes {
+            println!("   - Votes: +{} -{}", votes.positive, votes.negative);
+        }
+    }
+}
+
+async fn search_graphs(graph_client: &GraphClient<'_>) {
     println!("\n7. SEARCHING GRAPHS");
     println!("-------------------");
 
@@ -280,23 +354,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(results) => {
             println!("   ✓ Search completed");
             println!("   - Found {} graphs", results.data.len());
-
-            for graph in results.data.iter().take(3) {
-                println!("   - Graph ID: {}", graph.object.id);
-                if let Some(name) = &graph.object.attributes.name {
-                    println!("     Name: {}", name);
-                }
-            }
+            display_search_results(&results.data);
         }
         Err(e) => {
             println!("   ✗ Error searching graphs: {}", e);
         }
     }
+}
 
-    // 8. Test pagination with iterators
+fn display_search_results(graphs: &[Graph]) {
+    for graph in graphs.iter().take(3) {
+        println!("   - Graph ID: {}", graph.object.id);
+        if let Some(name) = &graph.object.attributes.name {
+            println!("     Name: {}", name);
+        }
+    }
+}
+
+async fn test_pagination(graph_client: &GraphClient<'_>) {
     println!("\n8. PAGINATION TEST");
     println!("------------------");
 
+    test_graph_pagination(graph_client).await;
+}
+
+async fn test_graph_pagination(graph_client: &GraphClient<'_>) {
     let mut graph_iterator =
         graph_client.list_graphs_iterator(Some("visibility:public"), Some(GraphOrder::NameAsc));
 
@@ -304,216 +386,266 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match graph_iterator.next_batch().await {
         Ok(batch) => {
             println!("   ✓ Retrieved {} graphs in first batch", batch.len());
-            for graph in batch.iter().take(3) {
-                if let Some(name) = &graph.object.attributes.name {
-                    println!("   - {}", name);
-                }
-            }
+            display_paginated_graphs(&batch);
         }
         Err(e) => {
             println!("   ✗ Error fetching batch: {}", e);
         }
     }
+}
 
-    // 9. Test comment pagination
-    if let Some(graph_id) = &created_graph_id {
-        println!("\n9. COMMENT PAGINATION");
-        println!("---------------------");
+fn display_paginated_graphs(batch: &[Graph]) {
+    for graph in batch.iter().take(3) {
+        if let Some(name) = &graph.object.attributes.name {
+            println!("   - {}", name);
+        }
+    }
+}
 
-        let mut comment_iterator = graph_client.get_graph_comments_iterator(graph_id);
+async fn test_comment_pagination(graph_client: &GraphClient<'_>, graph_id: &str) {
+    println!("\n9. COMMENT PAGINATION");
+    println!("---------------------");
 
-        println!("Fetching comments with iterator:");
-        match comment_iterator.next_batch().await {
-            Ok(batch) => {
-                println!("   ✓ Retrieved {} comments", batch.len());
-                for comment in batch.iter().take(3) {
-                    let text = &comment.object.attributes.text;
-                    println!("   - {}", &text[..50.min(text.len())]);
-                }
-            }
-            Err(e) => {
-                println!("   ✗ Error fetching comments: {}", e);
-            }
+    let mut comment_iterator = graph_client.get_graph_comments_iterator(graph_id);
+
+    println!("Fetching comments with iterator:");
+    match comment_iterator.next_batch().await {
+        Ok(batch) => {
+            println!("   ✓ Retrieved {} comments", batch.len());
+            display_paginated_comments(&batch);
+        }
+        Err(e) => {
+            println!("   ✗ Error fetching comments: {}", e);
+        }
+    }
+}
+
+fn display_paginated_comments(batch: &[Comment]) {
+    for comment in batch.iter().take(3) {
+        let text = &comment.object.attributes.text;
+        println!("   - {}", &text[..50.min(text.len())]);
+    }
+}
+
+async fn test_permission_management(graph_client: &GraphClient<'_>, graph_id: &str) {
+    println!("\n10. PERMISSION MANAGEMENT");
+    println!("-------------------------");
+
+    grant_view_permissions(graph_client, graph_id).await;
+    check_view_permission(graph_client, graph_id).await;
+    grant_edit_permissions(graph_client, graph_id).await;
+    get_viewer_descriptors(graph_client, graph_id).await;
+    revoke_permission(graph_client, graph_id).await;
+}
+
+async fn grant_view_permissions(graph_client: &GraphClient<'_>, graph_id: &str) {
+    println!("\nGranting view permissions:");
+    let viewers = vec![
+        PermissionDescriptor::user("viewer1".to_string()),
+        PermissionDescriptor::user("viewer2".to_string()),
+        PermissionDescriptor::group("analysts".to_string()),
+    ];
+
+    match graph_client.grant_view_permission(graph_id, viewers).await {
+        Ok(result) => {
+            println!("   ✓ Granted view permissions");
+            println!("   - Added {} viewers", result.data.len());
+        }
+        Err(e) => {
+            println!("   ✗ Error granting view permissions: {}", e);
+        }
+    }
+}
+
+async fn check_view_permission(graph_client: &GraphClient<'_>, graph_id: &str) {
+    println!("\nChecking view permission for 'viewer1':");
+    match graph_client
+        .check_view_permission(graph_id, "viewer1")
+        .await
+    {
+        Ok(response) => {
+            println!("   ✓ Permission check result: {}", response.data);
+        }
+        Err(e) => {
+            println!("   ✗ Error checking permission: {}", e);
+        }
+    }
+}
+
+async fn grant_edit_permissions(graph_client: &GraphClient<'_>, graph_id: &str) {
+    println!("\nGranting edit permissions:");
+    let editors = vec![
+        PermissionDescriptor::user("editor1".to_string()),
+        PermissionDescriptor::group("developers".to_string()),
+    ];
+
+    match graph_client.grant_edit_permission(graph_id, editors).await {
+        Ok(result) => {
+            println!("   ✓ Granted edit permissions");
+            println!("   - Added {} editors", result.data.len());
+        }
+        Err(e) => {
+            println!("   ✗ Error granting edit permissions: {}", e);
+        }
+    }
+}
+
+async fn get_viewer_descriptors(graph_client: &GraphClient<'_>, graph_id: &str) {
+    println!("\nGetting viewer descriptors:");
+    match graph_client
+        .get_graph_viewers_descriptors(graph_id, Some(10), None)
+        .await
+    {
+        Ok(descriptors) => {
+            println!("   ✓ Retrieved viewer descriptors");
+            println!("   - Total viewers: {}", descriptors.data.len());
+            display_viewer_descriptors(&descriptors.data);
+        }
+        Err(e) => {
+            println!("   ✗ Error getting viewer descriptors: {}", e);
+        }
+    }
+}
+
+fn display_viewer_descriptors(descriptors: &[GraphRelationshipDescriptor]) {
+    for descriptor in descriptors.iter().take(3) {
+        println!("   - {} (ID: {})", descriptor.object_type, descriptor.id);
+    }
+}
+
+async fn revoke_permission(graph_client: &GraphClient<'_>, graph_id: &str) {
+    println!("\nRevoking view permission from 'viewer2':");
+    match graph_client
+        .revoke_view_permission(graph_id, "viewer2")
+        .await
+    {
+        Ok(_) => {
+            println!("   ✓ Revoked view permission");
+        }
+        Err(e) => {
+            println!("   ✗ Error revoking permission: {}", e);
+        }
+    }
+}
+
+async fn test_relationship_operations(graph_client: &GraphClient<'_>, graph_id: &str) {
+    println!("\n11. GRAPH RELATIONSHIPS");
+    println!("-----------------------");
+
+    get_graph_owner(graph_client, graph_id).await;
+    get_graph_editors(graph_client, graph_id).await;
+    get_relationship_descriptors(graph_client, graph_id).await;
+    test_comment_pagination(graph_client, graph_id).await;
+}
+
+async fn get_graph_owner(graph_client: &GraphClient<'_>, graph_id: &str) {
+    println!("\nGetting graph owner:");
+    match graph_client.get_graph_owner(graph_id).await {
+        Ok(owner) => {
+            println!("   ✓ Retrieved graph owner");
+            display_owner_info(&owner);
+        }
+        Err(e) => {
+            println!("   ✗ Error getting owner: {}", e);
+        }
+    }
+}
+
+fn display_owner_info(owner: &GraphOwner) {
+    println!("   - User ID: {}", owner.object.id);
+
+    if let Some(first_name) = &owner.object.attributes.first_name {
+        if let Some(last_name) = &owner.object.attributes.last_name {
+            println!("   - Name: {} {}", first_name, last_name);
         }
     }
 
-    // 10. Test permission management
-    if let Some(graph_id) = &created_graph_id {
-        println!("\n10. PERMISSION MANAGEMENT");
-        println!("-------------------------");
-
-        // Grant view permissions
-        println!("\nGranting view permissions:");
-        let viewers = vec![
-            PermissionDescriptor::user("viewer1".to_string()),
-            PermissionDescriptor::user("viewer2".to_string()),
-            PermissionDescriptor::group("analysts".to_string()),
-        ];
-
-        match graph_client.grant_view_permission(graph_id, viewers).await {
-            Ok(result) => {
-                println!("   ✓ Granted view permissions");
-                println!("   - Added {} viewers", result.data.len());
-            }
-            Err(e) => {
-                println!("   ✗ Error granting view permissions: {}", e);
-            }
-        }
-
-        // Check view permission
-        println!("\nChecking view permission for 'viewer1':");
-        match graph_client
-            .check_view_permission(graph_id, "viewer1")
-            .await
-        {
-            Ok(response) => {
-                println!("   ✓ Permission check result: {}", response.data);
-            }
-            Err(e) => {
-                println!("   ✗ Error checking permission: {}", e);
-            }
-        }
-
-        // Grant edit permissions
-        println!("\nGranting edit permissions:");
-        let editors = vec![
-            PermissionDescriptor::user("editor1".to_string()),
-            PermissionDescriptor::group("developers".to_string()),
-        ];
-
-        match graph_client.grant_edit_permission(graph_id, editors).await {
-            Ok(result) => {
-                println!("   ✓ Granted edit permissions");
-                println!("   - Added {} editors", result.data.len());
-            }
-            Err(e) => {
-                println!("   ✗ Error granting edit permissions: {}", e);
-            }
-        }
-
-        // Get viewers using descriptors (minimal info)
-        println!("\nGetting viewer descriptors:");
-        match graph_client
-            .get_graph_viewers_descriptors(graph_id, Some(10), None)
-            .await
-        {
-            Ok(descriptors) => {
-                println!("   ✓ Retrieved viewer descriptors");
-                println!("   - Total viewers: {}", descriptors.data.len());
-                for descriptor in descriptors.data.iter().take(3) {
-                    println!("   - {} (ID: {})", descriptor.object_type, descriptor.id);
-                }
-            }
-            Err(e) => {
-                println!("   ✗ Error getting viewer descriptors: {}", e);
-            }
-        }
-
-        // Revoke a permission
-        println!("\nRevoking view permission from 'viewer2':");
-        match graph_client
-            .revoke_view_permission(graph_id, "viewer2")
-            .await
-        {
-            Ok(_) => {
-                println!("   ✓ Revoked view permission");
-            }
-            Err(e) => {
-                println!("   ✗ Error revoking permission: {}", e);
-            }
-        }
+    if let Some(status) = &owner.object.attributes.status {
+        println!("   - Status: {}", status);
     }
 
-    // 11. Test graph relationships
-    if let Some(graph_id) = &created_graph_id {
-        println!("\n11. GRAPH RELATIONSHIPS");
-        println!("-----------------------");
+    if let Some(reputation) = &owner.object.attributes.reputation {
+        println!("   - Reputation: {}", reputation);
+    }
+}
 
-        // Get graph owner
-        println!("\nGetting graph owner:");
-        match graph_client.get_graph_owner(graph_id).await {
-            Ok(owner) => {
-                println!("   ✓ Retrieved graph owner");
-                println!("   - User ID: {}", owner.object.id);
-                if let Some(first_name) = &owner.object.attributes.first_name {
-                    print!("   - Name: {}", first_name);
-                }
-                if let Some(last_name) = &owner.object.attributes.last_name {
-                    print!(" {}", last_name);
-                }
-                println!();
-                if let Some(status) = &owner.object.attributes.status {
-                    println!("   - Status: {}", status);
-                }
-                if let Some(reputation) = &owner.object.attributes.reputation {
-                    println!("   - Reputation: {}", reputation);
-                }
-            }
-            Err(e) => {
-                println!("   ✗ Error getting owner: {}", e);
-            }
+async fn get_graph_editors(graph_client: &GraphClient<'_>, graph_id: &str) {
+    println!("\nGetting graph editors:");
+    match graph_client
+        .get_graph_editors(graph_id, Some(10), None)
+        .await
+    {
+        Ok(editors) => {
+            println!("   ✓ Retrieved editors list");
+            println!("   - Total editors: {}", editors.data.len());
+            display_editor_list(&editors.data);
         }
-
-        // Get graph editors (may be empty)
-        println!("\nGetting graph editors:");
-        match graph_client
-            .get_graph_editors(graph_id, Some(10), None)
-            .await
-        {
-            Ok(editors) => {
-                println!("   ✓ Retrieved editors list");
-                println!("   - Total editors: {}", editors.data.len());
-                for editor in editors.data.iter().take(3) {
-                    println!("   - Editor: {}", editor.object.id);
-                }
-            }
-            Err(e) => {
-                println!("   ✗ Error getting editors: {}", e);
-            }
-        }
-
-        // Get relationship descriptors (minimal info)
-        println!("\nGetting relationship descriptors:");
-        match graph_client
-            .get_graph_relationship_descriptors(graph_id, "viewers", Some(5), None)
-            .await
-        {
-            Ok(descriptors) => {
-                println!("   ✓ Retrieved viewer descriptors");
-                println!("   - Total viewers: {}", descriptors.data.len());
-                for descriptor in descriptors.data.iter().take(3) {
-                    println!("   - {} (ID: {})", descriptor.object_type, descriptor.id);
-                    if let Some(context) = &descriptor.context_attributes {
-                        println!("     Context: {:?}", context);
-                    }
-                }
-            }
-            Err(e) => {
-                println!("   ✗ Error getting descriptors: {}", e);
-                println!("   Note: Some relationships require specific permissions");
-            }
+        Err(e) => {
+            println!("   ✗ Error getting editors: {}", e);
         }
     }
+}
 
-    // 12. Delete the created graph
-    if let Some(graph_id) = &created_graph_id {
-        println!("\n12. CLEANUP");
-        println!("-----------");
+fn display_editor_list(editors: &[GraphOwner]) {
+    for editor in editors.iter().take(3) {
+        println!("   - Editor: {}", editor.object.id);
+    }
+}
 
-        match graph_client.delete_graph(graph_id).await {
-            Ok(_) => {
-                println!("   ✓ Graph deleted successfully");
-            }
-            Err(e) => {
-                println!("   ✗ Error deleting graph: {}", e);
-            }
+async fn get_relationship_descriptors(graph_client: &GraphClient<'_>, graph_id: &str) {
+    println!("\nGetting relationship descriptors:");
+    match graph_client
+        .get_graph_relationship_descriptors(graph_id, "viewers", Some(5), None)
+        .await
+    {
+        Ok(descriptors) => {
+            println!("   ✓ Retrieved viewer descriptors");
+            println!("   - Total viewers: {}", descriptors.data.len());
+            display_relationship_descriptors(&descriptors.data);
+        }
+        Err(e) => {
+            println!("   ✗ Error getting descriptors: {}", e);
+            println!("   Note: Some relationships require specific permissions");
         }
     }
+}
 
-    // 13. Filter graphs by owner
+fn display_relationship_descriptors(descriptors: &[GraphRelationshipDescriptor]) {
+    for descriptor in descriptors.iter().take(3) {
+        println!("   - {} (ID: {})", descriptor.object_type, descriptor.id);
+        if let Some(context) = &descriptor.context_attributes {
+            println!("     Context: {:?}", context);
+        }
+    }
+}
+
+async fn cleanup_graph(graph_client: &GraphClient<'_>, graph_id: &str) {
+    println!("\n12. CLEANUP");
+    println!("-----------");
+
+    match graph_client.delete_graph(graph_id).await {
+        Ok(_) => {
+            println!("   ✓ Graph deleted successfully");
+        }
+        Err(e) => {
+            println!("   ✗ Error deleting graph: {}", e);
+        }
+    }
+}
+
+async fn test_graph_filters(graph_client: &GraphClient<'_>) {
     println!("\n13. FILTERING BY OWNER");
     println!("----------------------");
 
+    filter_graphs_by_owner(graph_client).await;
+
+    println!("\n14. FILTERING BY TAG");
+    println!("--------------------");
+
+    filter_graphs_by_tag(graph_client).await;
+}
+
+async fn filter_graphs_by_owner(graph_client: &GraphClient<'_>) {
     match graph_client
         .list_graphs(Some("owner:admin"), None, Some(5), None)
         .await
@@ -525,11 +657,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("   ✗ Error filtering by owner: {}", e);
         }
     }
+}
 
-    // 14. Filter graphs by tag
-    println!("\n14. FILTERING BY TAG");
-    println!("--------------------");
-
+async fn filter_graphs_by_tag(graph_client: &GraphClient<'_>) {
     match graph_client
         .list_graphs(Some("tag:malware"), None, Some(5), None)
         .await
@@ -544,9 +674,4 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("   ✗ Error filtering by tag: {}", e);
         }
     }
-
-    println!("\n=============================");
-    println!("Graph API testing complete!");
-
-    Ok(())
 }

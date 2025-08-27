@@ -83,11 +83,11 @@ async fn run_http_server_with_auth(
 async fn configure_and_serve(
     server: VtMcpServer,
     addr: SocketAddr,
-    jwt_config: Option<MaybeJwtConfig>,
-    oauth_config: Option<MaybeOAuthConfig>,
+    _jwt_config: Option<MaybeJwtConfig>,
+    _oauth_config: Option<MaybeOAuthConfig>,
 ) -> McpResult<()> {
     #[cfg(feature = "mcp-oauth")]
-    if let Some(config) = oauth_config {
+    if let Some(config) = _oauth_config {
         tracing::info!("Enabling OAuth 2.1 authentication for HTTP server");
         let oauth_state = OAuthState::new(config)?;
         let app = oauth_router(server, oauth_state);
@@ -95,7 +95,7 @@ async fn configure_and_serve(
     }
 
     #[cfg(feature = "mcp-jwt")]
-    if let Some(config) = jwt_config.clone() {
+    if let Some(config) = _jwt_config.clone() {
         tracing::info!("Enabling JWT authentication for HTTP server");
         let jwt_manager = JwtManager::new(config.clone());
         let app = jwt_router(server, jwt_manager.clone());

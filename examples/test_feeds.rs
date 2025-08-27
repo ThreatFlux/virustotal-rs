@@ -2,84 +2,38 @@
 use std::io::Write;
 use virustotal_rs::{ApiTier, ClientBuilder, FeedConfig, FeedsClient};
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // NOTE: File feeds require a File feeds license
-    // Sandbox feeds require a Sandbox feeds license
-    let api_key = std::env::var("VT_FEEDS_API_KEY")
-        .or_else(|_| std::env::var("VT_API_KEY"))
-        .unwrap_or_else(|_| "test_key".to_string());
-
-    let client = ClientBuilder::new()
-        .api_key(api_key)
-        .tier(ApiTier::Premium)
-        .build()?;
-
-    println!("Testing VirusTotal File Intelligence Feeds");
-    println!("==========================================");
-    println!("🚧 NOTE: Requires File feeds or Sandbox feeds license");
-    println!("==========================================\n");
-
-    let feeds = client.feeds();
-
-    // 1. Get the latest available feed time
-    println!("1. LATEST AVAILABLE FEEDS");
-    println!("-------------------------");
-
-    let latest_minute = FeedsClient::get_latest_available_time(false);
-    let latest_hour = FeedsClient::get_latest_available_time(true);
-
-    println!("Latest available per-minute feed: {}", latest_minute);
-    println!("Latest available hourly feed: {}", latest_hour);
-    println!("  (60-minute lag for per-minute, 2-hour lag for hourly)");
-
-    // 2. Download a per-minute file feed batch
-    println!("\n2. PER-MINUTE FILE FEED BATCH");
-    println!("------------------------------");
-
-    // Use a specific time or the latest available
-    let feed_time = "202312010802"; // December 1, 2023 08:02 UTC
-
+/// Print feed time breakdown
+fn print_feed_time_info(feed_time: &str) {
     println!("Downloading file feed for: {}", feed_time);
     println!("  Year: {}", &feed_time[0..4]);
     println!("  Month: {}", &feed_time[4..6]);
     println!("  Day: {}", &feed_time[6..8]);
     println!("  Hour: {}", &feed_time[8..10]);
     println!("  Minute: {}", &feed_time[10..12]);
+}
+
+/// Save data to file and print confirmation
+fn save_file(filename: &str, data: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
+    std::fs::write(filename, data)?;
+    println!("  Saved to: {}", filename);
+    Ok(())
+}
+
+/// Download per-minute file feed batch
+async fn demo_per_minute_feed(
+    feeds: &FeedsClient,
+    feed_time: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    println!("\n2. PER-MINUTE FILE FEED BATCH");
+    println!("------------------------------");
+
+    print_feed_time_info(feed_time);
 
     match feeds.get_file_feed_batch(feed_time).await {
         Ok(batch_data) => {
             println!("✓ Downloaded batch: {} bytes", batch_data.len());
-
-            // In production, you would:
-            // 1. Decompress the bzip2 data
-            // 2. Parse each line as JSON
-            // 3. Process the feed items
-
-            // Save to file for inspection
             let filename = format!("feed_{}.bz2", feed_time);
-            std::fs::write(&filename, &batch_data)?;
-            println!("  Saved to: {}", filename);
-
-            // Example of how to process (requires bzip2 decompression)
-            /*
-            use bzip2::read::BzDecoder;
-            use std::io::BufRead;
-
-            let decoder = BzDecoder::new(&batch_data[..]);
-            let reader = std::io::BufReader::new(decoder);
-
-            for line in reader.lines() {
-                if let Ok(line) = line {
-                    if let Ok(item) = feeds.parse_feed_line(&line) {
-                        println!("  File ID: {}", item.id);
-                        if let Some(url) = &item.download_url {
-                            println!("    Download: {}", url);
-                        }
-                    }
-                }
-            }
-            */
+            save_file(&filename, &batch_data)?;
         }
         Err(e) => {
             println!("✗ Error downloading batch: {}", e);
@@ -87,12 +41,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("  404 errors for missing batches are normal (rare)");
         }
     }
+    Ok(())
+}
 
-    // 3. Download an hourly file feed batch
+/// Download hourly file feed batch
+async fn demo_hourly_feed(
+    feeds: &FeedsClient,
+    hourly_time: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     println!("\n3. HOURLY FILE FEED BATCH");
     println!("-------------------------");
-
-    let hourly_time = "2023120108"; // December 1, 2023 08:00-08:59 UTC
 
     println!("Downloading hourly feed for: {}", hourly_time);
 
@@ -100,34 +58,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(batch_data) => {
             println!("✓ Downloaded hourly batch: {} bytes", batch_data.len());
             println!("  Contains 60 per-minute feeds in .tar.bz2 format");
-
-            // Save for inspection
             let filename = format!("feed_hourly_{}.tar.bz2", hourly_time);
-            std::fs::write(&filename, &batch_data)?;
-            println!("  Saved to: {}", filename);
+            save_file(&filename, &batch_data)?;
         }
         Err(e) => {
             println!("✗ Error downloading hourly batch: {}", e);
         }
     }
+    Ok(())
+}
 
-    // 4. Download a file from the feed
+/// Download file from feed using token
+async fn demo_file_download(
+    feeds: &FeedsClient,
+    token: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     println!("\n4. DOWNLOAD FILE FROM FEED");
     println!("--------------------------");
 
-    // This token would come from the download_url in a feed item
-    let example_token = "abc123token_from_feed";
+    println!("Attempting to download file with token: {}", token);
 
-    println!("Attempting to download file with token: {}", example_token);
-
-    match feeds.download_feed_file(example_token).await {
+    match feeds.download_feed_file(token).await {
         Ok(file_data) => {
             println!("✓ Downloaded file: {} bytes", file_data.len());
-
-            // Save the file
-            let filename = format!("downloaded_file_{}.bin", example_token);
-            std::fs::write(&filename, &file_data)?;
-            println!("  Saved to: {}", filename);
+            let filename = format!("downloaded_file_{}.bin", token);
+            save_file(&filename, &file_data)?;
         }
         Err(e) => {
             println!("✗ Error downloading file: {}", e);
@@ -135,8 +90,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("  Links expire after 7 days");
         }
     }
+    Ok(())
+}
 
-    // 5. Sandbox analyses feed
+/// Download sandbox feed batch
+async fn demo_sandbox_feed(
+    feeds: &FeedsClient,
+    feed_time: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     println!("\n5. SANDBOX ANALYSES FEED");
     println!("------------------------");
 
@@ -147,37 +108,83 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(batch_data) => {
             println!("✓ Downloaded sandbox batch: {} bytes", batch_data.len());
             println!("  Contains behavior reports in bzip2 format");
-
             let filename = format!("sandbox_feed_{}.bz2", feed_time);
-            std::fs::write(&filename, &batch_data)?;
-            println!("  Saved to: {}", filename);
+            save_file(&filename, &batch_data)?;
         }
         Err(e) => {
             println!("✗ Error downloading sandbox feed: {}", e);
             println!("  Note: Requires Sandbox feeds license");
         }
     }
+    Ok(())
+}
 
-    // 6. Generate time ranges for batch processing
+/// Demo time range generation
+fn demo_time_ranges() {
     println!("\n6. TIME RANGE GENERATION");
     println!("------------------------");
 
     let start_time = "202312010800";
     let end_time = "202312010805";
-
     let time_range = FeedsClient::get_time_range(start_time, end_time, false);
 
     println!("Time range from {} to {}:", start_time, end_time);
     for time in &time_range {
         println!("  - {}", time);
     }
+}
 
-    // 7. Batch download with retry logic
+/// Attempt to download a batch with retry logic
+async fn fetch_batch_with_retry(
+    feeds: &FeedsClient,
+    time: &str,
+    config: &FeedConfig,
+    consecutive_missing: &mut u32,
+) -> bool {
+    println!("\nFetching batch: {}", time);
+
+    let mut retries = 0;
+    loop {
+        match feeds.get_file_feed_batch(time).await {
+            Ok(data) => {
+                println!("  ✓ Success: {} bytes", data.len());
+                *consecutive_missing = 0;
+                return true;
+            }
+            Err(e) => {
+                if e.to_string().contains("404") {
+                    *consecutive_missing += 1;
+                    println!("  ⚠️ Missing batch (404) - #{}", consecutive_missing);
+
+                    if *consecutive_missing >= config.max_consecutive_missing {
+                        println!("  ✗ Too many consecutive missing batches");
+                        return false;
+                    }
+
+                    if config.skip_missing {
+                        return true; // Skip to next batch
+                    }
+                }
+
+                retries += 1;
+                if retries >= config.max_retries {
+                    println!("  ✗ Max retries reached");
+                    return false;
+                }
+
+                println!("  Retry {} of {}...", retries, config.max_retries);
+                tokio::time::sleep(tokio::time::Duration::from_secs(config.retry_delay_secs)).await;
+            }
+        }
+    }
+}
+
+/// Demo batch download with retry logic
+async fn demo_batch_retry(feeds: &FeedsClient) {
     println!("\n7. BATCH DOWNLOAD WITH RETRY");
     println!("-----------------------------");
 
     let config = FeedConfig::default();
-
     println!("Feed processing configuration:");
     println!("  Max retries: {}", config.max_retries);
     println!("  Retry delay: {} seconds", config.retry_delay_secs);
@@ -191,46 +198,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let times_to_fetch = vec!["202312010800", "202312010801", "202312010802"];
 
     for time in &times_to_fetch {
-        println!("\nFetching batch: {}", time);
-
-        let mut retries = 0;
-        loop {
-            match feeds.get_file_feed_batch(time).await {
-                Ok(data) => {
-                    println!("  ✓ Success: {} bytes", data.len());
-                    consecutive_missing = 0;
-                    break;
-                }
-                Err(e) => {
-                    if e.to_string().contains("404") {
-                        consecutive_missing += 1;
-                        println!("  ⚠️ Missing batch (404) - #{}", consecutive_missing);
-
-                        if consecutive_missing >= config.max_consecutive_missing {
-                            println!("  ✗ Too many consecutive missing batches");
-                            break;
-                        }
-
-                        if config.skip_missing {
-                            break; // Skip to next batch
-                        }
-                    }
-
-                    retries += 1;
-                    if retries >= config.max_retries {
-                        println!("  ✗ Max retries reached");
-                        break;
-                    }
-
-                    println!("  Retry {} of {}...", retries, config.max_retries);
-                    tokio::time::sleep(tokio::time::Duration::from_secs(config.retry_delay_secs))
-                        .await;
-                }
-            }
+        if !fetch_batch_with_retry(feeds, time, &config, &mut consecutive_missing).await {
+            break;
         }
     }
+}
 
-    // 8. Parse feed line example
+/// Demo feed line parsing
+fn demo_feed_parsing(feeds: &FeedsClient) {
     println!("\n8. PARSE FEED LINE");
     println!("------------------");
 
@@ -261,8 +236,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("✗ Error parsing line: {}", e);
         }
     }
+}
 
-    // 9. Important notes
+/// Print important notes and information
+fn print_important_notes() {
     println!("\n9. IMPORTANT NOTES");
     println!("------------------");
 
@@ -298,6 +275,49 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  - File feeds license for file feed endpoints");
     println!("  - Sandbox feeds license for behavior feed endpoints");
     println!("  - Download privilege for file downloads");
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Initialize client
+    let api_key = std::env::var("VT_FEEDS_API_KEY")
+        .or_else(|_| std::env::var("VT_API_KEY"))
+        .unwrap_or_else(|_| "test_key".to_string());
+
+    let client = ClientBuilder::new()
+        .api_key(api_key)
+        .tier(ApiTier::Premium)
+        .build()?;
+
+    println!("Testing VirusTotal File Intelligence Feeds");
+    println!("==========================================");
+    println!("🚧 NOTE: Requires File feeds or Sandbox feeds license");
+    println!("==========================================\n");
+
+    let feeds = client.feeds();
+
+    // 1. Show latest available feeds
+    println!("1. LATEST AVAILABLE FEEDS");
+    println!("-------------------------");
+    let latest_minute = FeedsClient::get_latest_available_time(false);
+    let latest_hour = FeedsClient::get_latest_available_time(true);
+    println!("Latest available per-minute feed: {}", latest_minute);
+    println!("Latest available hourly feed: {}", latest_hour);
+    println!("  (60-minute lag for per-minute, 2-hour lag for hourly)");
+
+    // Run all demos
+    let feed_time = "202312010802";
+    let hourly_time = "2023120108";
+    let example_token = "abc123token_from_feed";
+
+    demo_per_minute_feed(&feeds, feed_time).await?;
+    demo_hourly_feed(&feeds, hourly_time).await?;
+    demo_file_download(&feeds, example_token).await?;
+    demo_sandbox_feed(&feeds, feed_time).await?;
+    demo_time_ranges();
+    demo_batch_retry(&feeds).await;
+    demo_feed_parsing(&feeds);
+    print_important_notes();
 
     Ok(())
 }

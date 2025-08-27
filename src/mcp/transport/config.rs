@@ -1,9 +1,8 @@
+#[cfg(feature = "mcp-jwt")]
+use super::http::run_http_server_with_config;
 #[cfg(feature = "mcp-oauth")]
 use super::http::run_http_server_with_oauth;
-use super::{
-    http::{run_http_server, run_http_server_with_config},
-    stdio::run_stdio_server,
-};
+use super::{http::run_http_server, stdio::run_stdio_server};
 #[cfg(feature = "mcp-jwt")]
 use crate::mcp::auth::{JwtConfig, JwtManager};
 #[cfg(feature = "mcp-oauth")]

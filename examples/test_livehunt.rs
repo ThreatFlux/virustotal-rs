@@ -4,23 +4,28 @@ use virustotal_rs::{
     UpdateLivehuntRulesetRequest,
 };
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+/// Initialize and configure the VirusTotal client
+fn setup_client() -> Result<virustotal_rs::Client> {
     let api_key = std::env::var("VT_API_KEY").unwrap_or_else(|_| "test_key".to_string());
 
-    let client = ClientBuilder::new()
+    ClientBuilder::new()
         .api_key(api_key)
-        .tier(ApiTier::Premium) // Livehunt requires premium privileges
-        .build()?;
+        .tier(ApiTier::Premium)
+        .build()
+        .map_err(Into::into)
+}
 
-    println!("Testing VirusTotal Livehunt API");
-    println!("================================\n");
+/// Print section header with title and separator
+fn print_section_header(step: u8, title: &str) {
+    println!("\n{}. {}", step, title);
+    println!("{}", "-".repeat(title.len() + 4));
+}
 
-    let livehunt = client.livehunt();
-
-    // 1. List existing rulesets
-    println!("1. LISTING RULESETS");
-    println!("-------------------");
+/// Test listing existing rulesets
+async fn test_list_rulesets(livehunt: &virustotal_rs::LivehuntClient<'_>) {
+    print_section_header(1, "LISTING RULESETS");
 
     match livehunt
         .list_rulesets(
@@ -60,10 +65,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("   Note: Livehunt requires premium API privileges");
         }
     }
+}
 
-    // 2. Create a new ruleset
-    println!("\n2. CREATING RULESET");
-    println!("-------------------");
+/// Create a test ruleset and return its ID
+async fn test_create_ruleset(livehunt: &virustotal_rs::LivehuntClient<'_>) -> Option<String> {
+    print_section_header(2, "CREATING RULESET");
 
     let yara_rule = r#"
 rule TestMalware {
@@ -85,7 +91,7 @@ rule TestMalware {
             .with_notification_emails(vec!["notifications@example.com".to_string()])
             .with_match_object_type(MatchObjectType::File);
 
-    let created_ruleset_id = match livehunt.create_ruleset(&create_request).await {
+    match livehunt.create_ruleset(&create_request).await {
         Ok(ruleset) => {
             println!("   ✓ Ruleset created successfully");
             println!("   - ID: {}", ruleset.object.id);
@@ -101,85 +107,87 @@ rule TestMalware {
             println!("   ✗ Error creating ruleset: {}", e);
             None
         }
+    }
+}
+
+/// Update an existing ruleset
+async fn test_update_ruleset(livehunt: &virustotal_rs::LivehuntClient<'_>, ruleset_id: &str) {
+    print_section_header(3, "UPDATING RULESET");
+
+    let update_request = UpdateLivehuntRulesetRequest {
+        data: virustotal_rs::livehunt::UpdateLivehuntRulesetData {
+            object_type: "hunting_ruleset".to_string(),
+            id: ruleset_id.to_string(),
+            attributes: virustotal_rs::livehunt::UpdateLivehuntRulesetAttributes {
+                name: Some("Updated SDK Test Ruleset".to_string()),
+                enabled: Some(false),
+                limit: Some(50),
+                ..Default::default()
+            },
+        },
     };
 
-    // 3. Update the ruleset
-    if let Some(ruleset_id) = &created_ruleset_id {
-        println!("\n3. UPDATING RULESET");
-        println!("-------------------");
-
-        let update_request = UpdateLivehuntRulesetRequest {
-            data: virustotal_rs::livehunt::UpdateLivehuntRulesetData {
-                object_type: "hunting_ruleset".to_string(),
-                id: ruleset_id.clone(),
-                attributes: virustotal_rs::livehunt::UpdateLivehuntRulesetAttributes {
-                    name: Some("Updated SDK Test Ruleset".to_string()),
-                    enabled: Some(false),
-                    limit: Some(50),
-                    ..Default::default()
-                },
-            },
-        };
-
-        match livehunt.update_ruleset(ruleset_id, &update_request).await {
-            Ok(updated) => {
-                println!("   ✓ Ruleset updated successfully");
-                if let Some(name) = &updated.object.attributes.name {
-                    println!("   - New name: {}", name);
-                }
-                if let Some(enabled) = &updated.object.attributes.enabled {
-                    println!("   - Enabled: {}", enabled);
-                }
+    match livehunt.update_ruleset(ruleset_id, &update_request).await {
+        Ok(updated) => {
+            println!("   ✓ Ruleset updated successfully");
+            if let Some(name) = &updated.object.attributes.name {
+                println!("   - New name: {}", name);
             }
-            Err(e) => println!("   ✗ Error updating ruleset: {}", e),
+            if let Some(enabled) = &updated.object.attributes.enabled {
+                println!("   - Enabled: {}", enabled);
+            }
         }
+        Err(e) => println!("   ✗ Error updating ruleset: {}", e),
+    }
+}
+
+/// Test permission management operations
+async fn test_permission_management(
+    livehunt: &virustotal_rs::LivehuntClient<'_>,
+    ruleset_id: &str,
+) {
+    print_section_header(4, "PERMISSION MANAGEMENT");
+
+    let editors_request = AddEditorsRequest {
+        data: vec![EditorDescriptor {
+            object_type: "user".to_string(),
+            id: "example_user".to_string(),
+        }],
+    };
+
+    // Grant permissions
+    match livehunt
+        .grant_edit_permissions(ruleset_id, &editors_request)
+        .await
+    {
+        Ok(_) => println!("   ✓ Edit permissions granted"),
+        Err(e) => println!("   ✗ Error granting permissions: {}", e),
     }
 
-    // 4. Permission management
-    if let Some(ruleset_id) = &created_ruleset_id {
-        println!("\n4. PERMISSION MANAGEMENT");
-        println!("------------------------");
-
-        // Grant edit permissions
-        let editors_request = AddEditorsRequest {
-            data: vec![EditorDescriptor {
-                object_type: "user".to_string(),
-                id: "example_user".to_string(),
-            }],
-        };
-
-        match livehunt
-            .grant_edit_permissions(ruleset_id, &editors_request)
-            .await
-        {
-            Ok(_) => println!("   ✓ Edit permissions granted"),
-            Err(e) => println!("   ✗ Error granting permissions: {}", e),
+    // Check permissions
+    match livehunt
+        .check_editor_permission(ruleset_id, "example_user")
+        .await
+    {
+        Ok(response) => {
+            println!("   ✓ Permission check result: {}", response.data);
         }
-
-        // Check permissions
-        match livehunt
-            .check_editor_permission(ruleset_id, "example_user")
-            .await
-        {
-            Ok(response) => {
-                println!("   ✓ Permission check result: {}", response.data);
-            }
-            Err(e) => println!("   ✗ Error checking permissions: {}", e),
-        }
-
-        // Revoke permissions
-        match livehunt
-            .revoke_edit_permission(ruleset_id, "example_user")
-            .await
-        {
-            Ok(_) => println!("   ✓ Edit permissions revoked"),
-            Err(e) => println!("   ✗ Error revoking permissions: {}", e),
-        }
+        Err(e) => println!("   ✗ Error checking permissions: {}", e),
     }
 
-    // 5. List notifications
-    println!("\n5. NOTIFICATIONS");
-    println!("----------------");
+    // Revoke permissions
+    match livehunt
+        .revoke_edit_permission(ruleset_id, "example_user")
+        .await
+    {
+        Ok(_) => println!("   ✓ Edit permissions revoked"),
+        Err(e) => println!("   ✗ Error revoking permissions: {}", e),
+    }
+}
+
+/// Test notifications listing
+async fn test_list_notifications(livehunt: &virustotal_rs::LivehuntClient<'_>) {
+    print_section_header(5, "NOTIFICATIONS");
 
     match livehunt
         .list_notifications(
@@ -219,10 +227,11 @@ rule TestMalware {
             println!("   ✗ Error listing notifications: {}", e);
         }
     }
+}
 
-    // 6. Get notification files
-    println!("\n6. NOTIFICATION FILES");
-    println!("---------------------");
+/// Test notification files listing
+async fn test_notification_files(livehunt: &virustotal_rs::LivehuntClient<'_>) {
+    print_section_header(6, "NOTIFICATION FILES");
 
     match livehunt
         .list_notification_files(None, Some(10), Some(100), None)
@@ -247,30 +256,31 @@ rule TestMalware {
             println!("   ✗ Error getting notification files: {}", e);
         }
     }
+}
 
-    // 7. Delete notifications by tag
-    println!("\n7. NOTIFICATION MANAGEMENT");
-    println!("--------------------------");
+/// Test notification management operations
+async fn test_notification_management(livehunt: &virustotal_rs::LivehuntClient<'_>) {
+    print_section_header(7, "NOTIFICATION MANAGEMENT");
 
     match livehunt.delete_notifications(Some("old_tag")).await {
         Ok(_) => println!("   ✓ Deleted notifications with tag 'old_tag'"),
         Err(e) => println!("   ✗ Error deleting notifications: {}", e),
     }
+}
 
-    // 8. Clean up - delete the created ruleset
-    if let Some(ruleset_id) = &created_ruleset_id {
-        println!("\n8. CLEANUP");
-        println!("----------");
+/// Clean up created resources
+async fn test_cleanup(livehunt: &virustotal_rs::LivehuntClient<'_>, ruleset_id: &str) {
+    print_section_header(8, "CLEANUP");
 
-        match livehunt.delete_ruleset(ruleset_id).await {
-            Ok(_) => println!("   ✓ Deleted test ruleset"),
-            Err(e) => println!("   ✗ Error deleting ruleset: {}", e),
-        }
+    match livehunt.delete_ruleset(ruleset_id).await {
+        Ok(_) => println!("   ✓ Deleted test ruleset"),
+        Err(e) => println!("   ✗ Error deleting ruleset: {}", e),
     }
+}
 
-    // 9. Test pagination with iterators
-    println!("\n9. PAGINATION TEST");
-    println!("------------------");
+/// Test pagination with iterators
+async fn test_pagination(livehunt: &virustotal_rs::LivehuntClient<'_>) {
+    print_section_header(9, "PAGINATION TEST");
 
     let mut ruleset_iterator =
         livehunt.list_rulesets_iterator(Some("enabled:true"), Some(LivehuntRulesetOrder::NameAsc));
@@ -289,10 +299,11 @@ rule TestMalware {
             println!("   ✗ Error fetching batch: {}", e);
         }
     }
+}
 
-    // 10. Transfer ownership example (would fail without proper setup)
-    println!("\n10. OWNERSHIP TRANSFER");
-    println!("----------------------");
+/// Demonstrate ownership transfer functionality
+fn test_ownership_transfer() {
+    print_section_header(10, "OWNERSHIP TRANSFER");
 
     let _transfer_request = TransferOwnershipRequest {
         data: EditorDescriptor {
@@ -301,8 +312,38 @@ rule TestMalware {
         },
     };
 
-    // This would transfer ownership if we had a valid ruleset and user
     println!("   Note: Ownership transfer requires valid ruleset and user in same group");
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let client = setup_client()?;
+
+    println!("Testing VirusTotal Livehunt API");
+    println!("================================\n");
+
+    let livehunt = client.livehunt();
+
+    // Execute all test scenarios
+    test_list_rulesets(&livehunt).await;
+
+    let created_ruleset_id = test_create_ruleset(&livehunt).await;
+
+    if let Some(ruleset_id) = &created_ruleset_id {
+        test_update_ruleset(&livehunt, ruleset_id).await;
+        test_permission_management(&livehunt, ruleset_id).await;
+    }
+
+    test_list_notifications(&livehunt).await;
+    test_notification_files(&livehunt).await;
+    test_notification_management(&livehunt).await;
+
+    if let Some(ruleset_id) = &created_ruleset_id {
+        test_cleanup(&livehunt, ruleset_id).await;
+    }
+
+    test_pagination(&livehunt).await;
+    test_ownership_transfer();
 
     println!("\n================================");
     println!("Livehunt API testing complete!");

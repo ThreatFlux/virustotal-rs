@@ -17,48 +17,47 @@ use reqwest::Client as HttpClient;
 use serde_json::{json, Value};
 use std::io::{self, Write};
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let client = HttpClient::new();
-    let server_base = "http://127.0.0.1:3000";
-
-    println!("🧪 OAuth 2.1 Client Test for VirusTotal MCP Server");
-    println!("🌐 Server: {}", server_base);
-    println!();
-
-    // Step 1: Check server metadata
+/// Fetches and displays server metadata
+async fn fetch_server_metadata(
+    client: &HttpClient,
+    server_base: &str,
+) -> Result<bool, Box<dyn std::error::Error>> {
     println!("📋 Step 1: Fetching OAuth server metadata...");
-    let metadata_response = client
+    let response = client
         .get(format!("{}/oauth/metadata", server_base))
         .send()
         .await?;
 
-    if metadata_response.status().is_success() {
-        let metadata: Value = metadata_response.json().await?;
+    if response.status().is_success() {
+        let metadata: Value = response.json().await?;
         println!("✅ Server metadata:");
         println!("{}", serde_json::to_string_pretty(&metadata)?);
+        Ok(true)
     } else {
-        println!(
-            "❌ Failed to fetch metadata: {}",
-            metadata_response.status()
-        );
-        return Ok(());
+        println!("❌ Failed to fetch metadata: {}", response.status());
+        Ok(false)
     }
-    println!();
+}
 
-    // Step 2: Check health endpoint
+/// Performs health check on the server
+async fn check_server_health(
+    client: &HttpClient,
+    server_base: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     println!("🏥 Step 2: Checking server health...");
-    let health_response = client.get(format!("{}/health", server_base)).send().await?;
+    let response = client.get(format!("{}/health", server_base)).send().await?;
 
-    if health_response.status().is_success() {
-        let health_text = health_response.text().await?;
+    if response.status().is_success() {
+        let health_text = response.text().await?;
         println!("✅ Health check: {}", health_text);
     } else {
-        println!("❌ Health check failed: {}", health_response.status());
+        println!("❌ Health check failed: {}", response.status());
     }
-    println!();
+    Ok(())
+}
 
-    // Step 3: Manual OAuth flow instruction
+/// Displays OAuth flow instructions to the user
+fn display_oauth_instructions(server_base: &str) {
     println!("🔐 Step 3: OAuth Authorization Flow");
     println!("To complete the OAuth flow, you need to:");
     println!();
@@ -68,52 +67,78 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("2. Complete the authorization on the auth server");
     println!("3. You'll be redirected back with an access token");
     println!();
+}
 
-    // Step 4: Manual token input for testing
+/// Prompts user for access token input
+fn get_access_token() -> Result<String, Box<dyn std::error::Error>> {
     print!("🔑 Enter access token (or press Enter to skip MCP testing): ");
     io::stdout().flush()?;
 
     let mut token_input = String::new();
     io::stdin().read_line(&mut token_input)?;
-    let access_token = token_input.trim();
+    Ok(token_input.trim().to_string())
+}
 
-    if access_token.is_empty() {
-        println!("⏭️  Skipping MCP API testing");
-        return Ok(());
+/// Makes an MCP request and handles the response
+async fn make_mcp_request(
+    client: &HttpClient,
+    server_base: &str,
+    access_token: &str,
+    request_body: Value,
+    request_name: &str,
+    success_message: &str,
+    error_message: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    println!("🔍 Testing {}...", request_name);
+
+    let response = client
+        .post(format!("{}/", server_base))
+        .header("Authorization", format!("Bearer {}", access_token))
+        .header("Content-Type", "application/json")
+        .json(&request_body)
+        .send()
+        .await?;
+
+    if response.status().is_success() {
+        let response_json: Value = response.json().await?;
+        println!("✅ {}", success_message);
+        println!("{}", serde_json::to_string_pretty(&response_json)?);
+    } else {
+        println!("❌ {}: {}", error_message, response.status());
+        let error_text = response.text().await?;
+        println!("Error: {}", error_text);
     }
-
     println!();
+    Ok(())
+}
+
+/// Tests MCP API functionality with the provided access token
+async fn test_mcp_api(
+    client: &HttpClient,
+    server_base: &str,
+    access_token: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     println!("🧬 Step 4: Testing MCP API with access token...");
 
     // Test MCP tools/list
-    println!("📚 Testing tools/list...");
-    let mcp_request = json!({
+    let tools_request = json!({
         "jsonrpc": "2.0",
         "method": "tools/list",
         "id": 1
     });
 
-    let mcp_response = client
-        .post(format!("{}/", server_base))
-        .header("Authorization", format!("Bearer {}", access_token))
-        .header("Content-Type", "application/json")
-        .json(&mcp_request)
-        .send()
-        .await?;
-
-    if mcp_response.status().is_success() {
-        let response_json: Value = mcp_response.json().await?;
-        println!("✅ MCP tools/list response:");
-        println!("{}", serde_json::to_string_pretty(&response_json)?);
-    } else {
-        println!("❌ MCP request failed: {}", mcp_response.status());
-        let error_text = mcp_response.text().await?;
-        println!("Error: {}", error_text);
-    }
-    println!();
+    make_mcp_request(
+        client,
+        server_base,
+        access_token,
+        tools_request,
+        "tools/list",
+        "MCP tools/list response:",
+        "MCP request failed",
+    )
+    .await?;
 
     // Test MCP vti_search tool
-    println!("🔍 Testing vti_search tool...");
     let search_request = json!({
         "jsonrpc": "2.0",
         "method": "tools/call",
@@ -126,25 +151,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "id": 2
     });
 
-    let search_response = client
-        .post(format!("{}/", server_base))
-        .header("Authorization", format!("Bearer {}", access_token))
-        .header("Content-Type", "application/json")
-        .json(&search_request)
-        .send()
-        .await?;
+    make_mcp_request(
+        client,
+        server_base,
+        access_token,
+        search_request,
+        "vti_search tool",
+        "MCP vti_search response:",
+        "MCP search request failed",
+    )
+    .await?;
 
-    if search_response.status().is_success() {
-        let response_json: Value = search_response.json().await?;
-        println!("✅ MCP vti_search response:");
-        println!("{}", serde_json::to_string_pretty(&response_json)?);
-    } else {
-        println!("❌ MCP search request failed: {}", search_response.status());
-        let error_text = search_response.text().await?;
-        println!("Error: {}", error_text);
-    }
-    println!();
+    Ok(())
+}
 
+/// Displays final completion messages and notes
+fn display_completion_notes() {
     println!("🎉 OAuth client test completed!");
     println!();
     println!("💡 Notes:");
@@ -152,6 +174,47 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("- In production, use an OAuth 2.1 client library");
     println!("- Store tokens securely and handle refresh automatically");
     println!("- Always use HTTPS in production environments");
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let client = HttpClient::new();
+    let server_base = "http://127.0.0.1:3000";
+
+    println!("🧪 OAuth 2.1 Client Test for VirusTotal MCP Server");
+    println!("🌐 Server: {}", server_base);
+    println!();
+
+    // Step 1: Check server metadata
+    let metadata_ok = fetch_server_metadata(&client, server_base).await?;
+    println!();
+
+    if !metadata_ok {
+        return Ok(());
+    }
+
+    // Step 2: Check health endpoint
+    check_server_health(&client, server_base).await?;
+    println!();
+
+    // Step 3: Display OAuth flow instructions
+    display_oauth_instructions(server_base);
+
+    // Step 4: Get access token from user
+    let access_token = get_access_token()?;
+
+    if access_token.is_empty() {
+        println!("⏭️  Skipping MCP API testing");
+        return Ok(());
+    }
+
+    println!();
+
+    // Step 5: Test MCP API
+    test_mcp_api(&client, server_base, &access_token).await?;
+
+    // Display completion notes
+    display_completion_notes();
 
     Ok(())
 }
