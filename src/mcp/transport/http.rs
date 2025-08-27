@@ -72,36 +72,40 @@ async fn run_http_server_with_auth(
     let server = VtMcpServer::new(client);
 
     #[cfg(feature = "axum")]
-    {
-        #[cfg(feature = "mcp-oauth")]
-        if let Some(config) = oauth_config {
-            tracing::info!("Enabling OAuth 2.1 authentication for HTTP server");
-            let oauth_state = OAuthState::new(config)?;
-            let app = oauth_router(server, oauth_state);
-            return serve_router(app, addr).await;
-        }
-
-        #[cfg(feature = "mcp-jwt")]
-        if let Some(config) = jwt_config.clone() {
-            tracing::info!("Enabling JWT authentication for HTTP server");
-            let jwt_manager = JwtManager::new(config.clone());
-            let app = jwt_router(server, jwt_manager.clone());
-            return serve_router(app, addr).await;
-        }
-
-        let app = plain_router(server);
-        serve_router(app, addr).await?;
-    }
+    return configure_and_serve(server, addr, jwt_config, oauth_config).await;
 
     #[cfg(not(feature = "axum"))]
-    {
-        return Err(anyhow::anyhow!(
-            "HTTP server requires axum feature to be enabled",
-        ));
+    Err(anyhow::anyhow!(
+        "HTTP server requires axum feature to be enabled",
+    ))
+}
+#[cfg(feature = "axum")]
+async fn configure_and_serve(
+    server: VtMcpServer,
+    addr: SocketAddr,
+    jwt_config: Option<MaybeJwtConfig>,
+    oauth_config: Option<MaybeOAuthConfig>,
+) -> McpResult<()> {
+    #[cfg(feature = "mcp-oauth")]
+    if let Some(config) = oauth_config {
+        tracing::info!("Enabling OAuth 2.1 authentication for HTTP server");
+        let oauth_state = OAuthState::new(config)?;
+        let app = oauth_router(server, oauth_state);
+        return serve_router(app, addr).await;
     }
 
-    Ok(())
+    #[cfg(feature = "mcp-jwt")]
+    if let Some(config) = jwt_config.clone() {
+        tracing::info!("Enabling JWT authentication for HTTP server");
+        let jwt_manager = JwtManager::new(config.clone());
+        let app = jwt_router(server, jwt_manager.clone());
+        return serve_router(app, addr).await;
+    }
+
+    let app = plain_router(server);
+    serve_router(app, addr).await
 }
+
 #[cfg(feature = "axum")]
 fn base_router<S>(root: axum::routing::MethodRouter<S>) -> Router<S>
 where
