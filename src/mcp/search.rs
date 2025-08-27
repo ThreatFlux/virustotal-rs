@@ -195,54 +195,51 @@ fn get_threat_level_description(threat_score: u8, indicator_type: &str) -> Strin
     }
 }
 
-/// Search for file hash information
-async fn search_file_hash(client: &Client, hash: &str) -> McpResult<ThreatIntelligence> {
-    let file = client.files().get(hash).await.map_err(convert_vt_error)?;
-
-    let stats = file
-        .object
-        .attributes
-        .last_analysis_stats
-        .clone()
-        .unwrap_or_default();
-
-    let detection_summary = calculate_detection_summary(&stats);
-    let threat_score = calculate_threat_score(&stats);
-
-    // Extract threat categories
-    let threat_categories =
-        extract_threat_categories(&file.object.attributes.last_analysis_results, |result| {
-            (result.category.as_str(), result.result.as_ref())
-        });
-
-    // Extract malware families
+/// Extract malware families from file attributes
+fn extract_malware_families(file_attrs: &crate::files::FileAttributes) -> Vec<String> {
     let mut malware_families = Vec::new();
-    if let Some(ref families) = file.object.attributes.popular_threat_classification {
+    if let Some(ref families) = file_attrs.popular_threat_classification {
         malware_families.push(families.suggested_threat_label.clone());
     }
+    malware_families
+}
 
-    // Create summary
-    let summary = create_file_summary(&file.object.attributes, &detection_summary, threat_score);
-
-    // Extract MITRE ATT&CK data
-    let mitre_tactics = Vec::new();
-    let mitre_techniques = Vec::new();
-
-    // MITRE ATT&CK data extraction is simplified for now
-    // This would need proper field mapping based on `VirusTotal` API response
-
-    let context = ThreatContext {
+/// Create threat context for file analysis
+fn create_file_threat_context(
+    file_attrs: &crate::files::FileAttributes,
+    malware_families: Vec<String>,
+) -> ThreatContext {
+    ThreatContext {
         malware_families,
-        file_type: file.object.attributes.type_description,
-        file_size: file.object.attributes.size,
+        file_type: file_attrs.type_description.clone(),
+        file_size: file_attrs.size,
         country: None,
         asn: None,
         registrar: None,
         creation_date: None,
         associated_urls: Vec::new(),
-        mitre_tactics,
-        mitre_techniques,
-    };
+        mitre_tactics: Vec::new(),    // Simplified for now
+        mitre_techniques: Vec::new(), // Simplified for now
+    }
+}
+
+/// Search for file hash information
+async fn search_file_hash(client: &Client, hash: &str) -> McpResult<ThreatIntelligence> {
+    let file = client.files().get(hash).await.map_err(convert_vt_error)?;
+    let file_attrs = &file.object.attributes;
+
+    let stats = file_attrs.last_analysis_stats.clone().unwrap_or_default();
+    let detection_summary = calculate_detection_summary(&stats);
+    let threat_score = calculate_threat_score(&stats);
+
+    let threat_categories =
+        extract_threat_categories(&file_attrs.last_analysis_results, |result| {
+            (result.category.as_str(), result.result.as_ref())
+        });
+
+    let malware_families = extract_malware_families(file_attrs);
+    let summary = create_file_summary(file_attrs, &detection_summary, threat_score);
+    let context = create_file_threat_context(file_attrs, malware_families);
 
     Ok(ThreatIntelligence {
         indicator: hash.to_string(),
@@ -252,8 +249,8 @@ async fn search_file_hash(client: &Client, hash: &str) -> McpResult<ThreatIntell
         summary,
         detections: detection_summary,
         context,
-        last_analysis_date: file.object.attributes.last_analysis_date,
-        reputation: file.object.attributes.reputation,
+        last_analysis_date: file_attrs.last_analysis_date,
+        reputation: file_attrs.reputation,
     })
 }
 
@@ -309,6 +306,22 @@ async fn search_ip_address(client: &Client, ip: &str) -> McpResult<ThreatIntelli
     })
 }
 
+/// Create threat context for domain analysis
+fn create_domain_threat_context(domain_attrs: &crate::domains::DomainAttributes) -> ThreatContext {
+    ThreatContext {
+        malware_families: Vec::new(),
+        file_type: None,
+        file_size: None,
+        country: None,
+        asn: None,
+        registrar: domain_attrs.registrar.clone(),
+        creation_date: domain_attrs.creation_date,
+        associated_urls: Vec::new(),
+        mitre_tactics: Vec::new(),
+        mitre_techniques: Vec::new(),
+    }
+}
+
 /// Search for domain information
 async fn search_domain(client: &Client, domain: &str) -> McpResult<ThreatIntelligence> {
     let domain_info = client
@@ -317,39 +330,18 @@ async fn search_domain(client: &Client, domain: &str) -> McpResult<ThreatIntelli
         .await
         .map_err(convert_vt_error)?;
 
-    let stats = domain_info
-        .object
-        .attributes
-        .last_analysis_stats
-        .clone()
-        .unwrap_or_default();
-
+    let domain_attrs = &domain_info.object.attributes;
+    let stats = domain_attrs.last_analysis_stats.clone().unwrap_or_default();
     let detection_summary = calculate_detection_summary(&stats);
     let threat_score = calculate_threat_score(&stats);
 
-    let threat_categories = extract_threat_categories(
-        &domain_info.object.attributes.last_analysis_results,
-        |result| (result.category.as_str(), result.result.as_ref()),
-    );
+    let threat_categories =
+        extract_threat_categories(&domain_attrs.last_analysis_results, |result| {
+            (result.category.as_str(), result.result.as_ref())
+        });
 
-    let summary = create_domain_summary(
-        &domain_info.object.attributes,
-        &detection_summary,
-        threat_score,
-    );
-
-    let context = ThreatContext {
-        malware_families: Vec::new(),
-        file_type: None,
-        file_size: None,
-        country: None,
-        asn: None,
-        registrar: domain_info.object.attributes.registrar,
-        creation_date: domain_info.object.attributes.creation_date,
-        associated_urls: Vec::new(),
-        mitre_tactics: Vec::new(),
-        mitre_techniques: Vec::new(),
-    };
+    let summary = create_domain_summary(domain_attrs, &detection_summary, threat_score);
+    let context = create_domain_threat_context(domain_attrs);
 
     Ok(ThreatIntelligence {
         indicator: domain.to_string(),
@@ -359,8 +351,8 @@ async fn search_domain(client: &Client, domain: &str) -> McpResult<ThreatIntelli
         summary,
         detections: detection_summary,
         context,
-        last_analysis_date: domain_info.object.attributes.last_analysis_date,
-        reputation: domain_info.object.attributes.reputation,
+        last_analysis_date: domain_attrs.last_analysis_date,
+        reputation: domain_attrs.reputation,
     })
 }
 

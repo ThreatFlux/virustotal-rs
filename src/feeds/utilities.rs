@@ -57,6 +57,37 @@ pub fn get_latest_available_time(is_hourly: bool) -> String {
 
 /// Get feed times for a date range
 ///
+/// Prepare time strings for parsing by adding missing seconds/minutes
+fn prepare_time_strings(start_time: &str, end_time: &str, is_hourly: bool) -> (String, String) {
+    if is_hourly {
+        (format!("{}0000", start_time), format!("{}0000", end_time))
+    } else {
+        (format!("{}00", start_time), format!("{}00", end_time))
+    }
+}
+
+/// Format datetime to feed time string
+fn format_feed_time_string(current: DateTime<Utc>, is_hourly: bool) -> String {
+    if is_hourly {
+        format!(
+            "{:04}{:02}{:02}{:02}",
+            current.year(),
+            current.month(),
+            current.day(),
+            current.hour()
+        )
+    } else {
+        format!(
+            "{:04}{:02}{:02}{:02}{:02}",
+            current.year(),
+            current.month(),
+            current.day(),
+            current.hour(),
+            current.minute()
+        )
+    }
+}
+
 /// Generates a list of feed times for batch downloading.
 ///
 /// # Arguments
@@ -69,17 +100,9 @@ pub fn get_latest_available_time(is_hourly: bool) -> String {
 pub fn get_time_range(start_time: &str, end_time: &str, is_hourly: bool) -> Vec<String> {
     let mut times = Vec::new();
 
-    // Parse start and end times
-    let _format_str = if is_hourly { "%Y%m%d%H" } else { "%Y%m%d%H%M" };
-
-    // For hourly, add dummy minutes/seconds; for per-minute, add dummy seconds
-    let (start_str, end_str) = if is_hourly {
-        (format!("{}0000", start_time), format!("{}0000", end_time))
-    } else {
-        (format!("{}00", start_time), format!("{}00", end_time))
-    };
-
+    let (start_str, end_str) = prepare_time_strings(start_time, end_time, is_hourly);
     let full_format = "%Y%m%d%H%M%S";
+
     let start = NaiveDateTime::parse_from_str(&start_str, full_format);
     let end = NaiveDateTime::parse_from_str(&end_str, full_format);
 
@@ -94,24 +117,7 @@ pub fn get_time_range(start_time: &str, end_time: &str, is_hourly: bool) -> Vec<
         let end = DateTime::<Utc>::from_naive_utc_and_offset(end_dt, Utc);
 
         while current <= end {
-            let time_str = if is_hourly {
-                format!(
-                    "{:04}{:02}{:02}{:02}",
-                    current.year(),
-                    current.month(),
-                    current.day(),
-                    current.hour()
-                )
-            } else {
-                format!(
-                    "{:04}{:02}{:02}{:02}{:02}",
-                    current.year(),
-                    current.month(),
-                    current.day(),
-                    current.hour(),
-                    current.minute()
-                )
-            };
+            let time_str = format_feed_time_string(current, is_hourly);
             times.push(time_str);
             current += increment;
         }

@@ -221,46 +221,44 @@ fn parse_args() -> Args {
 /// Securely collect command line arguments with validation
 #[cfg(all(feature = "mcp-jwt", not(feature = "clap")))]
 fn get_safe_args() -> Vec<String> {
-    // Use env::args_os() for better Unicode handling and security
-    let args: Vec<String> = std::env::args_os()
+    // Use env::args() instead of args_os() for security - args() automatically handles
+    // Unicode validation and rejects invalid UTF-8 sequences
+    let args: Vec<String> = std::env::args()
         .enumerate()
         .filter_map(|(i, arg)| {
             // Skip if we have too many args (early termination for security)
             if i > 20 {
                 return None;
             }
-            
-            // Convert OsString to String safely
-            match arg.to_str() {
-                Some(s) => {
-                    // Pre-validate each argument for basic security
-                    if s.len() > 512 {
-                        eprintln!("Error: Argument too long at position {}. Maximum 512 characters allowed.", i);
-                        std::process::exit(1);
-                    }
-                    
-                    // Filter out potentially dangerous characters early
-                    if s.contains('\0') || s.contains('\x1b') {
-                        eprintln!("Error: Invalid characters detected in argument at position {}", i);
-                        std::process::exit(1);
-                    }
-                    
-                    Some(s.to_string())
-                }
-                None => {
-                    eprintln!("Error: Invalid Unicode in argument at position {}", i);
-                    std::process::exit(1);
-                }
+
+            // Pre-validate each argument for basic security
+            if arg.len() > 512 {
+                eprintln!(
+                    "Error: Argument too long at position {}. Maximum 512 characters allowed.",
+                    i
+                );
+                std::process::exit(1);
             }
+
+            // Filter out potentially dangerous characters early
+            if arg.contains('\0') || arg.contains('\x1b') {
+                eprintln!(
+                    "Error: Invalid characters detected in argument at position {}",
+                    i
+                );
+                std::process::exit(1);
+            }
+
+            Some(arg)
         })
         .collect();
-    
+
     // Additional validation on the collected args
     if args.len() > 20 {
         eprintln!("Error: Too many arguments provided. Maximum 20 arguments allowed.");
         std::process::exit(1);
     }
-    
+
     args
 }
 
