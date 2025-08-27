@@ -264,19 +264,8 @@ impl<'a> PrivateFilesClient<'a> {
         limit: Option<u32>,
         cursor: Option<&str>,
     ) -> Result<Collection<PrivateAnalysis>> {
-        let mut url = format!("private/files/{}/analyses?", urlencoding::encode(sha256));
-
-        if let Some(l) = limit {
-            url.push_str(&format!("limit={}&", l));
-        }
-
-        if let Some(c) = cursor {
-            url.push_str(&format!("cursor={}&", urlencoding::encode(c)));
-        }
-
-        // Remove trailing '&' or '?'
-        url.pop();
-
+        let base_path = format!("private/files/{}/analyses", urlencoding::encode(sha256));
+        let url = Self::build_paginated_url(&base_path, limit, cursor);
         self.client.get(&url).await
     }
 
@@ -364,19 +353,8 @@ impl<'a> PrivateFilesClient<'a> {
         limit: Option<u32>,
         cursor: Option<&str>,
     ) -> Result<Collection<FileBehavior>> {
-        let mut url = format!("private/files/{}/behaviours?", urlencoding::encode(sha256));
-
-        if let Some(l) = limit {
-            url.push_str(&format!("limit={}&", l));
-        }
-
-        if let Some(c) = cursor {
-            url.push_str(&format!("cursor={}&", urlencoding::encode(c)));
-        }
-
-        // Remove trailing '&' or '?'
-        url.pop();
-
+        let base_path = format!("private/files/{}/behaviours", urlencoding::encode(sha256));
+        let url = Self::build_paginated_url(&base_path, limit, cursor);
         self.client.get(&url).await
     }
 
@@ -420,22 +398,11 @@ impl<'a> PrivateFilesClient<'a> {
         limit: Option<u32>,
         cursor: Option<&str>,
     ) -> Result<Collection<DroppedFile>> {
-        let mut url = format!(
-            "private/files/{}/dropped_files?",
+        let base_path = format!(
+            "private/files/{}/dropped_files",
             urlencoding::encode(sha256)
         );
-
-        if let Some(l) = limit {
-            url.push_str(&format!("limit={}&", l));
-        }
-
-        if let Some(c) = cursor {
-            url.push_str(&format!("cursor={}&", urlencoding::encode(c)));
-        }
-
-        // Remove trailing '&' or '?'
-        url.pop();
-
+        let url = Self::build_paginated_url(&base_path, limit, cursor);
         self.client.get(&url).await
     }
 
@@ -669,6 +636,24 @@ impl<'a> PrivateFilesClient<'a> {
         self.client.get(&url).await
     }
 
+    /// Build URL for paginated queries
+    fn build_paginated_url(base_path: &str, limit: Option<u32>, cursor: Option<&str>) -> String {
+        let mut params = Vec::new();
+
+        if let Some(l) = limit {
+            params.push(format!("limit={}", l));
+        }
+        if let Some(c) = cursor {
+            params.push(format!("cursor={}", urlencoding::encode(c)));
+        }
+
+        if params.is_empty() {
+            base_path.to_string()
+        } else {
+            format!("{}?{}", base_path, params.join("&"))
+        }
+    }
+
     /// Get objects related to a private file
     ///
     /// GET /private/files/{id}/{relationship}
@@ -686,23 +671,12 @@ impl<'a> PrivateFilesClient<'a> {
     where
         T: serde::de::DeserializeOwned,
     {
-        let mut url = format!(
-            "private/files/{}/{}?",
+        let base_path = format!(
+            "private/files/{}/{}",
             urlencoding::encode(sha256),
             relationship
         );
-
-        if let Some(l) = limit {
-            url.push_str(&format!("limit={}&", l));
-        }
-
-        if let Some(c) = cursor {
-            url.push_str(&format!("cursor={}&", urlencoding::encode(c)));
-        }
-
-        // Remove trailing '&' or '?'
-        url.pop();
-
+        let url = Self::build_paginated_url(&base_path, limit, cursor);
         self.client.get(&url).await
     }
 
@@ -723,23 +697,12 @@ impl<'a> PrivateFilesClient<'a> {
         limit: Option<u32>,
         cursor: Option<&str>,
     ) -> Result<Collection<serde_json::Value>> {
-        let mut url = format!(
-            "private/files/{}/relationships/{}?",
+        let base_path = format!(
+            "private/files/{}/relationships/{}",
             urlencoding::encode(sha256),
             relationship
         );
-
-        if let Some(l) = limit {
-            url.push_str(&format!("limit={}&", l));
-        }
-
-        if let Some(c) = cursor {
-            url.push_str(&format!("cursor={}&", urlencoding::encode(c)));
-        }
-
-        // Remove trailing '&' or '?'
-        url.pop();
-
+        let url = Self::build_paginated_url(&base_path, limit, cursor);
         self.client.get(&url).await
     }
 
@@ -757,19 +720,8 @@ impl<'a> PrivateFilesClient<'a> {
         limit: Option<u32>,
         cursor: Option<&str>,
     ) -> Result<Collection<crate::comments::Comment>> {
-        let mut url = format!("private/files/{}/comments?", urlencoding::encode(sha256));
-
-        if let Some(l) = limit {
-            url.push_str(&format!("limit={}&", l));
-        }
-
-        if let Some(c) = cursor {
-            url.push_str(&format!("cursor={}&", urlencoding::encode(c)));
-        }
-
-        // Remove trailing '&' or '?'
-        url.pop();
-
+        let base_path = format!("private/files/{}/comments", urlencoding::encode(sha256));
+        let url = Self::build_paginated_url(&base_path, limit, cursor);
         self.client.get(&url).await
     }
 

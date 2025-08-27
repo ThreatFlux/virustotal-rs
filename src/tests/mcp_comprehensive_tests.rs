@@ -48,36 +48,81 @@ mod mcp_search_comprehensive_tests {
     use crate::tests::test_utils::create_test_client;
     use serde_json::json;
 
-    #[test]
-    fn test_threat_intelligence_creation() {
-        let intel = ThreatIntelligence {
+    // Helper function to create test detection summary
+    fn create_test_detection_summary() -> DetectionSummary {
+        DetectionSummary {
+            malicious: 45,
+            suspicious: 5,
+            clean: 10,
+            total_engines: 60,
+            detection_ratio: 0.83,
+        }
+    }
+
+    // Helper function to create test threat context
+    fn create_test_threat_context() -> ThreatContext {
+        ThreatContext {
+            first_seen: Some(1640995200), // 2022-01-01
+            last_seen: Some(1672531200),  // 2023-01-01
+            prevalence: Some("high".to_string()),
+            source_countries: vec!["US".to_string(), "CN".to_string()],
+            file_types: vec!["PE32".to_string()],
+            sandbox_reports: 15,
+        }
+    }
+
+    // Helper function to create test threat intelligence
+    fn create_test_threat_intelligence() -> ThreatIntelligence {
+        ThreatIntelligence {
             indicator: "malware.exe".to_string(),
             indicator_type: "file".to_string(),
             threat_score: 85,
             threat_categories: vec!["trojan".to_string(), "malware".to_string()],
             summary: "Detected as malicious by multiple engines".to_string(),
-            detections: DetectionSummary {
-                malicious: 45,
-                suspicious: 5,
-                clean: 10,
-                total_engines: 60,
-                detection_ratio: 0.83,
-            },
-            context: ThreatContext {
-                first_seen: Some(1640995200), // 2022-01-01
-                last_seen: Some(1672531200),  // 2023-01-01
-                prevalence: Some("high".to_string()),
-                source_countries: vec!["US".to_string(), "CN".to_string()],
-                file_types: vec!["PE32".to_string()],
-                sandbox_reports: 15,
-            },
+            detections: create_test_detection_summary(),
+            context: create_test_threat_context(),
             last_analysis_date: Some(1672531200),
             reputation: Some(-75),
-        };
+        }
+    }
+
+    #[test]
+    fn test_threat_intelligence_creation() {
+        let intel = create_test_threat_intelligence();
 
         assert_eq!(intel.indicator, "malware.exe");
         assert_eq!(intel.threat_score, 85);
         assert_eq!(intel.detections.total_engines, 60);
+        assert_eq!(intel.context.sandbox_reports, 15);
+    }
+
+    #[test]
+    fn test_threat_intelligence_basic_fields() {
+        let intel = create_test_threat_intelligence();
+
+        assert_eq!(intel.indicator_type, "file");
+        assert_eq!(intel.threat_categories.len(), 2);
+        assert!(intel.threat_categories.contains(&"trojan".to_string()));
+        assert!(intel.summary.contains("malicious"));
+    }
+
+    #[test]
+    fn test_threat_intelligence_detection_summary() {
+        let intel = create_test_threat_intelligence();
+
+        assert_eq!(intel.detections.malicious, 45);
+        assert_eq!(intel.detections.suspicious, 5);
+        assert_eq!(intel.detections.clean, 10);
+        assert_eq!(intel.detections.total_engines, 60);
+    }
+
+    #[test]
+    fn test_threat_intelligence_context() {
+        let intel = create_test_threat_intelligence();
+
+        assert!(intel.context.first_seen.is_some());
+        assert!(intel.context.last_seen.is_some());
+        assert_eq!(intel.context.source_countries.len(), 2);
         assert_eq!(intel.context.sandbox_reports, 15);
     }
 
@@ -130,9 +175,9 @@ mod mcp_search_comprehensive_tests {
         assert_eq!(calculate_threat_score(75, 50), 100); // Capped at 100
     }
 
-    #[test]
-    fn test_serialization_deserialization() {
-        let intel = ThreatIntelligence {
+    // Helper function to create phishing domain threat intelligence 
+    fn create_phishing_domain_intel() -> ThreatIntelligence {
+        ThreatIntelligence {
             indicator: "example.com".to_string(),
             indicator_type: "domain".to_string(),
             threat_score: 25,
@@ -155,18 +200,38 @@ mod mcp_search_comprehensive_tests {
             },
             last_analysis_date: Some(1672531200),
             reputation: Some(10),
-        };
+        }
+    }
 
-        // Test serialization
+    #[test]
+    fn test_threat_intelligence_serialization() {
+        let intel = create_phishing_domain_intel();
         let json = serde_json::to_string(&intel).expect("Failed to serialize");
+        
         assert!(json.contains("example.com"));
         assert!(json.contains("domain"));
+        assert!(json.contains("phishing"));
+    }
+
+    #[test]
+    fn test_threat_intelligence_deserialization() {
+        let intel = create_phishing_domain_intel();
+        let json = serde_json::to_string(&intel).expect("Failed to serialize");
         
-        // Test deserialization
         let deserialized: ThreatIntelligence = serde_json::from_str(&json).expect("Failed to deserialize");
+        
         assert_eq!(deserialized.indicator, intel.indicator);
         assert_eq!(deserialized.threat_score, intel.threat_score);
-        assert_eq!(deserialized.detections.total_engines, intel.detections.total_engines);
+    }
+
+    #[test]
+    fn test_threat_intelligence_roundtrip_consistency() {
+        let original = create_phishing_domain_intel();
+        let json = serde_json::to_string(&original).expect("Failed to serialize");
+        let deserialized: ThreatIntelligence = serde_json::from_str(&json).expect("Failed to deserialize");
+        
+        assert_eq!(deserialized.detections.total_engines, original.detections.total_engines);
+        assert_eq!(deserialized.context.source_countries, original.context.source_countries);
     }
 }
 

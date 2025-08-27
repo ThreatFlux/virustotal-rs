@@ -112,6 +112,35 @@ impl<'a> CrowdsourcedYaraRulesClient<'a> {
         Self { client }
     }
 
+    /// Build URL for listing YARA rules with query parameters
+    fn build_list_url(
+        filter: Option<&str>,
+        order: Option<YaraRuleOrder>,
+        limit: Option<u32>,
+        cursor: Option<&str>,
+    ) -> String {
+        let mut params = Vec::new();
+
+        if let Some(f) = filter {
+            params.push(format!("filter={}", urlencoding::encode(f)));
+        }
+        if let Some(o) = order {
+            params.push(format!("order={}", o.to_string()));
+        }
+        if let Some(l) = limit {
+            params.push(format!("limit={}", l));
+        }
+        if let Some(c) = cursor {
+            params.push(format!("cursor={}", urlencoding::encode(c)));
+        }
+
+        if params.is_empty() {
+            "yara_rules".to_string()
+        } else {
+            format!("yara_rules?{}", params.join("&"))
+        }
+    }
+
     /// List crowdsourced YARA rules
     ///
     /// Allowed filters:
@@ -130,27 +159,7 @@ impl<'a> CrowdsourcedYaraRulesClient<'a> {
         limit: Option<u32>,
         cursor: Option<&str>,
     ) -> Result<Collection<CrowdsourcedYaraRule>> {
-        let mut url = String::from("yara_rules?");
-
-        if let Some(f) = filter {
-            url.push_str(&format!("filter={}&", urlencoding::encode(f)));
-        }
-
-        if let Some(o) = order {
-            url.push_str(&format!("order={}&", o.to_string()));
-        }
-
-        if let Some(l) = limit {
-            url.push_str(&format!("limit={}&", l));
-        }
-
-        if let Some(c) = cursor {
-            url.push_str(&format!("cursor={}&", urlencoding::encode(c)));
-        }
-
-        // Remove trailing '&' or '?'
-        url.pop();
-
+        let url = Self::build_list_url(filter, order, limit, cursor);
         self.client.get(&url).await
     }
 
@@ -160,19 +169,7 @@ impl<'a> CrowdsourcedYaraRulesClient<'a> {
         filter: Option<&str>,
         order: Option<YaraRuleOrder>,
     ) -> CollectionIterator<'_, CrowdsourcedYaraRule> {
-        let mut url = String::from("yara_rules?");
-
-        if let Some(f) = filter {
-            url.push_str(&format!("filter={}&", urlencoding::encode(f)));
-        }
-
-        if let Some(o) = order {
-            url.push_str(&format!("order={}&", o.to_string()));
-        }
-
-        // Remove trailing '&' or '?'
-        url.pop();
-
+        let url = Self::build_list_url(filter, order, None, None);
         CollectionIterator::new(self.client, url)
     }
 
@@ -180,6 +177,35 @@ impl<'a> CrowdsourcedYaraRulesClient<'a> {
     pub async fn get(&self, rule_id: &str) -> Result<CrowdsourcedYaraRule> {
         let url = format!("yara_rules/{}", urlencoding::encode(rule_id));
         self.client.get(&url).await
+    }
+
+    /// Build URL for relationship queries with pagination
+    fn build_relationship_url(
+        rule_id: &str,
+        relationship: &str,
+        limit: Option<u32>,
+        cursor: Option<&str>,
+    ) -> String {
+        let mut params = Vec::new();
+
+        if let Some(l) = limit {
+            params.push(format!("limit={}", l));
+        }
+        if let Some(c) = cursor {
+            params.push(format!("cursor={}", urlencoding::encode(c)));
+        }
+
+        let base = format!(
+            "yara_rules/{}/{}",
+            urlencoding::encode(rule_id),
+            relationship
+        );
+
+        if params.is_empty() {
+            base
+        } else {
+            format!("{}?{}", base, params.join("&"))
+        }
     }
 
     /// Get objects related to a YARA rule
@@ -193,23 +219,7 @@ impl<'a> CrowdsourcedYaraRulesClient<'a> {
     where
         T: serde::de::DeserializeOwned,
     {
-        let mut url = format!(
-            "yara_rules/{}/{}?",
-            urlencoding::encode(rule_id),
-            relationship
-        );
-
-        if let Some(l) = limit {
-            url.push_str(&format!("limit={}&", l));
-        }
-
-        if let Some(c) = cursor {
-            url.push_str(&format!("cursor={}&", urlencoding::encode(c)));
-        }
-
-        // Remove trailing '&' or '?'
-        url.pop();
-
+        let url = Self::build_relationship_url(rule_id, relationship, limit, cursor);
         self.client.get(&url).await
     }
 
@@ -231,6 +241,35 @@ impl<'a> CrowdsourcedYaraRulesClient<'a> {
         CollectionIterator::new(self.client, url)
     }
 
+    /// Build URL for relationship descriptors with pagination
+    fn build_relationship_descriptors_url(
+        rule_id: &str,
+        relationship: &str,
+        limit: Option<u32>,
+        cursor: Option<&str>,
+    ) -> String {
+        let mut params = Vec::new();
+
+        if let Some(l) = limit {
+            params.push(format!("limit={}", l));
+        }
+        if let Some(c) = cursor {
+            params.push(format!("cursor={}", urlencoding::encode(c)));
+        }
+
+        let base = format!(
+            "yara_rules/{}/relationships/{}",
+            urlencoding::encode(rule_id),
+            relationship
+        );
+
+        if params.is_empty() {
+            base
+        } else {
+            format!("{}?{}", base, params.join("&"))
+        }
+    }
+
     /// Get object descriptors related to a YARA rule
     pub async fn get_relationship_descriptors<T>(
         &self,
@@ -242,23 +281,7 @@ impl<'a> CrowdsourcedYaraRulesClient<'a> {
     where
         T: serde::de::DeserializeOwned,
     {
-        let mut url = format!(
-            "yara_rules/{}/relationships/{}?",
-            urlencoding::encode(rule_id),
-            relationship
-        );
-
-        if let Some(l) = limit {
-            url.push_str(&format!("limit={}&", l));
-        }
-
-        if let Some(c) = cursor {
-            url.push_str(&format!("cursor={}&", urlencoding::encode(c)));
-        }
-
-        // Remove trailing '&' or '?'
-        url.pop();
-
+        let url = Self::build_relationship_descriptors_url(rule_id, relationship, limit, cursor);
         self.client.get(&url).await
     }
 }

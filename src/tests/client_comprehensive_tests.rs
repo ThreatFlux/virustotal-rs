@@ -408,11 +408,8 @@ fn test_client_clone() {
     assert_eq!(client.base_url(), cloned_client.base_url());
 }
 
-#[test]
-fn test_client_module_getters() {
-    let client = create_test_client();
-    
-    // Test that all module getters work
+// Helper function to test basic module getters
+fn test_basic_module_getters(client: &Client) {
     let _files = client.files();
     let _domains = client.domains();
     let _ip_addresses = client.ip_addresses();
@@ -421,13 +418,26 @@ fn test_client_module_getters() {
     let _comments = client.comments();
     let _votes = client.votes();
     let _collections = client.collections();
+}
+
+// Helper function to test search and feed module getters  
+fn test_search_and_feed_getters(client: &Client) {
     let _livehunt = client.livehunt();
     let _retrohunt = client.retrohunt();
     let _feeds = client.feeds();
+    let _search = client.search();
+    let _ioc_stream = client.ioc_stream();
+}
+
+// Helper function to test rule-related module getters
+fn test_rule_module_getters(client: &Client) {
     let _sigma_rules = client.sigma_rules();
     let _yara_rulesets = client.yara_rulesets();
-    
-    // These require premium features
+    let _crowdsourced_yara_rules = client.crowdsourced_yara_rules();
+}
+
+// Helper function to test premium feature getters
+fn test_premium_module_getters(client: &Client) {
     let _graphs = client.graphs();
     let _groups = client.groups();
     let _users = client.users();
@@ -436,14 +446,45 @@ fn test_client_module_getters() {
     let _zip_files = client.zip_files();
     let _references = client.references();
     let _file_behaviours = client.file_behaviours();
-    let _crowdsourced_yara_rules = client.crowdsourced_yara_rules();
+}
+
+// Helper function to test threat intelligence getters
+fn test_threat_intel_getters(client: &Client) {
     let _threat_actors = client.threat_actors();
     let _attack_tactics = client.attack_tactics();
     let _attack_techniques = client.attack_techniques();
     let _popular_threat_categories = client.popular_threat_categories();
-    let _search = client.search();
-    let _ioc_stream = client.ioc_stream();
     let _metadata = client.metadata();
+}
+
+#[test]
+fn test_client_basic_modules() {
+    let client = create_test_client();
+    test_basic_module_getters(&client);
+}
+
+#[test]
+fn test_client_search_modules() {
+    let client = create_test_client();
+    test_search_and_feed_getters(&client);
+}
+
+#[test]
+fn test_client_rule_modules() {
+    let client = create_test_client();
+    test_rule_module_getters(&client);
+}
+
+#[test]
+fn test_client_premium_modules() {
+    let client = create_test_client();
+    test_premium_module_getters(&client);
+}
+
+#[test]
+fn test_client_threat_intel_modules() {
+    let client = create_test_client();
+    test_threat_intel_getters(&client);
 }
 
 #[test]

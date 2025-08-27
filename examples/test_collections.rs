@@ -3,7 +3,6 @@ use virustotal_rs::{
     ExportFormat, UpdateCollectionRequest, UrlDescriptor,
 };
 
-#[path = "common/mod.rs"]
 mod common;
 use common::*;
 
@@ -59,7 +58,7 @@ async fn list_collections(collections_client: &virustotal_rs::CollectionsClient<
         .await
     {
         Ok(collections) => {
-            println!("   ✓ Retrieved collections");
+            print_success("Retrieved collections");
             if let Some(meta) = &collections.meta {
                 if let Some(count) = meta.count {
                     println!("   - Total collections: {}", count);
@@ -72,40 +71,17 @@ async fn list_collections(collections_client: &virustotal_rs::CollectionsClient<
             }
         }
         Err(e) => {
-            println!("   ✗ Error listing collections: {}", e);
+            print_error(&format!("Error listing collections: {}", e));
             println!("   Note: This endpoint requires special Threat Landscape privileges");
         }
     }
 }
 
-#[tokio::main]
-async fn main() -> ExampleResult<()> {
-    let client = create_client_from_env("VT_API_KEY", ApiTier::Premium)?; // Collections API requires premium privileges
-
-    print_header("Testing VirusTotal Collections API");
-
-    let collections_client = client.collections();
-
-    // Create collection and get its ID
-    let collection_id = create_test_collection(&collections_client).await?;
-
-    // Test collection operations
-    test_collection_operations(&collections_client, &collection_id).await?;
-
-    // List existing collections
-    list_collections(&collections_client).await;
-
-    println!("\n===================================");
-    println!("Collections API testing complete!");
-
-    Ok(())
-}
-
-async fn test_collection_operations(
+/// Update an existing collection
+async fn test_update_collection(
     client: &virustotal_rs::CollectionsClient<'_>,
     collection_id: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
-    // 3. Update the collection
+) {
     println!("\n3. Updating collection");
     println!("----------------------");
 
@@ -122,18 +98,21 @@ async fn test_collection_operations(
 
     match client.update(collection_id, &update_request).await {
         Ok(updated) => {
-            println!("   ✓ Collection updated successfully");
+            print_success("Collection updated successfully");
             if let Some(name) = &updated.object.attributes.name {
                 println!("   - New name: {}", name);
             }
         }
-        Err(e) => println!("   ✗ Error updating collection: {}", e),
+        Err(e) => print_error(&format!("Error updating collection: {}", e)),
     }
+}
 
-    // 4. Add items to the collection
+/// Add items to a collection
+async fn test_add_items(client: &virustotal_rs::CollectionsClient<'_>, collection_id: &str) {
     println!("\n4. Adding items to collection");
     println!("-----------------------------");
 
+    // Add domains
     let new_domains = CollectionItemsRequest {
         data: vec![
             DomainDescriptor {
@@ -151,8 +130,8 @@ async fn test_collection_operations(
         .add_items(collection_id, "domains", &new_domains)
         .await
     {
-        Ok(_) => println!("   ✓ Added 2 new domains to collection"),
-        Err(e) => println!("   ✗ Error adding domains: {}", e),
+        Ok(_) => print_success("Added 2 new domains to collection"),
+        Err(e) => print_error(&format!("Error adding domains: {}", e)),
     }
 
     // Add URLs using both methods (URL string and ID)
@@ -170,11 +149,16 @@ async fn test_collection_operations(
     };
 
     match client.add_items(collection_id, "urls", &new_urls).await {
-        Ok(_) => println!("   ✓ Added 2 new URLs to collection"),
-        Err(e) => println!("   ✗ Error adding URLs: {}", e),
+        Ok(_) => print_success("Added 2 new URLs to collection"),
+        Err(e) => print_error(&format!("Error adding URLs: {}", e)),
     }
+}
 
-    // 5. Get comments on the collection
+/// Test comment management
+async fn test_comment_management(
+    client: &virustotal_rs::CollectionsClient<'_>,
+    collection_id: &str,
+) {
     println!("\n5. Managing comments");
     println!("--------------------");
 
@@ -186,25 +170,27 @@ async fn test_collection_operations(
         .await
     {
         Ok(comment) => {
-            println!("   ✓ Added comment to collection");
+            print_success("Added comment to collection");
             println!("   - Comment: {}", &comment.object.attributes.text);
         }
-        Err(e) => println!("   ✗ Error adding comment: {}", e),
+        Err(e) => print_error(&format!("Error adding comment: {}", e)),
     }
 
     match client.get_comments(collection_id).await {
         Ok(comments) => {
-            println!("   ✓ Retrieved comments");
+            print_success("Retrieved comments");
             if let Some(meta) = &comments.meta {
                 if let Some(count) = meta.count {
                     println!("   - Total comments: {}", count);
                 }
             }
         }
-        Err(e) => println!("   ✗ Error getting comments: {}", e),
+        Err(e) => print_error(&format!("Error getting comments: {}", e)),
     }
+}
 
-    // 6. Get related objects
+/// Test relationship retrieval
+async fn test_relationships(client: &virustotal_rs::CollectionsClient<'_>, collection_id: &str) {
     println!("\n6. Getting related objects");
     println!("--------------------------");
 
@@ -213,14 +199,14 @@ async fn test_collection_operations(
         .await
     {
         Ok(domains) => {
-            println!("   ✓ Retrieved domains from collection");
+            print_success("Retrieved domains from collection");
             if let Some(meta) = &domains.meta {
                 if let Some(count) = meta.count {
                     println!("   - Number of domains: {}", count);
                 }
             }
         }
-        Err(e) => println!("   ✗ Error getting domains: {}", e),
+        Err(e) => print_error(&format!("Error getting domains: {}", e)),
     }
 
     match client
@@ -228,32 +214,38 @@ async fn test_collection_operations(
         .await
     {
         Ok(files) => {
-            println!("   ✓ Retrieved files from collection");
+            print_success("Retrieved files from collection");
             if let Some(meta) = &files.meta {
                 if let Some(count) = meta.count {
                     println!("   - Number of files: {}", count);
                 }
             }
         }
-        Err(e) => println!("   ✗ Error getting files: {}", e),
+        Err(e) => print_error(&format!("Error getting files: {}", e)),
     }
+}
 
-    // 7. Export collection (requires special privileges)
+/// Test advanced collection operations
+async fn test_advanced_operations(
+    client: &virustotal_rs::CollectionsClient<'_>,
+    collection_id: &str,
+) {
+    // Export collection
     println!("\n7. Exporting collection");
     println!("-----------------------");
 
     match client.export(collection_id, ExportFormat::Json).await {
         Ok(data) => {
-            println!("   ✓ Exported collection to JSON");
+            print_success("Exported collection to JSON");
             println!("   - Export size: {} bytes", data.len());
         }
         Err(e) => {
-            println!("   ✗ Error exporting collection: {}", e);
+            print_error(&format!("Error exporting collection: {}", e));
             println!("   Note: Export requires special Threat Landscape privileges");
         }
     }
 
-    // 8. Search within collection (requires special privileges)
+    // Search within collection
     println!("\n8. Searching within collection");
     println!("------------------------------");
 
@@ -268,7 +260,7 @@ async fn test_collection_operations(
         .await
     {
         Ok(results) => {
-            println!("   ✓ Search completed");
+            print_success("Search completed");
             if let Some(meta) = &results.meta {
                 if let Some(count) = meta.count {
                     println!("   - Results found: {}", count);
@@ -276,12 +268,14 @@ async fn test_collection_operations(
             }
         }
         Err(e) => {
-            println!("   ✗ Error searching collection: {}", e);
+            print_error(&format!("Error searching collection: {}", e));
             println!("   Note: Search requires special Threat Landscape privileges");
         }
     }
+}
 
-    // 9. Remove items from collection
+/// Test item removal from collection
+async fn test_remove_items(client: &virustotal_rs::CollectionsClient<'_>, collection_id: &str) {
     println!("\n9. Removing items from collection");
     println!("---------------------------------");
 
@@ -296,9 +290,43 @@ async fn test_collection_operations(
         .remove_items(collection_id, "domains", &domains_to_remove)
         .await
     {
-        Ok(_) => println!("   ✓ Removed domain from collection"),
-        Err(e) => println!("   ✗ Error removing domain: {}", e),
+        Ok(_) => print_success("Removed domain from collection"),
+        Err(e) => print_error(&format!("Error removing domain: {}", e)),
     }
+}
+
+/// Execute all collection operations with the created collection
+async fn execute_collection_operations(
+    client: &virustotal_rs::CollectionsClient<'_>,
+    collection_id: &str,
+) {
+    test_update_collection(client, collection_id).await;
+    test_add_items(client, collection_id).await;
+    test_comment_management(client, collection_id).await;
+    test_relationships(client, collection_id).await;
+    test_advanced_operations(client, collection_id).await;
+    test_remove_items(client, collection_id).await;
+}
+
+#[tokio::main]
+async fn main() -> ExampleResult<()> {
+    let client = create_client_from_env("VT_API_KEY", ApiTier::Premium)?; // Collections API requires premium privileges
+
+    print_header("Testing VirusTotal Collections API");
+
+    let collections_client = client.collections();
+
+    // Create collection and get its ID
+    let collection_id = create_test_collection(&collections_client).await?;
+
+    // Test collection operations
+    execute_collection_operations(&collections_client, &collection_id).await;
+
+    // List existing collections
+    list_collections(&collections_client).await;
+
+    println!("\n===================================");
+    println!("Collections API testing complete!");
 
     Ok(())
 }
