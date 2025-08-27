@@ -1,8 +1,7 @@
 use virustotal_rs::{ApiTier, ClientBuilder, FeedsClient};
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // NOTE: Domain/IP/URL feeds require their respective licenses
+/// Initialize client with API key from environment
+fn initialize_client() -> Result<virustotal_rs::Client, Box<dyn std::error::Error>> {
     let api_key = std::env::var("VT_FEEDS_API_KEY")
         .or_else(|_| std::env::var("VT_API_KEY"))
         .unwrap_or_else(|_| "test_key".to_string());
@@ -12,6 +11,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .tier(ApiTier::Premium)
         .build()?;
 
+    Ok(client)
+}
+
+/// Print introduction and feed information
+fn print_introduction() {
     println!("Testing VirusTotal Domain, IP, and URL Intelligence Feeds");
     println!("========================================================");
     println!("🔒 NOTE: Each feed type requires its specific license:");
@@ -19,22 +23,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   - IP feeds: IP feeds license");
     println!("   - URL feeds: URL feeds license");
     println!("========================================================\n");
+}
 
-    let feeds = client.feeds();
-
-    // Get the latest available feed times
+/// Print latest available feed times
+fn print_feed_times() {
     let latest_minute = FeedsClient::get_latest_available_time(false);
     let latest_hour = FeedsClient::get_latest_available_time(true);
 
     println!("Latest available per-minute feed: {}", latest_minute);
     println!("Latest available hourly feed: {}", latest_hour);
     println!("  (60-minute lag for per-minute, 2-hour lag for hourly)\n");
+}
 
-    // Example feed time
-    let feed_time = "202312010802"; // December 1, 2023 08:02 UTC
-    let hourly_time = "2023120108"; // December 1, 2023 08:00-08:59 UTC
-
-    // ========== DOMAIN INTELLIGENCE FEED ==========
+/// Test domain intelligence feeds
+async fn test_domain_feeds(
+    feeds: &virustotal_rs::FeedsClient,
+    feed_time: &str,
+    hourly_time: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     println!("1. DOMAIN INTELLIGENCE FEED");
     println!("---------------------------");
 
@@ -49,33 +55,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let filename = format!("domain_feed_{}.bz2", feed_time);
             std::fs::write(&filename, &batch_data)?;
             println!("  Saved to: {}", filename);
-
-            // Example of parsing domain feed lines
-            // In production, decompress and parse each line
-            /*
-            use bzip2::read::BzDecoder;
-            use std::io::BufRead;
-
-            let decoder = BzDecoder::new(&batch_data[..]);
-            let reader = std::io::BufReader::new(decoder);
-
-            for line in reader.lines() {
-                if let Ok(line) = line {
-                    if let Ok(item) = feeds.parse_domain_feed_line(&line) {
-                        println!("  Domain: {}", item.id);
-
-                        // Access domain attributes
-                        if let Some(reputation) = item.attributes.get("reputation") {
-                            println!("    Reputation: {}", reputation);
-                        }
-
-                        if let Some(stats) = item.attributes.get("last_analysis_stats") {
-                            println!("    Analysis stats: {:?}", stats);
-                        }
-                    }
-                }
-            }
-            */
         }
         Err(e) => {
             println!("✗ Error downloading domain feed: {}", e);
@@ -103,7 +82,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // ========== IP ADDRESS INTELLIGENCE FEED ==========
+    Ok(())
+}
+
+/// Test IP address intelligence feeds
+async fn test_ip_feeds(
+    feeds: &virustotal_rs::FeedsClient,
+    feed_time: &str,
+    hourly_time: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     println!("\n2. IP ADDRESS INTELLIGENCE FEED");
     println!("-------------------------------");
 
@@ -118,36 +105,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let filename = format!("ip_feed_{}.bz2", feed_time);
             std::fs::write(&filename, &batch_data)?;
             println!("  Saved to: {}", filename);
-
-            // Example of parsing IP feed lines
-            /*
-            use bzip2::read::BzDecoder;
-            use std::io::BufRead;
-
-            let decoder = BzDecoder::new(&batch_data[..]);
-            let reader = std::io::BufReader::new(decoder);
-
-            for line in reader.lines() {
-                if let Ok(line) = line {
-                    if let Ok(item) = feeds.parse_ip_feed_line(&line) {
-                        println!("  IP: {}", item.id);
-
-                        // Access IP attributes
-                        if let Some(country) = item.attributes.get("country") {
-                            println!("    Country: {}", country);
-                        }
-
-                        if let Some(as_owner) = item.attributes.get("as_owner") {
-                            println!("    AS Owner: {}", as_owner);
-                        }
-
-                        if let Some(reputation) = item.attributes.get("reputation") {
-                            println!("    Reputation: {}", reputation);
-                        }
-                    }
-                }
-            }
-            */
         }
         Err(e) => {
             println!("✗ Error downloading IP feed: {}", e);
@@ -172,7 +129,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // ========== URL INTELLIGENCE FEED ==========
+    Ok(())
+}
+
+/// Test URL intelligence feeds
+async fn test_url_feeds(
+    feeds: &virustotal_rs::FeedsClient,
+    feed_time: &str,
+    hourly_time: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     println!("\n3. URL INTELLIGENCE FEED");
     println!("------------------------");
 
@@ -188,38 +153,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let filename = format!("url_feed_{}.bz2", feed_time);
             std::fs::write(&filename, &batch_data)?;
             println!("  Saved to: {}", filename);
-
-            // Example of parsing URL feed lines
-            /*
-            use bzip2::read::BzDecoder;
-            use std::io::BufRead;
-
-            let decoder = BzDecoder::new(&batch_data[..]);
-            let reader = std::io::BufReader::new(decoder);
-
-            for line in reader.lines() {
-                if let Ok(line) = line {
-                    if let Ok(item) = feeds.parse_url_feed_line(&line) {
-                        println!("  URL: {}", item.id);
-
-                        // Access URL attributes
-                        if let Some(final_url) = item.attributes.get("last_final_url") {
-                            println!("    Final URL: {}", final_url);
-                        }
-
-                        // Check submitter information
-                        if let Some(submitter) = &item.submitter {
-                            if let Some(country) = &submitter.country {
-                                println!("    Submitted from: {}", country);
-                            }
-                            if let Some(method) = &submitter.method {
-                                println!("    Submission method: {}", method);
-                            }
-                        }
-                    }
-                }
-            }
-            */
         }
         Err(e) => {
             println!("✗ Error downloading URL feed: {}", e);
@@ -244,7 +177,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // ========== PARSE EXAMPLE FEED LINES ==========
+    Ok(())
+}
+
+/// Test parsing example feed lines
+fn test_feed_line_parsing(
+    feeds: &virustotal_rs::FeedsClient,
+) -> Result<(), Box<dyn std::error::Error>> {
     println!("\n4. PARSE EXAMPLE FEED LINES");
     println!("----------------------------");
 
@@ -344,7 +283,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => println!("✗ Error parsing URL: {}", e),
     }
 
-    // ========== TIME RANGE GENERATION ==========
+    Ok(())
+}
+
+/// Demonstrate time range generation
+fn demonstrate_time_ranges() {
     println!("\n5. TIME RANGE GENERATION");
     println!("------------------------");
 
@@ -364,8 +307,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  3. Decompress bzip2 data");
     println!("  4. Parse each line as JSON");
     println!("  5. Process according to your needs");
+}
 
-    // ========== IMPORTANT NOTES ==========
+/// Print important notes about the feeds
+fn print_important_notes() {
     println!("\n6. IMPORTANT NOTES");
     println!("------------------");
 
@@ -405,11 +350,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  - Handle 404s gracefully (skip missing batches)");
     println!("  - Store processed data for historical analysis");
     println!("  - Monitor feed lag to ensure timely processing");
+}
 
+/// Print final completion message
+fn print_completion_message() {
     println!("\n========================================================");
     println!("Domain, IP, and URL Intelligence Feeds Testing Complete!");
     println!("\nNOTE: All operations require appropriate feed licenses.");
     println!("Without proper privileges, operations will fail with 403/404 errors.");
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let client = initialize_client()?;
+    let feeds = client.feeds();
+
+    print_introduction();
+    print_feed_times();
+
+    // Example feed time
+    let feed_time = "202312010802"; // December 1, 2023 08:02 UTC
+    let hourly_time = "2023120108"; // December 1, 2023 08:00-08:59 UTC
+
+    test_domain_feeds(&feeds, feed_time, hourly_time).await?;
+    test_ip_feeds(&feeds, feed_time, hourly_time).await?;
+    test_url_feeds(&feeds, feed_time, hourly_time).await?;
+    test_feed_line_parsing(&feeds)?;
+    demonstrate_time_ranges();
+    print_important_notes();
+    print_completion_message();
 
     Ok(())
 }

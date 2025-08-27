@@ -24,6 +24,7 @@ pub mod metadata;
 pub mod objects;
 pub mod popular_threat_categories;
 pub mod private_files;
+pub mod private_files_client;
 pub mod private_urls;
 pub mod rate_limit;
 pub mod references;

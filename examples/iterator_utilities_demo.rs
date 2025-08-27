@@ -4,20 +4,26 @@ use virustotal_rs::{
     ApiTier, Client, Comment, Result,
 };
 
-#[tokio::main]
-async fn main() -> Result<()> {
+/// Initialize the demo client
+fn initialize_demo_client() -> Result<Client> {
     // Create a client (you'd use your actual API key here)
     let client = Client::new("your_api_key_here".into(), ApiTier::Public)?;
+    Ok(client)
+}
 
+/// Print the main demo header
+fn print_demo_header() {
     println!("=== VirusTotal Iterator Utilities Demo ===\n");
+}
 
-    // Example 1: Basic enhanced iteration with new utilities
+/// Demonstrate basic enhanced iteration capabilities
+fn demonstrate_basic_iteration(client: &Client) {
     println!("1. Basic Enhanced Iteration");
     println!("--------------------------");
 
     // Create an enhanced collection iterator directly
     let enhanced_iter: EnhancedCollectionIterator<'_, Comment> =
-        EnhancedCollectionIterator::new(&client, "comments").with_limit(3);
+        EnhancedCollectionIterator::new(client, "comments").with_limit(3);
 
     println!("Created enhanced iterator for comments endpoint");
     println!(
@@ -25,13 +31,15 @@ async fn main() -> Result<()> {
         enhanced_iter.total_fetched(),
         enhanced_iter.batch_count()
     );
+}
 
-    // Example 2: Chained operations with progress tracking
+/// Demonstrate chained operations with progress tracking
+async fn demonstrate_chained_operations(client: &Client) -> Result<()> {
     println!("\n2. Chained Operations with Progress");
     println!("----------------------------------");
 
     let enhanced_iter: EnhancedCollectionIterator<'_, Comment> =
-        EnhancedCollectionIterator::new(&client, "comments").with_limit(5);
+        EnhancedCollectionIterator::new(client, "comments").with_limit(5);
 
     let progress_tracker =
         ProgressTracker::new("Comment Processing").with_update_interval(Duration::from_millis(100));
@@ -56,7 +64,11 @@ async fn main() -> Result<()> {
         }
     }
 
-    // Example 3: Map and filter operations
+    Ok(())
+}
+
+/// Demonstrate available map and filter operations
+fn demonstrate_map_filter_operations() {
     println!("\n3. Map and Filter Operations");
     println!("----------------------------");
 
@@ -70,8 +82,10 @@ async fn main() -> Result<()> {
     println!("• retry_on_error() - Automatic retry on failures");
     println!("• with_progress() - Progress tracking");
     println!("• cached() - Cache results for reuse");
+}
 
-    // Example 4: Collectable utilities
+/// Demonstrate available collection utilities
+fn demonstrate_collection_utilities() {
     println!("\n4. Collection Utilities");
     println!("----------------------");
     println!("Available collection methods:");
@@ -79,7 +93,10 @@ async fn main() -> Result<()> {
     println!("• collect_set() - Collect into HashSet (deduplicates)");
     println!("• take(n) - Take first N items");
     println!("• skip(n) - Skip first N items");
+}
 
+/// Print the final demo completion message
+fn print_demo_completion() {
     println!("\n=== Demo Complete ===");
     println!("\nThis demonstrates the comprehensive iterator utilities that eliminate");
     println!("duplication across the VirusTotal Rust library by providing:");
@@ -88,6 +105,18 @@ async fn main() -> Result<()> {
     println!("• Progress tracking and throttling");
     println!("• Functional programming patterns (map, filter, etc.)");
     println!("• Easy collection into different container types");
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    let client = initialize_demo_client()?;
+
+    print_demo_header();
+    demonstrate_basic_iteration(&client);
+    demonstrate_chained_operations(&client).await?;
+    demonstrate_map_filter_operations();
+    demonstrate_collection_utilities();
+    print_demo_completion();
 
     Ok(())
 }

@@ -10,11 +10,8 @@ use virustotal_rs::{common::AnalysisStats, ApiTier};
 mod common;
 use common::*;
 
-#[tokio::main]
-async fn main() -> ExampleResult<()> {
-    print_header("Testing Common Utilities Module");
-
-    // Test 1: API key retrieval utilities
+/// Tests API key retrieval utilities
+async fn test_api_key_utilities() -> ExampleResult<()> {
     print_test_header("API Key Utilities");
 
     // Save original env state
@@ -40,7 +37,13 @@ async fn main() -> ExampleResult<()> {
     assert_eq!(private_key, "private_key_xyz");
     print_success("get_private_api_key works with private key");
 
-    // Test 2: Client creation utilities
+    // Restore original environment state
+    restore_environment_state(original_vt_key, original_vti_key);
+    Ok(())
+}
+
+/// Tests client creation utilities
+async fn test_client_creation_utilities() -> ExampleResult<()> {
     print_test_header("Client Creation Utilities");
 
     env::set_var("VT_API_KEY", "demo_key_for_client");
@@ -49,8 +52,11 @@ async fn main() -> ExampleResult<()> {
         Ok(_) => print_success("create_client_from_env works"),
         Err(_) => print_info("create_client_from_env tested (expected with demo key)"),
     }
+    Ok(())
+}
 
-    // Test 3: String utilities
+/// Tests string utilities
+async fn test_string_utilities() -> ExampleResult<()> {
     print_test_header("String Utilities");
 
     let short_text = "Short text";
@@ -69,8 +75,11 @@ async fn main() -> ExampleResult<()> {
     let truncated_comment = truncate_comment(&comment);
     assert!(truncated_comment.len() <= 100);
     print_success("truncate_comment works with standard length");
+    Ok(())
+}
 
-    // Test 4: Display utilities
+/// Tests display utilities
+async fn test_display_utilities() -> ExampleResult<()> {
     print_test_header("Display Utilities");
 
     print_separator(Some(30));
@@ -79,8 +88,11 @@ async fn main() -> ExampleResult<()> {
     print_warning("This is a warning message");
     print_info("This is an info message");
     print_separator(None);
+    Ok(())
+}
 
-    // Test 5: Result handling utilities
+/// Tests result handling utilities
+async fn test_result_handling_utilities() -> ExampleResult<()> {
     print_test_header("Result Handling Utilities");
 
     // Test with Ok result
@@ -104,8 +116,11 @@ async fn main() -> ExampleResult<()> {
         },
         "Handler test failed",
     );
+    Ok(())
+}
 
-    // Test 6: Analysis stats utilities
+/// Tests analysis stats utilities
+async fn test_analysis_stats_utilities() -> ExampleResult<()> {
     print_test_header("Analysis Stats Utilities");
 
     let stats = AnalysisStats {
@@ -122,11 +137,14 @@ async fn main() -> ExampleResult<()> {
     print_analysis_stats("Test Analysis", &stats);
     print_analysis_stats_detailed("Detailed Analysis", &stats);
 
-    // Test 7: Vote stats utilities
+    // Test vote stats utilities
     print_test_header("Vote Statistics");
     print_vote_stats("Community Votes", 45, 2);
+    Ok(())
+}
 
-    // Test 8: File size formatting
+/// Tests file size formatting utilities
+async fn test_file_size_formatting() -> ExampleResult<()> {
     print_test_header("File Size Formatting");
 
     assert_eq!(format_file_size(0), "0 B");
@@ -143,8 +161,11 @@ async fn main() -> ExampleResult<()> {
         format_file_size(1073741824)
     );
     print_success("File size formatting works correctly");
+    Ok(())
+}
 
-    // Test 9: Rate limiting utilities (brief test)
+/// Tests rate limiting utilities
+async fn test_rate_limiting_utilities() -> ExampleResult<()> {
     print_test_header("Rate Limiting (Quick Test)");
 
     let start = std::time::Instant::now();
@@ -154,8 +175,11 @@ async fn main() -> ExampleResult<()> {
     if elapsed.as_secs() >= 1 {
         print_success("rate_limit_wait works correctly");
     }
+    Ok(())
+}
 
-    // Test 10: Constants
+/// Tests constants availability
+async fn test_constants() -> ExampleResult<()> {
     print_test_header("Constants");
 
     #[allow(clippy::len_zero)] // Intentional test for non-empty constants
@@ -174,8 +198,14 @@ async fn main() -> ExampleResult<()> {
     println!("  URL: {}", SAMPLE_URL);
     println!("  API key vars: {:?}", API_KEY_VARS);
     print_success("All constants are properly defined");
+    Ok(())
+}
 
-    // Restore original environment
+/// Restores the original environment state after testing
+fn restore_environment_state(
+    original_vt_key: Option<String>,
+    original_vti_key: Option<String>,
+) {
     match original_vt_key {
         Some(key) => env::set_var("VT_API_KEY", key),
         None => {
@@ -189,8 +219,10 @@ async fn main() -> ExampleResult<()> {
         }
     }
     env::remove_var("VT_PRIVATE_API_KEY");
+}
 
-    // Final summary
+/// Prints the final test summary
+fn print_final_summary() {
     print_separator(Some(80));
     print_success("All common utilities tests completed successfully!");
 
@@ -205,6 +237,22 @@ async fn main() -> ExampleResult<()> {
     println!("✓ File size formatting (format_file_size)");
     println!("✓ Rate limiting utilities (rate_limit_wait)");
     println!("✓ Constants (SAMPLE_*, API_KEY_VARS)");
+}
 
+#[tokio::main]
+async fn main() -> ExampleResult<()> {
+    print_header("Testing Common Utilities Module");
+
+    test_api_key_utilities().await?;
+    test_client_creation_utilities().await?;
+    test_string_utilities().await?;
+    test_display_utilities().await?;
+    test_result_handling_utilities().await?;
+    test_analysis_stats_utilities().await?;
+    test_file_size_formatting().await?;
+    test_rate_limiting_utilities().await?;
+    test_constants().await?;
+
+    print_final_summary();
     Ok(())
 }

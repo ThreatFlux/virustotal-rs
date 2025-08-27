@@ -21,7 +21,7 @@ jobs:
       uses: actions/checkout@v5
 
     - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@stable
+      uses: dtolnay/rust-toolchain@5d458579430fc14a04a08a1e7d3694f545e91ce6 # stable
 
     - name: Cache cargo registry
       uses: actions/cache@v4
@@ -92,7 +92,7 @@ jobs:
       uses: actions/checkout@v5
 
     - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@stable
+      uses: dtolnay/rust-toolchain@5d458579430fc14a04a08a1e7d3694f545e91ce6 # stable
 
     - name: Cache cargo registry
       uses: actions/cache@v4
@@ -138,7 +138,7 @@ jobs:
       uses: actions/checkout@v5
 
     - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@stable
+      uses: dtolnay/rust-toolchain@5d458579430fc14a04a08a1e7d3694f545e91ce6 # stable
       with:
         components: clippy
 
@@ -174,7 +174,7 @@ jobs:
       uses: actions/checkout@v5
 
     - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@stable
+      uses: dtolnay/rust-toolchain@5d458579430fc14a04a08a1e7d3694f545e91ce6 # stable
 
     - name: Cache cargo registry
       uses: actions/cache@v4
@@ -275,7 +275,7 @@ jobs:
       uses: actions/checkout@v5
 
     - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@stable
+      uses: dtolnay/rust-toolchain@5d458579430fc14a04a08a1e7d3694f545e91ce6 # stable
 
     - name: Install cargo-readme
       run: cargo install cargo-readme
