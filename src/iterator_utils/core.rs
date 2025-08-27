@@ -7,16 +7,35 @@ use serde::de::DeserializeOwned;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
+/// Configuration for enhanced collection iterator
+#[derive(Clone, Default)]
+pub struct IteratorConfig {
+    pub cursor: Option<String>,
+    pub limit: Option<u32>,
+    pub rate_limiter: Option<Arc<crate::client_utils::TokenBucketLimiter>>,
+}
+
+impl std::fmt::Debug for IteratorConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("IteratorConfig")
+            .field("cursor", &self.cursor)
+            .field("limit", &self.limit)
+            .field(
+                "rate_limiter",
+                &self.rate_limiter.as_ref().map(|_| "TokenBucketLimiter"),
+            )
+            .finish()
+    }
+}
+
 /// Enhanced collection iterator with rate limiting and progress tracking
 pub struct EnhancedCollectionIterator<'a, T> {
     client: &'a Client,
     url: String,
-    cursor: Option<String>,
+    config: IteratorConfig,
     finished: bool,
-    limit: Option<u32>,
     total_fetched: u64,
     batch_count: u32,
-    rate_limiter: Option<Arc<crate::client_utils::TokenBucketLimiter>>,
     _phantom: PhantomData<T>,
 }
 
@@ -25,17 +44,20 @@ impl<'a, T> EnhancedCollectionIterator<'a, T>
 where
     T: DeserializeOwned + Clone,
 {
-    /// Create a new enhanced iterator
+    /// Create a new enhanced iterator with default configuration
     pub fn new(client: &'a Client, url: impl Into<String>) -> Self {
+        Self::with_config(client, url, IteratorConfig::default())
+    }
+
+    /// Create a new enhanced iterator with custom configuration
+    pub fn with_config(client: &'a Client, url: impl Into<String>, config: IteratorConfig) -> Self {
         Self {
             client,
             url: url.into(),
-            cursor: None,
+            config,
             finished: false,
-            limit: None,
             total_fetched: 0,
             batch_count: 0,
-            rate_limiter: None,
             _phantom: PhantomData,
         }
     }
@@ -48,7 +70,7 @@ where
 {
     /// Set batch size limit
     pub fn with_limit(mut self, limit: u32) -> Self {
-        self.limit = Some(limit);
+        self.config.limit = Some(limit);
         self
     }
 
@@ -57,7 +79,7 @@ where
         mut self,
         limiter: Arc<crate::client_utils::TokenBucketLimiter>,
     ) -> Self {
-        self.rate_limiter = Some(limiter);
+        self.config.rate_limiter = Some(limiter);
         self
     }
 }
@@ -88,11 +110,11 @@ where
         let mut url = self.url.clone();
         let mut query_params = Vec::new();
 
-        if let Some(cursor) = &self.cursor {
+        if let Some(cursor) = &self.config.cursor {
             query_params.push(format!("cursor={}", cursor));
         }
 
-        if let Some(limit) = self.limit {
+        if let Some(limit) = self.config.limit {
             query_params.push(format!("limit={}", limit));
         }
 
@@ -110,8 +132,8 @@ where
         self.batch_count += 1;
 
         if let Some(meta) = response.meta {
-            self.cursor = meta.cursor;
-            if self.cursor.is_none() {
+            self.config.cursor = meta.cursor;
+            if self.config.cursor.is_none() {
                 self.finished = true;
             }
         } else {
@@ -135,7 +157,7 @@ where
         }
 
         // Apply rate limiting if configured
-        if let Some(ref limiter) = self.rate_limiter {
+        if let Some(ref limiter) = self.config.rate_limiter {
             limiter.check_rate_limit().await?;
         }
 
