@@ -241,10 +241,47 @@ async fn test_invalid_zip_status(private_files: &PrivateFilesClient<'_>) {
 }
 
 async fn test_invalid_zip_download(private_files: &PrivateFilesClient<'_>) {
-    println!("\nTrying to download non-existent ZIP...");
+    println!("\nTesting various invalid ZIP download scenarios...");
+
+    test_nonexistent_zip_download(private_files).await;
+    test_malformed_zip_id_download(private_files).await;
+    test_empty_zip_id_download(private_files).await;
+    test_expired_zip_download(private_files).await;
+}
+
+/// Test downloading a ZIP file that doesn't exist
+async fn test_nonexistent_zip_download(private_files: &PrivateFilesClient<'_>) {
+    println!("  Testing non-existent ZIP download...");
     match private_files.download_zip("not_ready_zip_id").await {
-        Ok(_) => println!("  Unexpected success"),
-        Err(e) => println!("  Expected error: {}", e),
+        Ok(_) => println!("    ✗ Unexpected success"),
+        Err(e) => println!("    ✓ Expected error: {}", e),
+    }
+}
+
+/// Test downloading with malformed ZIP ID
+async fn test_malformed_zip_id_download(private_files: &PrivateFilesClient<'_>) {
+    println!("  Testing malformed ZIP ID download...");
+    match private_files.download_zip("invalid@zip#id!").await {
+        Ok(_) => println!("    ✗ Unexpected success"),
+        Err(e) => println!("    ✓ Expected error: {}", e),
+    }
+}
+
+/// Test downloading with empty ZIP ID
+async fn test_empty_zip_id_download(private_files: &PrivateFilesClient<'_>) {
+    println!("  Testing empty ZIP ID download...");
+    match private_files.download_zip("").await {
+        Ok(_) => println!("    ✗ Unexpected success"),
+        Err(e) => println!("    ✓ Expected error: {}", e),
+    }
+}
+
+/// Test downloading an expired or timed-out ZIP
+async fn test_expired_zip_download(private_files: &PrivateFilesClient<'_>) {
+    println!("  Testing expired ZIP download...");
+    match private_files.download_zip("expired_zip_12345").await {
+        Ok(_) => println!("    ✗ Unexpected success"),
+        Err(e) => println!("    ✓ Expected error: {}", e),
     }
 }
 

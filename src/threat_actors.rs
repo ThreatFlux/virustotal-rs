@@ -3,6 +3,7 @@ use crate::{Client, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
+use std::sync::LazyLock;
 
 /// Represents a Threat Actor in `VirusTotal`
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -101,7 +102,7 @@ impl fmt::Display for ThreatActorOrder {
 }
 
 /// Options for relationship ordering
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RelationshipOrder {
     // For collections
     CreationDateAsc,
@@ -134,34 +135,59 @@ pub enum RelationshipOrder {
     StatusDesc,
 }
 
+static RELATIONSHIP_ORDER_STRINGS: LazyLock<HashMap<RelationshipOrder, &'static str>> =
+    LazyLock::new(|| {
+        HashMap::from([
+            (RelationshipOrder::CreationDateAsc, "creation_date+"),
+            (RelationshipOrder::CreationDateDesc, "creation_date-"),
+            (
+                RelationshipOrder::LastModificationDateAsc,
+                "last_modification_date+",
+            ),
+            (
+                RelationshipOrder::LastModificationDateDesc,
+                "last_modification_date-",
+            ),
+            (RelationshipOrder::OwnerAsc, "owner+"),
+            (RelationshipOrder::OwnerDesc, "owner-"),
+            (RelationshipOrder::NameAsc, "name+"),
+            (RelationshipOrder::NameDesc, "name-"),
+            (RelationshipOrder::LastUpdateDateAsc, "last_update_date+"),
+            (RelationshipOrder::LastUpdateDateDesc, "last_update_date-"),
+            (RelationshipOrder::PositivesAsc, "positives+"),
+            (RelationshipOrder::PositivesDesc, "positives-"),
+            (
+                RelationshipOrder::FirstSubmissionDateAsc,
+                "first_submission_date+",
+            ),
+            (
+                RelationshipOrder::FirstSubmissionDateDesc,
+                "first_submission_date-",
+            ),
+            (
+                RelationshipOrder::LastSubmissionDateAsc,
+                "last_submission_date+",
+            ),
+            (
+                RelationshipOrder::LastSubmissionDateDesc,
+                "last_submission_date-",
+            ),
+            (RelationshipOrder::TimesSubmittedAsc, "times_submitted+"),
+            (RelationshipOrder::TimesSubmittedDesc, "times_submitted-"),
+            (RelationshipOrder::SizeAsc, "size+"),
+            (RelationshipOrder::SizeDesc, "size-"),
+            (RelationshipOrder::IpAsc, "ip+"),
+            (RelationshipOrder::IpDesc, "ip-"),
+            (RelationshipOrder::StatusAsc, "status+"),
+            (RelationshipOrder::StatusDesc, "status-"),
+        ])
+    });
+
 impl fmt::Display for RelationshipOrder {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let s = match self {
-            RelationshipOrder::CreationDateAsc => "creation_date+",
-            RelationshipOrder::CreationDateDesc => "creation_date-",
-            RelationshipOrder::LastModificationDateAsc => "last_modification_date+",
-            RelationshipOrder::LastModificationDateDesc => "last_modification_date-",
-            RelationshipOrder::OwnerAsc => "owner+",
-            RelationshipOrder::OwnerDesc => "owner-",
-            RelationshipOrder::NameAsc => "name+",
-            RelationshipOrder::NameDesc => "name-",
-            RelationshipOrder::LastUpdateDateAsc => "last_update_date+",
-            RelationshipOrder::LastUpdateDateDesc => "last_update_date-",
-            RelationshipOrder::PositivesAsc => "positives+",
-            RelationshipOrder::PositivesDesc => "positives-",
-            RelationshipOrder::FirstSubmissionDateAsc => "first_submission_date+",
-            RelationshipOrder::FirstSubmissionDateDesc => "first_submission_date-",
-            RelationshipOrder::LastSubmissionDateAsc => "last_submission_date+",
-            RelationshipOrder::LastSubmissionDateDesc => "last_submission_date-",
-            RelationshipOrder::TimesSubmittedAsc => "times_submitted+",
-            RelationshipOrder::TimesSubmittedDesc => "times_submitted-",
-            RelationshipOrder::SizeAsc => "size+",
-            RelationshipOrder::SizeDesc => "size-",
-            RelationshipOrder::IpAsc => "ip+",
-            RelationshipOrder::IpDesc => "ip-",
-            RelationshipOrder::StatusAsc => "status+",
-            RelationshipOrder::StatusDesc => "status-",
-        };
+        let s = RELATIONSHIP_ORDER_STRINGS
+            .get(self)
+            .expect("All RelationshipOrder variants should be in lookup table");
         write!(f, "{}", s)
     }
 }

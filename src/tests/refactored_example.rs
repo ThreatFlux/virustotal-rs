@@ -163,12 +163,33 @@ mod refactored_tests {
     }
 
     // BEFORE: Complex collection testing
+    // NOTE: This test intentionally demonstrates verbose, repetitive "old style" code
+    // with lots of boilerplate for educational comparison with the "new style" version below.
+    // The verbosity is intentional to show the contrast.
     #[tokio::test]
     async fn old_style_collection_test() {
+        let (mock_server, client) = setup_old_style_client().await;
+        let collection_response = create_manual_collection_response();
+        mount_old_style_collection_mock(&mock_server, collection_response).await;
+
+        let result: crate::Result<serde_json::Value> = client.get("files").await;
+        assert!(result.is_ok());
+
+        let response_data = result.unwrap();
+        assert_eq!(response_data["data"].as_array().unwrap().len(), 2);
+        assert_eq!(response_data["meta"]["count"], 2);
+        assert!(response_data["links"]["next"]
+            .as_str()
+            .unwrap()
+            .contains("next123"));
+    }
+
+    // Helper functions for old_style_collection_test - demonstrating the verbose approach
+    async fn setup_old_style_client() -> (wiremock::MockServer, crate::client::Client) {
         use crate::auth::ApiTier;
         use crate::client::ClientBuilder;
         use std::time::Duration;
-        use wiremock::{MockServer, ResponseTemplate};
+        use wiremock::MockServer;
 
         let mock_server = MockServer::start().await;
         let client = ClientBuilder::new()
@@ -179,7 +200,11 @@ mod refactored_tests {
             .build()
             .unwrap();
 
-        // Manual collection construction - lots of repetition
+        (mock_server, client)
+    }
+
+    fn create_manual_collection_response() -> serde_json::Value {
+        // Manual collection construction - lots of repetition (intentionally verbose for demo)
         let file1 = json!({
             "type": "file",
             "id": "hash1",
@@ -200,11 +225,18 @@ mod refactored_tests {
             }
         });
 
-        let collection_response = json!({
+        json!({
             "data": [file1, file2],
             "meta": { "count": 2 },
             "links": { "next": "https://api.example.com/files?cursor=next123" }
-        });
+        })
+    }
+
+    async fn mount_old_style_collection_mock(
+        mock_server: &wiremock::MockServer,
+        collection_response: serde_json::Value,
+    ) {
+        use wiremock::ResponseTemplate;
 
         let response = ResponseTemplate::new(200)
             .append_header("Content-Type", "application/json")
@@ -214,19 +246,8 @@ mod refactored_tests {
             .and(path("/files"))
             .and(header("x-apikey", "test_api_key"))
             .respond_with(response)
-            .mount(&mock_server)
+            .mount(mock_server)
             .await;
-
-        let result: crate::Result<serde_json::Value> = client.get("files").await;
-        assert!(result.is_ok());
-
-        let response_data = result.unwrap();
-        assert_eq!(response_data["data"].as_array().unwrap().len(), 2);
-        assert_eq!(response_data["meta"]["count"], 2);
-        assert!(response_data["links"]["next"]
-            .as_str()
-            .unwrap()
-            .contains("next123"));
     }
 
     // AFTER: Elegant collection testing

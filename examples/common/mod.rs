@@ -827,6 +827,7 @@ pub mod error_handling {
 
 /// Enhanced file information display patterns
 pub mod file_info {
+    use virustotal_rs::files::FileAttributes;
     use virustotal_rs::File;
 
     /// Standard file information display pattern used across examples
@@ -835,42 +836,58 @@ pub mod file_info {
     pub fn print_standard_file_info(file: &File) {
         println!("\n✓ File retrieved successfully!");
 
-        if let Some(type_desc) = &file.object.attributes.type_description {
+        print_file_basic_info(&file.object.attributes);
+        print_file_hashes(&file.object.attributes);
+        print_file_names(&file.object.attributes);
+        print_file_analysis_info(&file.object.attributes);
+    }
+
+    /// Print basic file information (type and size)
+    fn print_file_basic_info(attrs: &FileAttributes) {
+        if let Some(type_desc) = &attrs.type_description {
             println!("  Type: {}", type_desc);
         }
 
-        if let Some(size) = file.object.attributes.size {
+        if let Some(size) = attrs.size {
             println!("  Size: {} bytes", size);
         }
+    }
 
-        if let Some(sha256) = &file.object.attributes.sha256 {
+    /// Print file hashes (SHA256, MD5, SHA1)
+    fn print_file_hashes(attrs: &FileAttributes) {
+        if let Some(sha256) = &attrs.sha256 {
             println!("  SHA256: {}", sha256);
         }
 
-        if let Some(md5) = &file.object.attributes.md5 {
+        if let Some(md5) = &attrs.md5 {
             println!("  MD5: {}", md5);
         }
 
-        if let Some(sha1) = &file.object.attributes.sha1 {
+        if let Some(sha1) = &attrs.sha1 {
             println!("  SHA1: {}", sha1);
         }
+    }
 
-        if let Some(names) = &file.object.attributes.names {
+    /// Print file names
+    fn print_file_names(attrs: &FileAttributes) {
+        if let Some(names) = &attrs.names {
             if !names.is_empty() {
                 println!("  Names: {:?}", names);
             }
         }
 
-        if let Some(meaningful_name) = &file.object.attributes.meaningful_name {
+        if let Some(meaningful_name) = &attrs.meaningful_name {
             println!("  Meaningful name: {}", meaningful_name);
         }
+    }
 
-        // Use the existing print_analysis_stats function
-        if let Some(stats) = &file.object.attributes.last_analysis_stats {
+    /// Print file analysis information
+    fn print_file_analysis_info(attrs: &FileAttributes) {
+        if let Some(stats) = &attrs.last_analysis_stats {
             super::print_analysis_stats("Last Analysis Stats", stats);
         }
 
-        if let Some(reputation) = file.object.attributes.reputation {
+        if let Some(reputation) = attrs.reputation {
             println!("  Reputation: {}", reputation);
         }
     }

@@ -207,7 +207,14 @@ fn parse_args() -> Args {
     let args: Vec<String> = std::env::args().collect();
     let mut parsed_args = create_default_args();
 
+    // Validate that we're not processing too many arguments (security check)
+    if args.len() > 20 {
+        eprintln!("Error: Too many arguments provided. Maximum 20 arguments allowed.");
+        std::process::exit(1);
+    }
+
     parse_command_line_arguments(&args, &mut parsed_args);
+    validate_parsed_args(&parsed_args);
     parsed_args
 }
 
@@ -223,10 +230,16 @@ fn create_default_args() -> Args {
     }
 }
 
-/// Parse command line arguments
+/// Parse command line arguments with security validation
 fn parse_command_line_arguments(args: &[String], parsed_args: &mut Args) {
     let mut i = 1;
     while i < args.len() {
+        // Validate argument length to prevent buffer overflow attacks
+        if args[i].len() > 256 {
+            eprintln!("Error: Argument too long. Maximum 256 characters allowed.");
+            std::process::exit(1);
+        }
+
         match args[i].as_str() {
             "--user" | "-u" => i = parse_string_arg(args, i, &mut parsed_args.user),
             "--role" | "-r" => i = parse_string_arg(args, i, &mut parsed_args.role),
@@ -236,37 +249,153 @@ fn parse_command_line_arguments(args: &[String], parsed_args: &mut Args) {
             "--permissions" | "-p" => {
                 i = parse_optional_string_arg(args, i, &mut parsed_args.permissions)
             }
+            arg if arg.starts_with('-') => {
+                eprintln!("Error: Unknown argument: {}", arg);
+                std::process::exit(1);
+            }
             _ => i += 1,
         }
     }
 }
 
-/// Parse string argument
+/// Parse string argument with validation
 fn parse_string_arg(args: &[String], i: usize, target: &mut String) -> usize {
     if i + 1 < args.len() {
-        *target = args[i + 1].clone();
+        let value = &args[i + 1];
+        // Validate argument value length and content
+        if value.len() > 128 {
+            eprintln!("Error: Argument value too long. Maximum 128 characters allowed.");
+            std::process::exit(1);
+        }
+        if value.is_empty() {
+            eprintln!("Error: Argument value cannot be empty.");
+            std::process::exit(1);
+        }
+        *target = sanitize_string(value);
         i + 2
     } else {
-        i + 1
+        eprintln!("Error: Missing value for argument: {}", args[i]);
+        std::process::exit(1);
     }
 }
 
-/// Parse optional string argument
+/// Parse optional string argument with validation
 fn parse_optional_string_arg(args: &[String], i: usize, target: &mut Option<String>) -> usize {
     if i + 1 < args.len() {
-        *target = Some(args[i + 1].clone());
+        let value = &args[i + 1];
+        // Validate argument value length and content
+        if value.len() > 512 {
+            eprintln!("Error: Argument value too long. Maximum 512 characters allowed.");
+            std::process::exit(1);
+        }
+        if !value.is_empty() {
+            *target = Some(sanitize_string(value));
+        }
         i + 2
     } else {
-        i + 1
+        eprintln!("Error: Missing value for argument: {}", args[i]);
+        std::process::exit(1);
     }
 }
 
-/// Parse expiry argument
+/// Parse expiry argument with validation
 fn parse_expiry_arg(args: &[String], i: usize, target: &mut u64) -> usize {
     if i + 1 < args.len() {
-        *target = args[i + 1].parse().unwrap_or(86400);
+        let value = &args[i + 1];
+        match value.parse::<u64>() {
+            Ok(expiry) => {
+                // Validate expiry bounds (1 second to 1 year)
+                if !(1..=31_536_000).contains(&expiry) {
+                    eprintln!(
+                        "Error: Expiry must be between 1 second and 1 year (31536000 seconds)."
+                    );
+                    std::process::exit(1);
+                }
+                *target = expiry;
+            }
+            Err(_) => {
+                eprintln!("Error: Invalid expiry value. Must be a positive integer.");
+                std::process::exit(1);
+            }
+        }
         i + 2
     } else {
-        i + 1
+        eprintln!("Error: Missing value for argument: {}", args[i]);
+        std::process::exit(1);
+    }
+}
+
+/// Sanitize string input by removing control characters and limiting character set
+fn sanitize_string(input: &str) -> String {
+    input
+        .chars()
+        .filter(|&c| {
+            // Allow alphanumeric, space, hyphen, underscore, period, comma, colon
+            c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '.' | ',' | ':')
+        })
+        .collect()
+}
+
+/// Validate parsed arguments for security
+fn validate_parsed_args(args: &Args) {
+    // Validate user field
+    if args.user.is_empty() || args.user.len() > 64 {
+        eprintln!("Error: User must be 1-64 characters long.");
+        std::process::exit(1);
+    }
+
+    // Validate role field - only allow specific values
+    match args.role.as_str() {
+        "admin" | "user" | "readonly" => {}
+        _ => {
+            eprintln!("Error: Role must be one of: admin, user, readonly");
+            std::process::exit(1);
+        }
+    }
+
+    // Validate output format
+    match args.output.as_str() {
+        "token" | "json" | "full" => {}
+        _ => {
+            eprintln!("Error: Output format must be one of: token, json, full");
+            std::process::exit(1);
+        }
+    }
+
+    // Validate secret length if provided
+    if let Some(secret) = &args.secret {
+        if secret.len() < 8 {
+            eprintln!("Error: Secret must be at least 8 characters long.");
+            std::process::exit(1);
+        }
+        if secret.len() > 256 {
+            eprintln!("Error: Secret must not exceed 256 characters.");
+            std::process::exit(1);
+        }
+    }
+
+    // Validate permissions if provided
+    if let Some(permissions) = &args.permissions {
+        let perms: Vec<&str> = permissions.split(',').collect();
+        if perms.len() > 10 {
+            eprintln!("Error: Maximum 10 permissions allowed.");
+            std::process::exit(1);
+        }
+
+        // Validate each permission
+        for perm in perms {
+            let trimmed = perm.trim();
+            if trimmed.is_empty() || trimmed.len() > 50 {
+                eprintln!("Error: Each permission must be 1-50 characters long.");
+                std::process::exit(1);
+            }
+            if !trimmed
+                .chars()
+                .all(|c| c.is_alphanumeric() || matches!(c, ':' | '_' | '-'))
+            {
+                eprintln!("Error: Permissions can only contain alphanumeric characters, colons, underscores, and hyphens.");
+                std::process::exit(1);
+            }
+        }
     }
 }
