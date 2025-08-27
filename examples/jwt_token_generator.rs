@@ -204,7 +204,7 @@ fn format_timestamp(timestamp: usize) -> String {
 #[allow(unexpected_cfgs)]
 #[cfg(all(feature = "mcp-jwt", not(feature = "clap")))]
 fn parse_args() -> Args {
-    let args: Vec<String> = std::env::args().collect();
+    let args = get_safe_args();
     let mut parsed_args = create_default_args();
 
     // Validate that we're not processing too many arguments (security check)
@@ -218,7 +218,54 @@ fn parse_args() -> Args {
     parsed_args
 }
 
+/// Securely collect command line arguments with validation
+#[cfg(all(feature = "mcp-jwt", not(feature = "clap")))]
+fn get_safe_args() -> Vec<String> {
+    // Use env::args_os() for better Unicode handling and security
+    let args: Vec<String> = std::env::args_os()
+        .enumerate()
+        .filter_map(|(i, arg)| {
+            // Skip if we have too many args (early termination for security)
+            if i > 20 {
+                return None;
+            }
+            
+            // Convert OsString to String safely
+            match arg.to_str() {
+                Some(s) => {
+                    // Pre-validate each argument for basic security
+                    if s.len() > 512 {
+                        eprintln!("Error: Argument too long at position {}. Maximum 512 characters allowed.", i);
+                        std::process::exit(1);
+                    }
+                    
+                    // Filter out potentially dangerous characters early
+                    if s.contains('\0') || s.contains('\x1b') {
+                        eprintln!("Error: Invalid characters detected in argument at position {}", i);
+                        std::process::exit(1);
+                    }
+                    
+                    Some(s.to_string())
+                }
+                None => {
+                    eprintln!("Error: Invalid Unicode in argument at position {}", i);
+                    std::process::exit(1);
+                }
+            }
+        })
+        .collect();
+    
+    // Additional validation on the collected args
+    if args.len() > 20 {
+        eprintln!("Error: Too many arguments provided. Maximum 20 arguments allowed.");
+        std::process::exit(1);
+    }
+    
+    args
+}
+
 /// Create default argument values
+#[cfg(all(feature = "mcp-jwt", not(feature = "clap")))]
 fn create_default_args() -> Args {
     Args {
         user: "admin".to_string(),
@@ -231,6 +278,7 @@ fn create_default_args() -> Args {
 }
 
 /// Parse command line arguments with security validation
+#[cfg(all(feature = "mcp-jwt", not(feature = "clap")))]
 fn parse_command_line_arguments(args: &[String], parsed_args: &mut Args) {
     let mut i = 1;
     while i < args.len() {
@@ -259,6 +307,7 @@ fn parse_command_line_arguments(args: &[String], parsed_args: &mut Args) {
 }
 
 /// Parse string argument with validation
+#[cfg(all(feature = "mcp-jwt", not(feature = "clap")))]
 fn parse_string_arg(args: &[String], i: usize, target: &mut String) -> usize {
     if i + 1 < args.len() {
         let value = &args[i + 1];
@@ -280,6 +329,7 @@ fn parse_string_arg(args: &[String], i: usize, target: &mut String) -> usize {
 }
 
 /// Parse optional string argument with validation
+#[cfg(all(feature = "mcp-jwt", not(feature = "clap")))]
 fn parse_optional_string_arg(args: &[String], i: usize, target: &mut Option<String>) -> usize {
     if i + 1 < args.len() {
         let value = &args[i + 1];
@@ -299,6 +349,7 @@ fn parse_optional_string_arg(args: &[String], i: usize, target: &mut Option<Stri
 }
 
 /// Parse expiry argument with validation
+#[cfg(all(feature = "mcp-jwt", not(feature = "clap")))]
 fn parse_expiry_arg(args: &[String], i: usize, target: &mut u64) -> usize {
     if i + 1 < args.len() {
         let value = &args[i + 1];
@@ -326,6 +377,7 @@ fn parse_expiry_arg(args: &[String], i: usize, target: &mut u64) -> usize {
 }
 
 /// Sanitize string input by removing control characters and limiting character set
+#[cfg(all(feature = "mcp-jwt", not(feature = "clap")))]
 fn sanitize_string(input: &str) -> String {
     input
         .chars()
@@ -337,33 +389,52 @@ fn sanitize_string(input: &str) -> String {
 }
 
 /// Validate parsed arguments for security
+#[cfg(all(feature = "mcp-jwt", not(feature = "clap")))]
 fn validate_parsed_args(args: &Args) {
-    // Validate user field
-    if args.user.is_empty() || args.user.len() > 64 {
+    validate_user_field(&args.user);
+    validate_role_field(&args.role);
+    validate_output_format(&args.output);
+    validate_secret_field(&args.secret);
+    validate_permissions_field(&args.permissions);
+}
+
+/// Validate user field constraints
+#[cfg(all(feature = "mcp-jwt", not(feature = "clap")))]
+fn validate_user_field(user: &str) {
+    if user.is_empty() || user.len() > 64 {
         eprintln!("Error: User must be 1-64 characters long.");
         std::process::exit(1);
     }
+}
 
-    // Validate role field - only allow specific values
-    match args.role.as_str() {
+/// Validate role field against allowed values
+#[cfg(all(feature = "mcp-jwt", not(feature = "clap")))]
+fn validate_role_field(role: &str) {
+    match role {
         "admin" | "user" | "readonly" => {}
         _ => {
             eprintln!("Error: Role must be one of: admin, user, readonly");
             std::process::exit(1);
         }
     }
+}
 
-    // Validate output format
-    match args.output.as_str() {
+/// Validate output format against allowed values
+#[cfg(all(feature = "mcp-jwt", not(feature = "clap")))]
+fn validate_output_format(output: &str) {
+    match output {
         "token" | "json" | "full" => {}
         _ => {
             eprintln!("Error: Output format must be one of: token, json, full");
             std::process::exit(1);
         }
     }
+}
 
-    // Validate secret length if provided
-    if let Some(secret) = &args.secret {
+/// Validate secret length constraints
+#[cfg(all(feature = "mcp-jwt", not(feature = "clap")))]
+fn validate_secret_field(secret: &Option<String>) {
+    if let Some(secret) = secret {
         if secret.len() < 8 {
             eprintln!("Error: Secret must be at least 8 characters long.");
             std::process::exit(1);
@@ -373,29 +444,54 @@ fn validate_parsed_args(args: &Args) {
             std::process::exit(1);
         }
     }
+}
 
-    // Validate permissions if provided
-    if let Some(permissions) = &args.permissions {
+/// Validate permissions field and individual permissions
+#[cfg(all(feature = "mcp-jwt", not(feature = "clap")))]
+fn validate_permissions_field(permissions: &Option<String>) {
+    if let Some(permissions) = permissions {
         let perms: Vec<&str> = permissions.split(',').collect();
-        if perms.len() > 10 {
-            eprintln!("Error: Maximum 10 permissions allowed.");
-            std::process::exit(1);
-        }
+        validate_permissions_count(&perms);
+        validate_individual_permissions(&perms);
+    }
+}
 
-        // Validate each permission
-        for perm in perms {
-            let trimmed = perm.trim();
-            if trimmed.is_empty() || trimmed.len() > 50 {
-                eprintln!("Error: Each permission must be 1-50 characters long.");
-                std::process::exit(1);
-            }
-            if !trimmed
-                .chars()
-                .all(|c| c.is_alphanumeric() || matches!(c, ':' | '_' | '-'))
-            {
-                eprintln!("Error: Permissions can only contain alphanumeric characters, colons, underscores, and hyphens.");
-                std::process::exit(1);
-            }
-        }
+/// Validate the number of permissions
+#[cfg(all(feature = "mcp-jwt", not(feature = "clap")))]
+fn validate_permissions_count(perms: &[&str]) {
+    if perms.len() > 10 {
+        eprintln!("Error: Maximum 10 permissions allowed.");
+        std::process::exit(1);
+    }
+}
+
+/// Validate each individual permission
+#[cfg(all(feature = "mcp-jwt", not(feature = "clap")))]
+fn validate_individual_permissions(perms: &[&str]) {
+    for perm in perms {
+        let trimmed = perm.trim();
+        validate_permission_length(trimmed);
+        validate_permission_characters(trimmed);
+    }
+}
+
+/// Validate permission length
+#[cfg(all(feature = "mcp-jwt", not(feature = "clap")))]
+fn validate_permission_length(permission: &str) {
+    if permission.is_empty() || permission.len() > 50 {
+        eprintln!("Error: Each permission must be 1-50 characters long.");
+        std::process::exit(1);
+    }
+}
+
+/// Validate permission character set
+#[cfg(all(feature = "mcp-jwt", not(feature = "clap")))]
+fn validate_permission_characters(permission: &str) {
+    if !permission
+        .chars()
+        .all(|c| c.is_alphanumeric() || matches!(c, ':' | '_' | '-'))
+    {
+        eprintln!("Error: Permissions can only contain alphanumeric characters, colons, underscores, and hyphens.");
+        std::process::exit(1);
     }
 }

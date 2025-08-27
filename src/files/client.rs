@@ -119,13 +119,7 @@ impl<'a> FileClient<'a> {
         filename: &str,
         password: Option<&str>,
     ) -> Result<crate::AnalysisResponse> {
-        let part = multipart::Part::bytes(bytes).file_name(filename.to_string());
-        let mut form = multipart::Form::new().part("file", part);
-
-        if let Some(pwd) = password {
-            form = form.text("password", pwd.to_string());
-        }
-
+        let form = self.create_multipart_form(bytes, filename, password);
         self.post_multipart_form("files", form).await
     }
 
@@ -151,13 +145,7 @@ impl<'a> FileClient<'a> {
         filename: &str,
         password: Option<&str>,
     ) -> Result<crate::AnalysisResponse> {
-        let part = multipart::Part::bytes(bytes).file_name(filename.to_string());
-        let mut form = multipart::Form::new().part("file", part);
-
-        if let Some(pwd) = password {
-            form = form.text("password", pwd.to_string());
-        }
-
+        let form = self.create_multipart_form(bytes, filename, password);
         let request = self
             .client
             .http_client()
@@ -166,26 +154,7 @@ impl<'a> FileClient<'a> {
             .multipart(form);
 
         let response = request.send().await.map_err(crate::Error::Http)?;
-
-        if response.status().is_success() {
-            let text = response.text().await.map_err(crate::Error::Http)?;
-            serde_json::from_str(&text).map_err(crate::Error::Json)
-        } else {
-            let status = response.status();
-            let text = response.text().await.map_err(crate::Error::Http)?;
-
-            if let Ok(error_response) =
-                serde_json::from_str::<crate::error::ApiErrorResponse>(&text)
-            {
-                Err(crate::Error::from_response(status, error_response.error))
-            } else {
-                Err(crate::Error::unknown(format!(
-                    "HTTP {}: {}",
-                    status,
-                    text.chars().take(200).collect::<String>()
-                )))
-            }
-        }
+        self.handle_upload_response(response).await
     }
 
     async fn post_multipart_form(
@@ -202,26 +171,7 @@ impl<'a> FileClient<'a> {
             .multipart(form);
 
         let response = request.send().await.map_err(crate::Error::Http)?;
-
-        if response.status().is_success() {
-            let text = response.text().await.map_err(crate::Error::Http)?;
-            serde_json::from_str(&text).map_err(crate::Error::Json)
-        } else {
-            let status = response.status();
-            let text = response.text().await.map_err(crate::Error::Http)?;
-
-            if let Ok(error_response) =
-                serde_json::from_str::<crate::error::ApiErrorResponse>(&text)
-            {
-                Err(crate::Error::from_response(status, error_response.error))
-            } else {
-                Err(crate::Error::unknown(format!(
-                    "HTTP {}: {}",
-                    status,
-                    text.chars().take(200).collect::<String>()
-                )))
-            }
-        }
+        self.handle_upload_response(response).await
     }
 
     pub async fn get_upload_url(&self) -> Result<String> {
@@ -276,6 +226,49 @@ impl<'a> FileClient<'a> {
     pub async fn get_behavior_report(&self, sandbox_id: &str) -> Result<FileBehavior> {
         let url = format!("file_behaviours/{}", sandbox_id);
         self.client.get(&url).await
+    }
+
+    /// Helper method to create multipart form with file and optional password
+    fn create_multipart_form(
+        &self,
+        bytes: Vec<u8>,
+        filename: &str,
+        password: Option<&str>,
+    ) -> multipart::Form {
+        let part = multipart::Part::bytes(bytes).file_name(filename.to_string());
+        let mut form = multipart::Form::new().part("file", part);
+
+        if let Some(pwd) = password {
+            form = form.text("password", pwd.to_string());
+        }
+
+        form
+    }
+
+    /// Helper method to handle upload response with common error handling logic
+    async fn handle_upload_response(
+        &self,
+        response: reqwest::Response,
+    ) -> Result<crate::AnalysisResponse> {
+        if response.status().is_success() {
+            let text = response.text().await.map_err(crate::Error::Http)?;
+            serde_json::from_str(&text).map_err(crate::Error::Json)
+        } else {
+            let status = response.status();
+            let text = response.text().await.map_err(crate::Error::Http)?;
+
+            if let Ok(error_response) =
+                serde_json::from_str::<crate::error::ApiErrorResponse>(&text)
+            {
+                Err(crate::Error::from_response(status, error_response.error))
+            } else {
+                Err(crate::Error::unknown(format!(
+                    "HTTP {}: {}",
+                    status,
+                    text.chars().take(200).collect::<String>()
+                )))
+            }
+        }
     }
 
     pub async fn get_comments_iterator(&self, file_id: &str) -> CommentIterator<'_> {

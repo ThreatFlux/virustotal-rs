@@ -143,13 +143,9 @@ async fn test_update_collection(
     handle_update_result(result);
 }
 
-/// Add items to a collection
-async fn test_add_items(client: &virustotal_rs::CollectionsClient<'_>, collection_id: &str) {
-    println!("\n4. Adding items to collection");
-    println!("-----------------------------");
-
-    // Add domains
-    let new_domains = CollectionItemsRequest {
+/// Create domain items for collection
+fn create_domain_items() -> CollectionItemsRequest<DomainDescriptor> {
+    CollectionItemsRequest {
         data: vec![
             DomainDescriptor {
                 object_type: "domain".to_string(),
@@ -160,18 +156,12 @@ async fn test_add_items(client: &virustotal_rs::CollectionsClient<'_>, collectio
                 id: "another-c2.net".to_string(),
             },
         ],
-    };
-
-    match client
-        .add_items(collection_id, "domains", &new_domains)
-        .await
-    {
-        Ok(_) => print_success("Added 2 new domains to collection"),
-        Err(e) => print_error(&format!("Error adding domains: {}", e)),
     }
+}
 
-    // Add URLs using both methods (URL string and ID)
-    let new_urls = CollectionItemsRequest {
+/// Create URL items for collection
+fn create_url_items() -> CollectionItemsRequest<UrlDescriptor> {
+    CollectionItemsRequest {
         data: vec![
             UrlDescriptor::WithUrl {
                 object_type: "url".to_string(),
@@ -182,12 +172,46 @@ async fn test_add_items(client: &virustotal_rs::CollectionsClient<'_>, collectio
                 id: "f11f7cc900638fae209f68498a90158fbfb067fc4191549ddb657e39cc4428c2".to_string(),
             },
         ],
-    };
+    }
+}
 
+/// Add domains to collection
+async fn add_domains_to_collection(
+    client: &virustotal_rs::CollectionsClient<'_>,
+    collection_id: &str,
+) {
+    let new_domains = create_domain_items();
+    match client
+        .add_items(collection_id, "domains", &new_domains)
+        .await
+    {
+        Ok(_) => print_success("Added 2 new domains to collection"),
+        Err(e) => print_error(&format!("Error adding domains: {}", e)),
+    }
+}
+
+/// Add URLs to collection
+async fn add_urls_to_collection(
+    client: &virustotal_rs::CollectionsClient<'_>,
+    collection_id: &str,
+) {
+    let new_urls = create_url_items();
     match client.add_items(collection_id, "urls", &new_urls).await {
         Ok(_) => print_success("Added 2 new URLs to collection"),
         Err(e) => print_error(&format!("Error adding URLs: {}", e)),
     }
+}
+
+/// Add items to a collection
+async fn test_add_items(client: &virustotal_rs::CollectionsClient<'_>, collection_id: &str) {
+    println!("\n4. Adding items to collection");
+    println!("-----------------------------");
+
+    // Add domains
+    add_domains_to_collection(client, collection_id).await;
+
+    // Add URLs using both methods (URL string and ID)
+    add_urls_to_collection(client, collection_id).await;
 }
 
 /// Add a comment to a collection
@@ -243,40 +267,52 @@ async fn test_comment_management(
     retrieve_collection_comments(client, collection_id).await;
 }
 
+/// Retrieve and display relationship data
+async fn retrieve_relationship_data(
+    client: &virustotal_rs::CollectionsClient<'_>,
+    collection_id: &str,
+    relationship_type: &str,
+    success_message: &str,
+    count_label: &str,
+) {
+    match client
+        .get_relationship::<serde_json::Value>(collection_id, relationship_type)
+        .await
+    {
+        Ok(data) => {
+            print_success(success_message);
+            if let Some(meta) = &data.meta {
+                if let Some(count) = meta.count {
+                    println!("   - {}: {}", count_label, count);
+                }
+            }
+        }
+        Err(e) => print_error(&format!("Error getting {}: {}", relationship_type, e)),
+    }
+}
+
 /// Test relationship retrieval
 async fn test_relationships(client: &virustotal_rs::CollectionsClient<'_>, collection_id: &str) {
     println!("\n6. Getting related objects");
     println!("--------------------------");
 
-    match client
-        .get_relationship::<serde_json::Value>(collection_id, "domains")
-        .await
-    {
-        Ok(domains) => {
-            print_success("Retrieved domains from collection");
-            if let Some(meta) = &domains.meta {
-                if let Some(count) = meta.count {
-                    println!("   - Number of domains: {}", count);
-                }
-            }
-        }
-        Err(e) => print_error(&format!("Error getting domains: {}", e)),
-    }
+    retrieve_relationship_data(
+        client,
+        collection_id,
+        "domains",
+        "Retrieved domains from collection",
+        "Number of domains",
+    )
+    .await;
 
-    match client
-        .get_relationship::<serde_json::Value>(collection_id, "files")
-        .await
-    {
-        Ok(files) => {
-            print_success("Retrieved files from collection");
-            if let Some(meta) = &files.meta {
-                if let Some(count) = meta.count {
-                    println!("   - Number of files: {}", count);
-                }
-            }
-        }
-        Err(e) => print_error(&format!("Error getting files: {}", e)),
-    }
+    retrieve_relationship_data(
+        client,
+        collection_id,
+        "files",
+        "Retrieved files from collection",
+        "Number of files",
+    )
+    .await;
 }
 
 /// Test collection export functionality
