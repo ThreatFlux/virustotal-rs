@@ -126,49 +126,112 @@ impl ServerConfig {
         self.init_logging();
 
         // Create `VirusTotal` client
-        let client = crate::ClientBuilder::new()
-            .api_key(self.api_key)
-            .tier(self.api_tier)
-            .build()
-            .map_err(crate::mcp::convert_vt_error)?;
+        let client = self.create_client()?;
 
         // Run server in appropriate mode
         match self.http_addr {
-            Some(addr) => {
-                // Check for OAuth configuration first (takes precedence)
-                #[cfg(feature = "mcp-oauth")]
-                {
-                    if let Some(oauth_config) = self.oauth_config {
-                        tracing::info!("OAuth 2.1 Authentication enabled");
-                        tracing::info!("Authorization endpoint: /oauth/authorize");
-                        tracing::info!("Token endpoint: /oauth/token");
-                        tracing::info!("Callback endpoint: /oauth/callback");
-                        tracing::info!("Metadata endpoint: /oauth/metadata");
-                        return run_http_server_with_oauth(client, addr, oauth_config).await;
-                    }
-                }
-
-                // Check for JWT configuration
-                #[cfg(feature = "mcp-jwt")]
-                {
-                    if let Some(jwt_config) = self.jwt_config {
-                        // Print JWT configuration info
-                        let jwt_manager = JwtManager::new(jwt_config.clone());
-                        if let Ok(admin_token) = jwt_manager.generate_admin_token("admin") {
-                            tracing::info!("JWT Authentication enabled");
-                            tracing::info!("Sample admin credentials: admin/admin123");
-                            tracing::info!("Sample user credentials: user/user123");
-                            tracing::info!("Sample admin token: {}", admin_token);
-                            tracing::info!("Use POST /auth/token to authenticate");
-                        }
-                        return run_http_server_with_config(client, addr, Some(jwt_config)).await;
-                    }
-                }
-
-                // No authentication - basic server
-                run_http_server(client, addr).await
-            }
+            Some(addr) => self.run_http_server(client, addr).await,
             None => run_stdio_server(client).await,
+        }
+    }
+
+    /// Create VirusTotal client from configuration
+    fn create_client(&self) -> McpResult<crate::Client> {
+        crate::ClientBuilder::new()
+            .api_key(self.api_key.clone())
+            .tier(self.api_tier)
+            .build()
+            .map_err(crate::mcp::convert_vt_error)
+    }
+
+    /// Run HTTP server with authentication configuration
+    async fn run_http_server(self, client: crate::Client, addr: SocketAddr) -> McpResult<()> {
+        // Check for OAuth configuration first (takes precedence)
+        if let Some(result) = self.try_run_oauth_server(&client, addr).await {
+            return result;
+        }
+
+        // Check for JWT configuration
+        if let Some(result) = self.try_run_jwt_server(&client, addr).await {
+            return result;
+        }
+
+        // No authentication - basic server
+        run_http_server(client, addr).await
+    }
+
+    /// Try to run OAuth server if configuration is available
+    #[cfg(feature = "mcp-oauth")]
+    async fn try_run_oauth_server(
+        &self,
+        client: &crate::Client,
+        addr: SocketAddr,
+    ) -> Option<McpResult<()>> {
+        if let Some(oauth_config) = &self.oauth_config {
+            self.log_oauth_info();
+            return Some(
+                run_http_server_with_oauth(client.clone(), addr, oauth_config.clone()).await,
+            );
+        }
+        None
+    }
+
+    /// Try to run OAuth server if configuration is available (no-op when feature disabled)
+    #[cfg(not(feature = "mcp-oauth"))]
+    async fn try_run_oauth_server(
+        &self,
+        _client: &crate::Client,
+        _addr: SocketAddr,
+    ) -> Option<McpResult<()>> {
+        None
+    }
+
+    /// Try to run JWT server if configuration is available
+    #[cfg(feature = "mcp-jwt")]
+    async fn try_run_jwt_server(
+        &self,
+        client: &crate::Client,
+        addr: SocketAddr,
+    ) -> Option<McpResult<()>> {
+        if let Some(jwt_config) = &self.jwt_config {
+            self.log_jwt_info(jwt_config);
+            return Some(
+                run_http_server_with_config(client.clone(), addr, Some(jwt_config.clone())).await,
+            );
+        }
+        None
+    }
+
+    /// Try to run JWT server if configuration is available (no-op when feature disabled)
+    #[cfg(not(feature = "mcp-jwt"))]
+    async fn try_run_jwt_server(
+        &self,
+        _client: &crate::Client,
+        _addr: SocketAddr,
+    ) -> Option<McpResult<()>> {
+        None
+    }
+
+    /// Log OAuth configuration information
+    #[cfg(feature = "mcp-oauth")]
+    fn log_oauth_info(&self) {
+        tracing::info!("OAuth 2.1 Authentication enabled");
+        tracing::info!("Authorization endpoint: /oauth/authorize");
+        tracing::info!("Token endpoint: /oauth/token");
+        tracing::info!("Callback endpoint: /oauth/callback");
+        tracing::info!("Metadata endpoint: /oauth/metadata");
+    }
+
+    /// Log JWT configuration information
+    #[cfg(feature = "mcp-jwt")]
+    fn log_jwt_info(&self, jwt_config: &JwtConfig) {
+        let jwt_manager = JwtManager::new(jwt_config.clone());
+        if let Ok(admin_token) = jwt_manager.generate_admin_token("admin") {
+            tracing::info!("JWT Authentication enabled");
+            tracing::info!("Sample admin credentials: admin/admin123");
+            tracing::info!("Sample user credentials: user/user123");
+            tracing::info!("Sample admin token: {}", admin_token);
+            tracing::info!("Use POST /auth/token to authenticate");
         }
     }
 

@@ -1,5 +1,5 @@
+use super::display_utils::{print_analysis_stats, print_file_info};
 use crate::common::*;
-use super::display_utils::{print_file_info, print_analysis_stats};
 
 /// Test listing private files
 pub async fn test_list_files(private_client: &virustotal_rs::PrivateFilesClient<'_>) {
@@ -68,7 +68,10 @@ pub async fn test_file_report(
 }
 
 /// Test file download
-pub async fn test_file_download(private_client: &virustotal_rs::PrivateFilesClient<'_>, hash: &str) {
+pub async fn test_file_download(
+    private_client: &virustotal_rs::PrivateFilesClient<'_>,
+    hash: &str,
+) {
     print_step_header(11, "FILE DOWNLOAD");
 
     println!("Downloading file content...");

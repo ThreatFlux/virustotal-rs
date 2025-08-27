@@ -1,7 +1,9 @@
-use virustotal_rs::GraphClient;
-use crate::common::print_step_header;
-use super::display_utils::{display_owner_info, display_editor_list, display_relationship_descriptors};
 use super::comment_operations::test_comment_pagination;
+use super::display_utils::{
+    display_editor_list, display_owner_info, display_relationship_descriptors,
+};
+use crate::common::print_step_header;
+use virustotal_rs::GraphClient;
 
 pub async fn test_relationship_operations(graph_client: &GraphClient<'_>, graph_id: &str) {
     print_step_header(11, "GRAPH RELATIONSHIPS");

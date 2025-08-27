@@ -1,8 +1,8 @@
 //! URL and endpoint builders for constructing VirusTotal API URLs
 
-use crate::error::{Error, Result};
 use super::constants::VT_API_BASE;
-use super::encoding::{encode_path_segment, build_query_string};
+use super::encoding::{build_query_string, encode_path_segment};
+use crate::error::{Error, Result};
 use std::collections::HashMap;
 use std::fmt;
 use url::Url;

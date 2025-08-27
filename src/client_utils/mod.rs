@@ -47,17 +47,17 @@
 //! # }
 //! ```
 
+pub mod builder;
 pub mod constants;
 pub mod rate_limiting;
 pub mod retry;
-pub mod builder;
 pub mod utils;
 
 // Re-export commonly used items
+pub use builder::{ClientUtils, EnhancedClientBuilder};
 pub use constants::*;
-pub use rate_limiting::{RateLimiter, RateLimitStatus, TokenBucketLimiter};
+pub use rate_limiting::{RateLimitStatus, RateLimiter, TokenBucketLimiter};
 pub use retry::{RetryConfig, RetryUtils};
-pub use builder::{EnhancedClientBuilder, ClientUtils};
 pub use utils::{detect_api_tier, HeaderUtils};
 
 #[cfg(test)]
@@ -65,9 +65,9 @@ mod tests {
     use super::*;
     use crate::auth::{ApiKey, ApiTier};
     use crate::error::Error;
+    use reqwest::header::{HeaderMap, HeaderValue};
     use std::collections::HashMap;
     use std::time::Duration;
-    use reqwest::header::{HeaderMap, HeaderValue};
 
     #[test]
     fn test_retry_config_default() {

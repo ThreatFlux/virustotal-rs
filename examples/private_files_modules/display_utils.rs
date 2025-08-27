@@ -1,4 +1,3 @@
-
 /// Print analysis statistics in standardized format
 pub fn print_analysis_stats(stats: &serde_json::Value, prefix: &str) {
     use virustotal_rs::{common::AnalysisStats, DisplayStats};

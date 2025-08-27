@@ -1,27 +1,29 @@
 #[cfg(test)]
+pub mod assertions;
+#[cfg(test)]
+pub mod builders;
+#[cfg(test)]
 pub mod constants;
 #[cfg(test)]
 pub mod environment;
 #[cfg(test)]
 pub mod mock_client;
 #[cfg(test)]
-pub mod builders;
-#[cfg(test)]
 pub mod responses;
-#[cfg(test)]
-pub mod assertions;
 
 #[cfg(test)]
-pub use assertions::*;
+//pub use assertions::*;
 
 #[cfg(test)]
 /// Re-exports for backward compatibility
 pub mod test_utilities {
+    pub use super::builders::{
+        AnalysisStatsBuilder, DomainResponseBuilder, FileResponseBuilder, IpResponseBuilder,
+    };
     pub use super::constants::constants;
     pub use super::environment::TestEnvironment;
     pub use super::mock_client::MockApiClient;
-    pub use super::builders::{AnalysisStatsBuilder, FileResponseBuilder, DomainResponseBuilder, IpResponseBuilder};
-    pub use super::responses::{ResponseFactory, create_mock_response, create_json_response};
+    pub use super::responses::{create_json_response, create_mock_response, ResponseFactory};
 }
 
 #[cfg(test)]

@@ -2,6 +2,8 @@ use virustotal_rs::{ApiTier, Corpus, CreateRetrohuntJobRequest, JobStatus};
 
 mod common;
 use common::*;
+mod matching_files_helper;
+use matching_files_helper::*;
 
 type ExampleResult<T> = Result<T, Box<dyn std::error::Error>>;
 
@@ -227,66 +229,8 @@ fn display_job_progress(job: &virustotal_rs::RetrohuntJob) {
 async fn get_matching_files(retrohunt: &virustotal_rs::RetrohuntClient<'_>, job_id: &str) {
     print_step_header(4, "RETRIEVING MATCHING FILES");
 
-    match retrohunt.get_matching_files(job_id, Some(10), None).await {
-        Ok(files) => {
-            print_success("Retrieved matching files");
-            println!("   - Total matches: {}", files.data.len());
-            display_matching_files(&files.data);
-        }
-        Err(e) => {
-            print_error(&format!("Error getting matching files: {}", e));
-            println!("   Note: Job may still be running or have no matches");
-        }
-    }
-}
-
-/// Display matching files information
-fn display_matching_files(files: &[virustotal_rs::RetrohuntMatchingFile]) {
-    for (i, file) in files.iter().take(5).enumerate() {
-        println!("\n   Match #{}:", i + 1);
-        if let Some(context) = &file.context_attributes {
-            if let Some(rule_name) = &context.rule_name {
-                println!("   - Matched rule: {}", rule_name);
-            }
-            if let Some(offset) = &context.match_offset {
-                println!("   - Match offset: 0x{:X}", offset);
-            }
-            if let Some(snippet) = &context.match_snippet {
-                println!("   - Match snippet: {}", truncate_string(snippet, 50));
-            }
-            if let Some(in_subfile) = &context.match_in_subfile {
-                if *in_subfile {
-                    println!("   - Match in subfile: yes");
-                }
-            }
-        }
-    }
-}
-
-/// Display batch information for matching files
-fn display_matching_files_batch(batch: &[virustotal_rs::RetrohuntMatchingFile]) {
-    for file in batch.iter().take(3) {
-        if let Some(context) = &file.context_attributes {
-            if let Some(rule) = &context.rule_name {
-                println!("   - Matched by rule: {}", rule);
-            }
-        }
-    }
-}
-
-/// Handle pagination batch result
-fn handle_pagination_batch_result(
-    result: Result<Vec<virustotal_rs::RetrohuntMatchingFile>, virustotal_rs::Error>,
-) {
-    match result {
-        Ok(batch) => {
-            print_success(&format!("Retrieved {} files in first batch", batch.len()));
-            display_matching_files_batch(&batch);
-        }
-        Err(e) => {
-            print_error(&format!("Error fetching batch: {}", e));
-        }
-    }
+    let result = retrohunt.get_matching_files(job_id, Some(10), None).await;
+    handle_matching_files_result(result);
 }
 
 /// Test pagination functionality

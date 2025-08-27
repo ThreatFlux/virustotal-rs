@@ -1,10 +1,13 @@
 use virustotal_rs::GraphClient;
 
+#[path = "common/mod.rs"]
 mod common;
-mod test_graphs;
 
-use common::{setup_client};
-use test_graphs::*;
+#[path = "test_graphs/mod.rs"]
+mod test_graphs_module;
+
+use common::setup_client;
+use test_graphs_module::*;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -44,4 +47,3 @@ async fn run_additional_graph_tests(graph_client: &GraphClient<'_>) {
     test_pagination(graph_client).await;
     test_graph_filters(graph_client).await;
 }
-

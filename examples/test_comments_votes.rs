@@ -3,7 +3,15 @@ use tokio::time::{sleep, Duration};
 use virustotal_rs::{ApiTier, ClientBuilder, VoteVerdict};
 
 /// Initializes the client and returns CTF resource identifiers
-async fn initialize_client_and_resources() -> Result<(virustotal_rs::Client, &'static str, &'static str, &'static str), Box<dyn std::error::Error>> {
+async fn initialize_client_and_resources() -> Result<
+    (
+        virustotal_rs::Client,
+        &'static str,
+        &'static str,
+        &'static str,
+    ),
+    Box<dyn std::error::Error>,
+> {
     // Get API key from environment variable
     let api_key = env::var("VTI_API_KEY").expect("VTI_API_KEY environment variable not set");
 

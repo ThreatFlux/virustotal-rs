@@ -2,7 +2,7 @@ use virustotal_rs::crowdsourced_yara_rules::CrowdsourcedYaraRule;
 use virustotal_rs::ioc_stream::{
     HuntingInfo, IocStreamContext, IocStreamNotification, IocStreamObject, NotificationSource,
 };
-use virustotal_rs::objects::Meta;
+use virustotal_rs::objects::CollectionMeta;
 use virustotal_rs::{ApiTier, EntityType, IocStreamOrder, SourceType, YaraRuleOrder};
 
 #[path = "common/mod.rs"]
@@ -70,7 +70,7 @@ async fn fetch_yara_rules(
 }
 
 /// Display YARA pagination info
-fn display_yara_pagination(meta: &Option<Meta>) {
+fn display_yara_pagination(meta: &Option<CollectionMeta>) {
     if let Some(meta) = meta {
         if let Some(cursor) = &meta.cursor {
             println!(
@@ -142,7 +142,7 @@ fn display_yara_rule_details(rule: &CrowdsourcedYaraRule) {
 }
 
 /// Display YARA rule metadata
-fn display_yara_metadata(meta_list: &Option<Vec<virustotal_rs::YaraMetadata>>) {
+fn display_yara_metadata(meta_list: &Option<Vec<virustotal_rs::YaraRuleMeta>>) {
     if let Some(meta_list) = meta_list {
         println!("   - Metadata:");
         for meta in meta_list.iter().take(3) {

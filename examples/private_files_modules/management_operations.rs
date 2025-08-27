@@ -76,7 +76,10 @@ pub async fn test_pagination(private_client: &virustotal_rs::PrivateFilesClient<
 }
 
 /// Fetch and display analysis batch
-pub async fn fetch_analysis_batch(private_client: &virustotal_rs::PrivateFilesClient<'_>, hash: &str) {
+pub async fn fetch_analysis_batch(
+    private_client: &virustotal_rs::PrivateFilesClient<'_>,
+    hash: &str,
+) {
     println!("Getting analysis history with pagination...");
     let mut analyses_iterator = private_client.get_analyses_iterator(hash);
 
@@ -111,7 +114,10 @@ pub fn display_analysis_metadata(analysis: &virustotal_rs::PrivateAnalysis) {
 }
 
 /// Test file relationships
-pub async fn test_relationships(private_client: &virustotal_rs::PrivateFilesClient<'_>, hash: &str) {
+pub async fn test_relationships(
+    private_client: &virustotal_rs::PrivateFilesClient<'_>,
+    hash: &str,
+) {
     print_step_header(13, "FILE RELATIONSHIPS");
 
     println!("Getting file relationships...");

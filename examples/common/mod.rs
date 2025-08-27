@@ -892,7 +892,7 @@ pub mod file_info {
             .object
             .attributes
             .size
-            .map(|s| super::format_file_size(s))
+            .map(super::format_file_size)
             .unwrap_or_else(|| "Unknown".to_string());
 
         println!("  • {} ({})", name, size);

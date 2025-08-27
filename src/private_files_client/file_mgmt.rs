@@ -4,8 +4,8 @@
 //! listing, retrieving, deleting, and downloading files.
 
 use super::{PrivateFilesClient, Result};
-use crate::private_files::{PrivateFile};
 use crate::objects::{Collection, CollectionIterator};
+use crate::private_files::PrivateFile;
 use crate::url_utils::Endpoints;
 
 impl<'a> PrivateFilesClient<'a> {

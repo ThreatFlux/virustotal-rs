@@ -1,5 +1,5 @@
-use crate::common::*;
 use super::display_utils::print_analysis_stats;
+use crate::common::*;
 use virustotal_rs::PrivateFileUploadParams;
 
 /// Create upload parameters for private file scanning

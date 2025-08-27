@@ -4,8 +4,10 @@
 //! comments, and ZIP file operations.
 
 use super::{PrivateFilesClient, Result};
-use crate::private_files::{CreatePrivateZipRequest, PrivateZipFile, PrivateZipDownloadUrlResponse};
 use crate::objects::Collection;
+use crate::private_files::{
+    CreatePrivateZipRequest, PrivateZipDownloadUrlResponse, PrivateZipFile,
+};
 
 impl<'a> PrivateFilesClient<'a> {
     // Relationship operations

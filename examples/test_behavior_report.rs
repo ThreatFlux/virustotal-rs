@@ -1,6 +1,6 @@
 use std::env;
+use virustotal_rs::files::{DnsLookup, FileBehaviorAttributes, IpTraffic, RegistryKeySet};
 use virustotal_rs::{ApiTier, ClientBuilder};
-use virustotal_rs::files::{FileBehaviorAttributes, DnsLookup, IpTraffic, ProcessTreeNode, SigmaResult};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -138,7 +138,7 @@ fn display_files_written(files: &Option<Vec<String>>) {
 }
 
 /// Display files dropped
-fn display_files_dropped(files: &Option<Vec<virustotal_rs::DroppedFileInfo>>) {
+fn display_files_dropped(files: &Option<Vec<virustotal_rs::DroppedFile>>) {
     if let Some(files) = files {
         if !files.is_empty() {
             println!("\n📦 Files Dropped ({}):", files.len());
@@ -150,14 +150,14 @@ fn display_files_dropped(files: &Option<Vec<virustotal_rs::DroppedFileInfo>>) {
 }
 
 /// Display individual dropped file
-fn display_dropped_file(file_drop: &virustotal_rs::DroppedFileInfo) {
-    if let Some(path) = &file_drop.path {
+fn display_dropped_file(file_drop: &virustotal_rs::DroppedFile) {
+    if let Some(path) = &file_drop.object.attributes.path {
         print!("  • {}", path);
-        if let Some(sha) = &file_drop.sha256 {
+        if let Some(sha) = &file_drop.object.attributes.sha256 {
             print!(" (SHA256: {}...)", &sha[..16]);
         }
-        if let Some(ftype) = &file_drop.file_type {
-            print!(" [{}]", ftype);
+        if let Some(size) = file_drop.object.attributes.size {
+            print!(" [size: {} bytes]", size);
         }
         println!();
     }
@@ -255,7 +255,7 @@ fn display_registry_keys_opened(keys: &Option<Vec<String>>) {
 }
 
 /// Display registry keys set
-fn display_registry_keys_set(keys: &Option<Vec<virustotal_rs::RegistryKeySet>>) {
+fn display_registry_keys_set(keys: &Option<Vec<RegistryKeySet>>) {
     if let Some(keys) = keys {
         if !keys.is_empty() {
             println!("\n📝 Registry Keys Set ({}):", keys.len());

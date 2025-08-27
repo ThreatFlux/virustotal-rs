@@ -57,7 +57,7 @@ fn test_latest_feed_times() {
 }
 
 /// Test per-minute behavior feed batch download
-async fn test_per_minute_batch(feeds: &FeedsClient<'_>) -> Result<(), Box<dyn std::error::Error>> {
+async fn test_per_minute_batch(feeds: &FeedsClient) -> Result<(), Box<dyn std::error::Error>> {
     println!("\n2. PER-MINUTE BEHAVIOR FEED BATCH");
     println!("----------------------------------");
 
@@ -76,7 +76,7 @@ async fn test_per_minute_batch(feeds: &FeedsClient<'_>) -> Result<(), Box<dyn st
 
 /// Download behavior batch data
 async fn download_behavior_batch(
-    feeds: &FeedsClient<'_>,
+    feeds: &FeedsClient,
     feed_time: &str,
 ) -> Result<Vec<u8>, virustotal_rs::Error> {
     feeds.get_file_behaviour_feed_batch(feed_time).await
@@ -103,7 +103,7 @@ fn print_batch_error(error: &virustotal_rs::Error) {
 }
 
 /// Test hourly behavior feed batch download
-async fn test_hourly_batch(feeds: &FeedsClient<'_>) -> Result<(), Box<dyn std::error::Error>> {
+async fn test_hourly_batch(feeds: &FeedsClient) -> Result<(), Box<dyn std::error::Error>> {
     println!("\n3. HOURLY BEHAVIOR FEED BATCH");
     println!("------------------------------");
 
@@ -121,7 +121,7 @@ async fn test_hourly_batch(feeds: &FeedsClient<'_>) -> Result<(), Box<dyn std::e
 
 /// Download hourly batch data
 async fn download_hourly_batch(
-    feeds: &FeedsClient<'_>,
+    feeds: &FeedsClient,
     hourly_time: &str,
 ) -> Result<Vec<u8>, virustotal_rs::Error> {
     feeds
@@ -155,7 +155,7 @@ fn print_hourly_error(error: &virustotal_rs::Error) {
 }
 
 /// Test parsing behavior feed line
-fn test_feed_parsing(feeds: &FeedsClient<'_>) {
+fn test_feed_parsing(feeds: &FeedsClient) {
     println!("\n4. PARSE BEHAVIOR FEED LINE");
     println!("----------------------------");
 
@@ -193,7 +193,7 @@ fn create_example_feed_line() -> String {
 
 /// Parse behavior feed line
 fn parse_feed_line(
-    feeds: &FeedsClient<'_>,
+    feeds: &FeedsClient,
     line: &str,
 ) -> Result<BehaviorFeedItem, virustotal_rs::Error> {
     feeds.parse_behaviour_feed_line(line)
@@ -240,7 +240,7 @@ fn extract_and_display_token(url: &Option<String>, artifact_type: &str) {
 }
 
 /// Test downloading behavior artifacts
-async fn test_artifact_downloads(feeds: &FeedsClient<'_>) {
+async fn test_artifact_downloads(feeds: &FeedsClient) {
     println!("\n5. DOWNLOAD BEHAVIOR ARTIFACTS");
     println!("-------------------------------");
 
@@ -257,7 +257,7 @@ async fn test_artifact_downloads(feeds: &FeedsClient<'_>) {
 }
 
 /// Download EVTX artifact
-async fn download_evtx(feeds: &FeedsClient<'_>, token: &str) {
+async fn download_evtx(feeds: &FeedsClient, token: &str) {
     println!("\nDownloading EVTX (Windows Event Log)...");
     match feeds.download_behaviour_evtx(token).await {
         Ok(evtx_data) => {
@@ -269,7 +269,7 @@ async fn download_evtx(feeds: &FeedsClient<'_>, token: &str) {
 }
 
 /// Download PCAP artifact
-async fn download_pcap(feeds: &FeedsClient<'_>, token: &str) {
+async fn download_pcap(feeds: &FeedsClient, token: &str) {
     println!("\nDownloading PCAP (network capture)...");
     match feeds.download_behaviour_pcap(token).await {
         Ok(pcap_data) => {
@@ -281,7 +281,7 @@ async fn download_pcap(feeds: &FeedsClient<'_>, token: &str) {
 }
 
 /// Download HTML report
-async fn download_html_report(feeds: &FeedsClient<'_>, token: &str) {
+async fn download_html_report(feeds: &FeedsClient, token: &str) {
     println!("\nDownloading HTML report...");
     match feeds.download_behaviour_html(token).await {
         Ok(html_data) => {

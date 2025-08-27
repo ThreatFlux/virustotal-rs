@@ -4,8 +4,8 @@
 //! including listing, retrieving, and managing analyses.
 
 use super::{PrivateFilesClient, Result};
-use crate::private_files::{PrivateAnalysis, PrivateAnalysisResponse};
 use crate::objects::{Collection, CollectionIterator};
+use crate::private_files::{PrivateAnalysis, PrivateAnalysisResponse};
 use crate::url_utils::EndpointBuilder;
 
 impl<'a> PrivateFilesClient<'a> {

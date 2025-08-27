@@ -82,10 +82,7 @@ async fn wait_for_completion(private_files: &PrivateFilesClient<'_>, zip_id: &st
 
     println!("Waiting for ZIP file to be ready (max 60 seconds)...");
 
-    match private_files
-        .wait_for_zip_completion(zip_id, Some(60))
-        .await
-    {
+    match private_files.wait_for_zip_completion(zip_id, 5, 2).await {
         Ok(completed) => {
             display_completion_status(&completed);
             handle_download(private_files, zip_id).await?;

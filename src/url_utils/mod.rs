@@ -3,18 +3,18 @@
 //! This module provides type-safe URL construction utilities to eliminate duplication
 //! and reduce errors in URL building across the library.
 
-pub mod constants;
 pub mod builder;
-pub mod endpoints;
+pub mod constants;
 pub mod encoding;
+pub mod endpoints;
 pub mod validation;
 
 // Re-export commonly used items
+pub use builder::{EndpointBuilder, QueryBuilder, VirusTotalUrlBuilder};
 pub use constants::*;
-pub use builder::{VirusTotalUrlBuilder, EndpointBuilder, QueryBuilder};
+pub use encoding::{build_query_string, encode_path_segment};
 pub use endpoints::Endpoints;
-pub use encoding::{encode_path_segment, build_query_string};
-pub use validation::{validate_hash, validate_domain, validate_ip};
+pub use validation::{validate_domain, validate_hash, validate_ip};
 
 #[cfg(test)]
 mod tests {

@@ -34,7 +34,10 @@ pub fn display_behavior_reports(behaviors: &[virustotal_rs::FileBehavior]) {
 }
 
 /// Test behavior summary
-pub async fn test_behavior_summary(private_client: &virustotal_rs::PrivateFilesClient<'_>, hash: &str) {
+pub async fn test_behavior_summary(
+    private_client: &virustotal_rs::PrivateFilesClient<'_>,
+    hash: &str,
+) {
     print_step_header(6, "BEHAVIOR SUMMARY");
 
     match private_client.get_behavior_summary(hash).await {
@@ -111,7 +114,10 @@ pub fn display_techniques(techniques: &[virustotal_rs::MitreTechnique]) {
 }
 
 /// Test dropped files retrieval
-pub async fn test_dropped_files(private_client: &virustotal_rs::PrivateFilesClient<'_>, hash: &str) {
+pub async fn test_dropped_files(
+    private_client: &virustotal_rs::PrivateFilesClient<'_>,
+    hash: &str,
+) {
     print_step_header(8, "DROPPED FILES");
 
     match private_client.get_dropped_files(hash, Some(10), None).await {

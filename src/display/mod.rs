@@ -35,22 +35,22 @@
 //! println!("Size: {}", format_file_size(1048576)); // "Size: 1.0 MB"
 //! ```
 
+pub mod formatting;
+pub mod helpers;
+pub mod implementations;
+pub mod structured;
 pub mod traits;
 pub mod types;
-pub mod formatting;
-pub mod structured;
-pub mod implementations;
-pub mod helpers;
 
 // Re-export main public API
-pub use traits::{DisplayStats, DisplayVotes, DisplayDetails};
-pub use types::{ThreatLevel, VoteConsensus, DisplayOptions};
 pub use formatting::{
-    format_file_size, format_timestamp, format_timestamp_relative, 
-    truncate_hash, truncate_text, format_reputation
+    format_file_size, format_reputation, format_timestamp, format_timestamp_relative,
+    truncate_hash, truncate_text,
 };
-pub use structured::{pretty_print_json, format_table, format_list};
 pub use helpers::display_options;
+pub use structured::{format_list, format_table, pretty_print_json};
+pub use traits::{DisplayDetails, DisplayStats, DisplayVotes};
+pub use types::{DisplayOptions, ThreatLevel, VoteConsensus};
 
 #[cfg(test)]
 mod tests {

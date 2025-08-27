@@ -1,17 +1,17 @@
 use virustotal_rs::ApiTier;
 
+mod analysis_operations;
 mod constants;
 mod display_utils;
-mod upload_operations;
 mod file_operations;
-mod analysis_operations;
 mod management_operations;
+mod upload_operations;
 
-pub use constants::*;
-pub use upload_operations::*;
-pub use file_operations::*;
 pub use analysis_operations::*;
+pub use constants::*;
+pub use file_operations::*;
 pub use management_operations::*;
+pub use upload_operations::*;
 
 use crate::common::*;
 

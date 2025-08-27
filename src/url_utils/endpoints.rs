@@ -1,7 +1,7 @@
 //! Common endpoint patterns for VirusTotal API
 
 use super::builder::EndpointBuilder;
-use super::validation::{validate_hash, validate_domain, validate_ip};
+use super::validation::{validate_domain, validate_hash, validate_ip};
 use crate::error::Result;
 
 /// Common endpoint patterns

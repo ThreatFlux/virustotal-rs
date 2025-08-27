@@ -5,8 +5,8 @@
 
 use super::{PrivateFilesClient, Result};
 use crate::files::{FileBehavior, FileBehaviorSummary, MitreTrees};
-use crate::private_files::{DroppedFile, PrivateFileBehavior};
 use crate::objects::{Collection, CollectionIterator};
+use crate::private_files::{DroppedFile, PrivateFileBehavior};
 
 impl<'a> PrivateFilesClient<'a> {
     /// Get behavior report for a private file

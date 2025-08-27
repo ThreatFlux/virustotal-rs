@@ -4,8 +4,8 @@
 //! getting analysis status, listing analyses, and triggering reanalysis.
 
 use super::{PrivateFilesClient, Result};
-use crate::private_files::{PrivateAnalysis, ReanalyzeParams};
 use crate::objects::{Collection, CollectionIterator};
+use crate::private_files::{PrivateAnalysis, ReanalyzeParams};
 
 impl<'a> PrivateFilesClient<'a> {
     /// Get the analysis status for a private file

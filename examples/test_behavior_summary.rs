@@ -1,5 +1,6 @@
 use std::env;
-use virustotal_rs::files::{DnsLookup, FileBehaviorData};
+use virustotal_rs::file_behaviours::{DnsLookup, HttpConversation, IpTraffic};
+use virustotal_rs::files::{FileBehaviorSummary, FileBehaviorSummaryResponse};
 use virustotal_rs::{ApiTier, ClientBuilder};
 
 #[tokio::main]
@@ -50,12 +51,12 @@ async fn test_behavior_summary(client: &virustotal_rs::Client, dll_hash: &str) {
 async fn fetch_behavior_summary(
     client: &virustotal_rs::Client,
     dll_hash: &str,
-) -> Result<virustotal_rs::FileBehaviorSummary, virustotal_rs::Error> {
+) -> Result<FileBehaviorSummaryResponse, virustotal_rs::Error> {
     client.files().get_behavior_summary(dll_hash).await
 }
 
-/// Display all behavior data
-fn display_behavior_data(data: &FileBehaviorData) {
+/// Display all behavior data  
+fn display_behavior_data(data: &FileBehaviorSummary) {
     display_file_operations(data);
     display_process_operations(data);
     display_registry_operations(data);
@@ -65,7 +66,7 @@ fn display_behavior_data(data: &FileBehaviorData) {
 }
 
 /// Display file operations
-fn display_file_operations(data: &FileBehaviorData) {
+fn display_file_operations(data: &FileBehaviorSummary) {
     display_files_opened(&data.files_opened);
     display_processes_created(&data.processes_created);
     display_process_tree(&data.processes_tree);
@@ -120,7 +121,7 @@ fn display_process_node(node: &virustotal_rs::ProcessInfo) {
 }
 
 /// Display process operations
-fn display_process_operations(data: &FileBehaviorData) {
+fn display_process_operations(data: &FileBehaviorSummary) {
     display_mutexes_created(&data.mutexes_created);
 }
 
@@ -137,7 +138,7 @@ fn display_mutexes_created(mutexes: &Option<Vec<String>>) {
 }
 
 /// Display registry operations
-fn display_registry_operations(data: &FileBehaviorData) {
+fn display_registry_operations(data: &FileBehaviorSummary) {
     display_registry_keys_opened(&data.registry_keys_opened);
 }
 
@@ -157,7 +158,7 @@ fn display_registry_keys_opened(registry_keys: &Option<Vec<String>>) {
 }
 
 /// Display network operations
-fn display_network_operations(data: &FileBehaviorData) {
+fn display_network_operations(data: &FileBehaviorSummary) {
     display_dns_lookups(&data.dns_lookups);
     display_ip_traffic(&data.ip_traffic);
     display_http_conversations(&data.http_conversations);
@@ -176,7 +177,7 @@ fn display_dns_lookups(dns_lookups: &Option<Vec<DnsLookup>>) {
 }
 
 /// Display individual DNS lookup
-fn display_dns_lookup(lookup: &virustotal_rs::DnsLookup) {
+fn display_dns_lookup(lookup: &DnsLookup) {
     if let Some(hostname) = &lookup.hostname {
         println!("  • {}", hostname);
         if let Some(ips) = &lookup.resolved_ips {
@@ -188,7 +189,7 @@ fn display_dns_lookup(lookup: &virustotal_rs::DnsLookup) {
 }
 
 /// Display IP traffic
-fn display_ip_traffic(ip_traffic: &Option<Vec<virustotal_rs::IpTraffic>>) {
+fn display_ip_traffic(ip_traffic: &Option<Vec<IpTraffic>>) {
     if let Some(traffic) = ip_traffic {
         if !traffic.is_empty() {
             println!("\n📡 Network Traffic ({} connections):", traffic.len());
@@ -200,7 +201,7 @@ fn display_ip_traffic(ip_traffic: &Option<Vec<virustotal_rs::IpTraffic>>) {
 }
 
 /// Display IP connection
-fn display_ip_connection(traffic: &virustotal_rs::IpTraffic) {
+fn display_ip_connection(traffic: &IpTraffic) {
     println!(
         "  • {}:{} ({})",
         traffic
@@ -213,7 +214,7 @@ fn display_ip_connection(traffic: &virustotal_rs::IpTraffic) {
 }
 
 /// Display HTTP conversations
-fn display_http_conversations(http_convos: &Option<Vec<virustotal_rs::HttpConversation>>) {
+fn display_http_conversations(http_convos: &Option<Vec<HttpConversation>>) {
     if let Some(conversations) = http_convos {
         if !conversations.is_empty() {
             println!("\n🌐 HTTP Conversations ({}):", conversations.len());
@@ -225,7 +226,7 @@ fn display_http_conversations(http_convos: &Option<Vec<virustotal_rs::HttpConver
 }
 
 /// Display HTTP conversation
-fn display_http_conversation(convo: &virustotal_rs::HttpConversation) {
+fn display_http_conversation(convo: &HttpConversation) {
     if let Some(url) = &convo.url {
         println!(
             "  • {} {}",
@@ -239,7 +240,7 @@ fn display_http_conversation(convo: &virustotal_rs::HttpConversation) {
 }
 
 /// Display command executions
-fn display_command_executions(data: &FileBehaviorData) {
+fn display_command_executions(data: &FileBehaviorSummary) {
     if let Some(commands) = &data.command_executions {
         if !commands.is_empty() {
             println!("\n💻 Commands Executed ({}):", commands.len());
@@ -251,10 +252,10 @@ fn display_command_executions(data: &FileBehaviorData) {
 }
 
 /// Display behavioral indicators
-fn display_behavioral_indicators(data: &FileBehaviorData) {
+fn display_behavioral_indicators(data: &FileBehaviorSummary) {
     display_behavioral_tags(&data.tags);
     display_mitre_techniques(&data.mitre_attack_techniques);
-    display_sigma_results(&data.sigma_analysis_results);
+    // display_sigma_results(&data.attributes.sigma_analysis_results); // SigmaResult type not available
 }
 
 /// Display behavioral tags
@@ -285,11 +286,19 @@ fn display_mitre_techniques(techniques: &Option<Vec<virustotal_rs::MitreTechniqu
 fn display_mitre_technique(technique: &virustotal_rs::MitreTechnique) {
     println!(
         "  • {} - {}",
-        technique.id.as_ref().unwrap_or(&"Unknown".to_string()),
-        technique.name.as_ref().unwrap_or(&"Unknown".to_string())
+        technique
+            .id
+            .as_ref()
+            .map(|s| s.as_str())
+            .unwrap_or("Unknown"),
+        technique
+            .name
+            .as_ref()
+            .map(|s| s.as_str())
+            .unwrap_or("Unknown")
     );
 
-    if let Some(desc) = &technique.description {
+    if let Some(ref desc) = technique.description {
         let preview = create_description_preview(desc, 80);
         println!("    {}", preview);
     }
@@ -304,27 +313,7 @@ fn create_description_preview(description: &str, max_len: usize) -> String {
     }
 }
 
-/// Display Sigma analysis results
-fn display_sigma_results(sigma_results: &Option<Vec<virustotal_rs::SigmaResult>>) {
-    if let Some(results) = sigma_results {
-        if !results.is_empty() {
-            println!("\n🎯 Sigma Rule Matches ({}):", results.len());
-            for result in results.iter().take(3) {
-                display_sigma_result(result);
-            }
-        }
-    }
-}
-
-/// Display individual Sigma result
-fn display_sigma_result(result: &virustotal_rs::SigmaResult) {
-    if let Some(title) = &result.rule_title {
-        println!("  • {}", title);
-        if let Some(level) = &result.rule_level {
-            println!("    Level: {}", level);
-        }
-    }
-}
+// Sigma analysis functions removed due to SigmaResult type not being available
 
 /// Print error message
 fn print_error(error: &virustotal_rs::Error) {

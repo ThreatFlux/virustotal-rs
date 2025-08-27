@@ -3,9 +3,9 @@
 //! This module provides the concrete implementations of display traits
 //! for the main VirusTotal data types.
 
-use crate::common::{AnalysisStats, VoteStats};
 use super::traits::{DisplayStats, DisplayVotes};
 use super::types::{ThreatLevel, VoteConsensus};
+use crate::common::{AnalysisStats, VoteStats};
 
 // Helper functions for AnalysisStats
 impl AnalysisStats {

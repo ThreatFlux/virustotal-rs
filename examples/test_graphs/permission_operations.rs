@@ -1,6 +1,6 @@
-use virustotal_rs::{GraphClient, PermissionDescriptor};
-use crate::common::print_step_header;
 use super::display_utils::display_viewer_descriptors;
+use crate::common::print_step_header;
+use virustotal_rs::{GraphClient, PermissionDescriptor};
 
 pub async fn test_permission_management(graph_client: &GraphClient<'_>, graph_id: &str) {
     print_step_header(10, "PERMISSION MANAGEMENT");

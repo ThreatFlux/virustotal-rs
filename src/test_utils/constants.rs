@@ -11,8 +11,7 @@ pub mod constants {
     pub const TEST_API_KEY: &str = "test_api_key_123";
     pub const MALICIOUS_HASH: &str =
         "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
-    pub const CLEAN_HASH: &str =
-        "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9";
+    pub const CLEAN_HASH: &str = "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9";
 
     /// Common timestamp for consistent test data
     pub const SAMPLE_TIMESTAMP: i64 = 1609459200; // 2021-01-01 00:00:00 UTC

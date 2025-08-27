@@ -1,10 +1,8 @@
-use virustotal_rs::{
-    CreateGraphRequest, GraphClient, GraphOrder, GraphVisibility,
-};
-use crate::common::print_step_header;
-use super::graph_data::create_sample_graph_data;
 use super::display_utils::*;
+use super::graph_data::create_sample_graph_data;
+use crate::common::print_step_header;
 use virustotal_rs::graphs::Graph;
+use virustotal_rs::{CreateGraphRequest, GraphClient, GraphOrder, GraphVisibility};
 
 pub async fn list_graphs(graph_client: &GraphClient<'_>) {
     print_step_header(1, "LISTING GRAPHS");

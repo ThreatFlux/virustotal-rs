@@ -7,12 +7,12 @@ use crate::{Client, Result};
 
 // Import all the operation modules
 mod analysis_ops;
-mod upload_ops;
-mod file_mgmt;
-mod file_analysis;
 mod behavior_ops;
-mod misc_ops;
+mod file_analysis;
+mod file_mgmt;
 mod helpers;
+mod misc_ops;
+mod upload_ops;
 
 /// Client for Private File Scanning operations
 pub struct PrivateFilesClient<'a> {

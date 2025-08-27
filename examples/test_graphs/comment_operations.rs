@@ -1,7 +1,6 @@
-use virustotal_rs::comments::Comment;
-use virustotal_rs::GraphClient;
-use crate::common::print_step_header;
 use super::display_utils::{display_comment_list, display_paginated_comments};
+use crate::common::print_step_header;
+use virustotal_rs::GraphClient;
 
 pub async fn test_comment_operations(graph_client: &GraphClient<'_>, graph_id: &str) {
     add_graph_comments(graph_client, graph_id).await;

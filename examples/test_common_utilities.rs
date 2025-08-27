@@ -202,10 +202,7 @@ async fn test_constants() -> ExampleResult<()> {
 }
 
 /// Restores the original environment state after testing
-fn restore_environment_state(
-    original_vt_key: Option<String>,
-    original_vti_key: Option<String>,
-) {
+fn restore_environment_state(original_vt_key: Option<String>, original_vti_key: Option<String>) {
     match original_vt_key {
         Some(key) => env::set_var("VT_API_KEY", key),
         None => {

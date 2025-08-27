@@ -3,7 +3,7 @@
 //! This module defines the core traits for displaying VirusTotal analysis data
 //! in various formats with consistent interfaces.
 
-use super::types::{ThreatLevel, VoteConsensus, DisplayOptions};
+use super::types::{DisplayOptions, ThreatLevel, VoteConsensus};
 
 /// Trait for displaying analysis statistics in various formats
 ///
