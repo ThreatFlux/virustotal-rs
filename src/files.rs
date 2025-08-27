@@ -429,7 +429,7 @@ impl<'a> FileClient<'a> {
         let file_path = file_path.as_ref();
         let file_bytes = fs::read(file_path)
             .await
-            .map_err(|e| crate::Error::Unknown(format!("Failed to read file: {}", e)))?;
+            .map_err(|e| crate::Error::io_error(format!("Failed to read file: {}", e)))?;
 
         const MAX_DIRECT_UPLOAD_SIZE: usize = 32 * 1024 * 1024; // 32MB
 
@@ -516,7 +516,7 @@ impl<'a> FileClient<'a> {
             {
                 Err(crate::Error::from_response(status, error_response.error))
             } else {
-                Err(crate::Error::Unknown(format!(
+                Err(crate::Error::unknown(format!(
                     "HTTP {}: {}",
                     status,
                     text.chars().take(200).collect::<String>()
@@ -575,7 +575,7 @@ impl<'a> FileClient<'a> {
             {
                 Err(crate::Error::from_response(status, error_response.error))
             } else {
-                Err(crate::Error::Unknown(format!(
+                Err(crate::Error::unknown(format!(
                     "HTTP {}: {}",
                     status,
                     text.chars().take(200).collect::<String>()
@@ -615,7 +615,7 @@ impl<'a> FileClient<'a> {
         } else {
             let status = response.status();
             let text = response.text().await.map_err(crate::Error::Http)?;
-            Err(crate::Error::Unknown(format!(
+            Err(crate::Error::unknown(format!(
                 "Failed to download file: HTTP {} - {}",
                 status,
                 text.chars().take(200).collect::<String>()

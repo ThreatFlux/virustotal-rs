@@ -23,6 +23,7 @@ reqwest = { version = "0.12.23", features = ["json", "rustls-tls", "multipart"] 
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.143"
 tokio = { version = "1.43.0", features = ["rt-multi-thread", "macros", "time", "fs"] }
+tokio-stream = "0.1.17"
 thiserror = "2.0.16"
 async-trait = "0.1.89"
 url = "2.5.7"
@@ -65,6 +66,7 @@ tokio-test = "0.4.4"
 mockito = "1.7.0"
 wiremock = "0.6.5"
 clap = { version = "4.5", features = ["derive"] }
+tempfile = "3.12.0"
 
 [profile.release]
 opt-level = 3

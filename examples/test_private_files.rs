@@ -24,37 +24,49 @@ fn handle_result<T>(result: Result<T, BoxError>, success_msg: &str, error_msg: &
 
 /// Print analysis statistics if available
 fn print_analysis_stats(stats: &serde_json::Value, prefix: &str) {
-    if let Some(malicious) = stats.get("malicious").and_then(|v| v.as_u64()) {
-        println!("{}  - Malicious: {}", prefix, malicious);
-    }
-    if let Some(suspicious) = stats.get("suspicious").and_then(|v| v.as_u64()) {
-        println!("{}  - Suspicious: {}", prefix, suspicious);
-    }
-    if let Some(undetected) = stats.get("undetected").and_then(|v| v.as_u64()) {
-        println!("{}  - Undetected: {}", prefix, undetected);
+    use virustotal_rs::{common::AnalysisStats, DisplayStats};
+
+    // Try to convert JSON to AnalysisStats for better formatting
+    if let Ok(analysis_stats) = serde_json::from_value::<AnalysisStats>(stats.clone()) {
+        let formatted = analysis_stats.display_formatted(prefix, false);
+        println!("{}", formatted);
+    } else {
+        // Fallback to manual parsing if conversion fails
+        if let Some(malicious) = stats.get("malicious").and_then(|v| v.as_u64()) {
+            println!("{}  - Malicious: {}", prefix, malicious);
+        }
+        if let Some(suspicious) = stats.get("suspicious").and_then(|v| v.as_u64()) {
+            println!("{}  - Suspicious: {}", prefix, suspicious);
+        }
+        if let Some(undetected) = stats.get("undetected").and_then(|v| v.as_u64()) {
+            println!("{}  - Undetected: {}", prefix, undetected);
+        }
     }
 }
 
 /// Print file information in a standardized format
 fn print_file_info(file: &serde_json::Value, prefix: &str) {
+    use virustotal_rs::{format_file_size, format_reputation};
+
     if let Some(size) = file.get("size").and_then(|v| v.as_u64()) {
-        println!("{}Size: {} bytes", prefix, size);
+        println!("{}Size: {}", prefix, format_file_size(size));
     }
     if let Some(type_desc) = file.get("type_description").and_then(|v| v.as_str()) {
         println!("{}Type: {}", prefix, type_desc);
     }
     if let Some(reputation) = file.get("reputation").and_then(|v| v.as_i64()) {
-        println!("{}Reputation: {}", prefix, reputation);
+        println!(
+            "{}Reputation: {}",
+            prefix,
+            format_reputation(reputation as i32)
+        );
     }
 }
 
 /// Truncate a string for display
 fn truncate_for_display(s: &str, max_len: usize) -> String {
-    if s.len() <= max_len {
-        s.to_string()
-    } else {
-        format!("{}...", &s[..max_len])
-    }
+    use virustotal_rs::truncate_text;
+    truncate_text(s, max_len)
 }
 
 /// Initialize the API client

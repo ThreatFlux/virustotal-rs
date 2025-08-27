@@ -1,5 +1,6 @@
 use crate::files::{FileBehavior, FileBehaviorSummary, MitreTrees};
 use crate::objects::{Collection, CollectionIterator, Object};
+use crate::url_utils::{EndpointBuilder, Endpoints};
 use crate::{Client, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -426,29 +427,15 @@ impl<'a> PrivateFilesClient<'a> {
         cursor: Option<&str>,
         order: Option<&str>,
     ) -> Result<Collection<PrivateAnalysis>> {
-        let mut url = String::from("private/analyses?");
+        let endpoint = EndpointBuilder::new()
+            .raw_segment("private")
+            .raw_segment("analyses")
+            .query_opt("limit", limit.map(|l| l.min(40))) // Maximum 40 analyses
+            .query_opt("cursor", cursor)
+            .query("order", order.unwrap_or("date-")) // Default to date- (most recent first)
+            .build();
 
-        if let Some(l) = limit {
-            // Maximum 40 analyses
-            let limit = l.min(40);
-            url.push_str(&format!("limit={}&", limit));
-        }
-
-        if let Some(c) = cursor {
-            url.push_str(&format!("cursor={}&", urlencoding::encode(c)));
-        }
-
-        if let Some(o) = order {
-            url.push_str(&format!("order={}&", urlencoding::encode(o)));
-        } else {
-            // Default to date- (most recent first)
-            url.push_str("order=date-&");
-        }
-
-        // Remove trailing '&' or '?'
-        url.pop();
-
-        self.client.get(&url).await
+        self.client.get(&endpoint).await
     }
 
     /// Get an iterator for listing private analyses
@@ -604,14 +591,16 @@ impl<'a> PrivateFilesClient<'a> {
     /// - `only_from_storage`: If true, only the file will be deleted from storage,
     ///   but the generated reports and analyses won't be deleted.
     pub async fn delete_file(&self, sha256: &str, only_from_storage: bool) -> Result<()> {
-        let url = if only_from_storage {
-            format!(
-                "private/files/{}?only_from_storage=true",
-                urlencoding::encode(sha256)
+        let url = Endpoints::private_file(sha256)?
+            .query_opt(
+                "only_from_storage",
+                if only_from_storage {
+                    Some("true")
+                } else {
+                    None
+                },
             )
-        } else {
-            format!("private/files/{}", urlencoding::encode(sha256))
-        };
+            .build();
         self.client.delete(&url).await
     }
 
@@ -1262,7 +1251,7 @@ impl<'a> PrivateFilesClient<'a> {
             match status.data.attributes.status.as_str() {
                 "finished" => return Ok(status),
                 "timeout" | "error-starting" | "error-creating" => {
-                    return Err(crate::Error::Unknown(format!(
+                    return Err(crate::Error::unknown(format!(
                         "ZIP file creation failed with status: {}",
                         status.data.attributes.status
                     )));
@@ -1274,8 +1263,8 @@ impl<'a> PrivateFilesClient<'a> {
             }
         }
 
-        Err(crate::Error::Unknown(
-            "Timeout waiting for ZIP file creation".to_string(),
+        Err(crate::Error::unknown(
+            "Timeout waiting for ZIP file creation",
         ))
     }
 }

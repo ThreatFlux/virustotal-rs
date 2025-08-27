@@ -184,6 +184,11 @@ where
 
         Ok(all_items)
     }
+
+    /// Check if iteration has finished
+    pub fn is_finished(&self) -> bool {
+        self.finished
+    }
 }
 
 pub trait ObjectOperations {

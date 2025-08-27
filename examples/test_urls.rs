@@ -1,24 +1,22 @@
-use virustotal_rs::{ApiTier, ClientBuilder, UrlClient, VoteVerdict};
+use virustotal_rs::{ApiTier, UrlClient, VoteVerdict};
+
+#[path = "common/mod.rs"]
+mod common;
+use common::*;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let api_key = std::env::var("VT_API_KEY").unwrap_or_else(|_| "test_key".to_string());
-
-    let client = ClientBuilder::new()
-        .api_key(api_key)
-        .tier(ApiTier::Public)
-        .build()?;
+async fn main() -> ExampleResult<()> {
+    let client = create_client_from_env("VT_API_KEY", ApiTier::Public)?;
 
     let url_client = client.urls();
 
     // Example URL to test
     let test_url = "http://www.example.com/test";
 
-    println!("Testing URL API methods:");
-    println!("========================");
+    print_header("Testing URL API methods");
 
     // Test URL identifier generation
-    println!("\n1. URL Identifier Generation:");
+    print_test_header("1. URL Identifier Generation");
     let base64_id = UrlClient::generate_url_id(test_url);
     let sha256_id = UrlClient::generate_url_sha256(test_url);
     println!("   URL: {}", test_url);
@@ -26,21 +24,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   SHA256 ID: {}", sha256_id);
 
     // Test scanning a URL
-    println!("\n2. Scanning URL:");
-    match url_client.scan(test_url).await {
-        Ok(analysis) => {
-            println!("   ✓ URL submitted for scanning");
+    print_test_header("2. Scanning URL");
+    handle_result_with(
+        url_client.scan(test_url).await,
+        |analysis| {
+            print_success("URL submitted for scanning");
             println!("   - Analysis ID: {}", analysis.data.id);
             println!("   - Type: {}", analysis.data.object_type);
-        }
-        Err(e) => println!("   ✗ Error: {}", e),
-    }
+        },
+        "Failed to scan URL",
+    );
 
     // Test getting URL report by ID
-    println!("\n3. Getting URL report:");
-    match url_client.get(&base64_id).await {
-        Ok(url_report) => {
-            println!("   ✓ Successfully retrieved URL report");
+    print_test_header("3. Getting URL report");
+    handle_result_with(
+        url_client.get(&base64_id).await,
+        |url_report| {
+            print_success("Successfully retrieved URL report");
             println!("   - URL: {:?}", url_report.object.attributes.url);
             println!(
                 "   - Final URL: {:?}",
@@ -57,159 +57,163 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
 
             if let Some(stats) = &url_report.object.attributes.last_analysis_stats {
-                println!("   - Last analysis stats:");
-                println!("     • Harmless: {}", stats.harmless);
-                println!("     • Malicious: {}", stats.malicious);
-                println!("     • Suspicious: {}", stats.suspicious);
-                println!("     • Undetected: {}", stats.undetected);
+                print_analysis_stats("Last analysis stats", stats);
             }
 
             if let Some(votes) = &url_report.object.attributes.total_votes {
-                println!("   - Total votes:");
-                println!("     • Harmless: {}", votes.harmless);
-                println!("     • Malicious: {}", votes.malicious);
+                print_vote_stats("Total votes", votes.harmless, votes.malicious);
             }
-        }
-        Err(e) => println!("   ✗ Error: {}", e),
-    }
+        },
+        "Failed to get URL report",
+    );
 
     // Test getting URL report by actual URL (convenience method)
-    println!("\n4. Getting URL report by actual URL:");
-    match url_client.get_by_url(test_url).await {
-        Ok(url_report) => {
-            println!("   ✓ Successfully retrieved URL report using actual URL");
+    print_test_header("4. Getting URL report by actual URL");
+    handle_result_with(
+        url_client.get_by_url(test_url).await,
+        |url_report| {
+            print_success("Retrieved URL report using actual URL");
             println!("   - ID: {}", url_report.object.id);
-        }
-        Err(e) => println!("   ✗ Error: {}", e),
-    }
+        },
+        "Failed to get URL report by URL",
+    );
 
     // Test rescanning a URL
-    println!("\n5. Requesting URL rescan:");
-    match url_client.rescan(&base64_id).await {
-        Ok(analysis) => {
-            println!("   ✓ URL rescan requested");
+    print_test_header("5. Requesting URL rescan");
+    handle_result_with(
+        url_client.rescan(&base64_id).await,
+        |analysis| {
+            print_success("URL rescan requested");
             println!("   - New analysis ID: {}", analysis.data.id);
-        }
-        Err(e) => println!("   ✗ Error: {}", e),
-    }
+        },
+        "Failed to request rescan",
+    );
 
     // Test getting comments
-    println!("\n6. Getting comments on URL:");
-    match url_client.get_comments(&base64_id).await {
-        Ok(comments) => {
-            println!("   ✓ Successfully retrieved comments");
+    print_test_header("6. Getting comments on URL");
+    handle_result_with(
+        url_client.get_comments(&base64_id).await,
+        |comments| {
+            print_success("Successfully retrieved comments");
             if let Some(meta) = &comments.meta {
                 if let Some(count) = meta.count {
                     println!("   - Total comments: {}", count);
                 }
             }
             for comment in comments.data.iter().take(3) {
-                println!("   - Comment: {}", comment.object.attributes.text);
+                let truncated = truncate_comment(&comment.object.attributes.text);
+                println!("   - Comment: {}", truncated);
             }
-        }
-        Err(e) => println!("   ✗ Error: {}", e),
-    }
+        },
+        "Failed to get comments",
+    );
 
     // Test adding a comment
-    println!("\n7. Adding a comment:");
-    match url_client
-        .add_comment(&base64_id, "This is a test comment #testing")
-        .await
-    {
-        Ok(comment) => {
-            println!("   ✓ Successfully added comment");
+    print_test_header("7. Adding a comment");
+    handle_result_with(
+        url_client
+            .add_comment(&base64_id, "This is a test comment #testing")
+            .await,
+        |comment| {
+            print_success("Successfully added comment");
             println!("   - Comment ID: {}", comment.object.id);
             println!("   - Text: {}", comment.object.attributes.text);
             if let Some(tags) = &comment.object.attributes.tags {
                 println!("   - Tags: {:?}", tags);
             }
-        }
-        Err(e) => println!("   ✗ Error: {}", e),
-    }
+        },
+        "Failed to add comment",
+    );
 
     // Test getting votes
-    println!("\n8. Getting votes on URL:");
-    match url_client.get_votes(&base64_id).await {
-        Ok(votes) => {
-            println!("   ✓ Successfully retrieved votes");
+    print_test_header("8. Getting votes on URL");
+    handle_result_with(
+        url_client.get_votes(&base64_id).await,
+        |votes| {
+            print_success("Successfully retrieved votes");
             if let Some(meta) = &votes.meta {
                 if let Some(count) = meta.count {
                     println!("   - Total votes: {}", count);
                 }
             }
-        }
-        Err(e) => println!("   ✗ Error: {}", e),
-    }
+        },
+        "Failed to get votes",
+    );
 
     // Test adding a vote
-    println!("\n9. Adding a vote (harmless):");
-    match url_client.add_vote(&base64_id, VoteVerdict::Harmless).await {
-        Ok(vote) => {
-            println!("   ✓ Successfully added vote");
+    print_test_header("9. Adding a vote (harmless)");
+    handle_result_with(
+        url_client.add_vote(&base64_id, VoteVerdict::Harmless).await,
+        |vote| {
+            print_success("Successfully added vote");
             println!("   - Vote verdict: {:?}", vote.object.attributes.verdict);
-        }
-        Err(e) => println!("   ✗ Error: {}", e),
-    }
+        },
+        "Failed to add vote",
+    );
 
     // Test getting relationships
-    println!("\n10. Getting URL relationships:");
+    print_test_header("10. Getting URL relationships");
 
     // Get analyses
-    match url_client.get_analyses(&base64_id).await {
-        Ok(analyses) => {
-            println!("   ✓ Retrieved analyses");
+    handle_result_with(
+        url_client.get_analyses(&base64_id).await,
+        |analyses| {
+            print_success("Retrieved analyses");
             if let Some(meta) = &analyses.meta {
                 if let Some(count) = meta.count {
                     println!("   - Number of analyses: {}", count);
                 }
             }
-        }
-        Err(e) => println!("   ✗ Error getting analyses: {}", e),
-    }
+        },
+        "Error getting analyses",
+    );
 
     // Get downloaded files
-    match url_client.get_downloaded_files(&base64_id).await {
-        Ok(files) => {
-            println!("   ✓ Retrieved downloaded files");
+    handle_result_with(
+        url_client.get_downloaded_files(&base64_id).await,
+        |files| {
+            print_success("Retrieved downloaded files");
             if let Some(meta) = &files.meta {
                 if let Some(count) = meta.count {
                     println!("   - Number of downloaded files: {}", count);
                 }
             }
-        }
-        Err(e) => println!("   ✗ Error getting downloaded files: {}", e),
-    }
+        },
+        "Error getting downloaded files",
+    );
 
     // Get redirecting URLs
-    match url_client.get_redirecting_urls(&base64_id).await {
-        Ok(urls) => {
-            println!("   ✓ Retrieved redirecting URLs");
+    handle_result_with(
+        url_client.get_redirecting_urls(&base64_id).await,
+        |urls| {
+            print_success("Retrieved redirecting URLs");
             if let Some(meta) = &urls.meta {
                 if let Some(count) = meta.count {
                     println!("   - Number of redirecting URLs: {}", count);
                 }
             }
-        }
-        Err(e) => println!("   ✗ Error getting redirecting URLs: {}", e),
-    }
+        },
+        "Error getting redirecting URLs",
+    );
 
     // Test using iterators for paginated results
-    println!("\n11. Testing pagination with comments iterator:");
+    print_test_header("11. Testing pagination with comments iterator");
     let mut comments_iter = url_client.get_comments_iterator(&base64_id);
-    match comments_iter.next_batch().await {
-        Ok(batch) => {
+    handle_result_with(
+        comments_iter.next_batch().await,
+        |batch| {
             if batch.is_empty() {
-                println!("   - No comments found");
+                print_info("No comments found");
             } else {
-                println!("   ✓ Retrieved first batch of comments");
+                print_success("Retrieved first batch of comments");
                 println!("   - Batch size: {}", batch.len());
             }
-        }
-        Err(e) => println!("   ✗ Error: {}", e),
-    }
+        },
+        "Failed to get comments batch",
+    );
 
-    println!("\n========================");
-    println!("URL API testing complete!");
+    print_separator(Some(60));
+    print_success("URL API testing complete!");
 
     Ok(())
 }

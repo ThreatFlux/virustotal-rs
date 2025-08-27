@@ -140,7 +140,7 @@ impl<'a> ZipFilesClient<'a> {
                     ZipFileStatus::Timeout
                     | ZipFileStatus::ErrorStarting
                     | ZipFileStatus::ErrorCreating => {
-                        return Err(crate::Error::Unknown(format!(
+                        return Err(crate::Error::unknown(format!(
                             "ZIP file creation failed with status: {:?}",
                             file_status
                         )));
@@ -153,8 +153,8 @@ impl<'a> ZipFilesClient<'a> {
             }
         }
 
-        Err(crate::Error::Unknown(
-            "Timeout waiting for ZIP file creation".to_string(),
+        Err(crate::Error::unknown(
+            "Timeout waiting for ZIP file creation",
         ))
     }
 }

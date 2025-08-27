@@ -36,3 +36,15 @@ mod integration_tests;
 mod additional_coverage_tests;
 #[cfg(test)]
 mod async_coverage_tests;
+
+// Example tests demonstrating new utilities
+#[cfg(test)]
+mod example_with_new_utilities;
+
+// Tests for the test utilities themselves
+#[cfg(test)]
+mod test_utilities_tests;
+
+// Refactoring examples showing before/after
+#[cfg(test)]
+mod refactored_example;

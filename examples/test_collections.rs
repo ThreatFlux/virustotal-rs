@@ -1,25 +1,22 @@
 use virustotal_rs::{
-    ApiTier, ClientBuilder, CollectionItemsRequest, CollectionOrder, CreateCollectionRequest,
-    DomainDescriptor, ExportFormat, UpdateCollectionRequest, UrlDescriptor,
+    ApiTier, CollectionItemsRequest, CollectionOrder, CreateCollectionRequest, DomainDescriptor,
+    ExportFormat, UpdateCollectionRequest, UrlDescriptor,
 };
 
+#[path = "common/mod.rs"]
+mod common;
+use common::*;
+
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let api_key = std::env::var("VT_API_KEY").unwrap_or_else(|_| "test_key".to_string());
+async fn main() -> ExampleResult<()> {
+    let client = create_client_from_env("VT_API_KEY", ApiTier::Premium)?; // Collections API requires premium privileges
 
-    let client = ClientBuilder::new()
-        .api_key(api_key)
-        .tier(ApiTier::Premium) // Collections API requires premium privileges for some features
-        .build()?;
-
-    println!("Testing VirusTotal Collections API");
-    println!("===================================\n");
+    print_header("Testing VirusTotal Collections API");
 
     let collections_client = client.collections();
 
     // 1. Create a new collection
-    println!("1. Creating a new collection");
-    println!("-----------------------------");
+    print_test_header("1. Creating a new collection");
 
     let create_request = CreateCollectionRequest::new(
         "APT Campaign IOCs".to_string(),
@@ -37,7 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     match collections_client.create(&create_request).await {
         Ok(collection) => {
-            println!("   ✓ Collection created successfully");
+            print_success("Collection created successfully");
             if let Some(name) = &collection.object.attributes.name {
                 println!("   - Name: {}", name);
             }
@@ -47,7 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             test_collection_operations(&collections_client, &collection.object.id).await?;
         }
         Err(e) => {
-            println!("   ✗ Error creating collection: {}", e);
+            print_error(&format!("Error creating collection: {}", e));
 
             // Test with a mock collection ID
             println!("\n   Using mock collection ID for demonstration...");

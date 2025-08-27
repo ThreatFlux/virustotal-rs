@@ -59,7 +59,7 @@ impl Client {
 
     pub fn with_base_url(mut self, base_url: &str) -> Result<Self> {
         self.base_url = Url::parse(base_url)
-            .map_err(|e| Error::BadRequest(format!("Invalid base URL: {}", e)))?;
+            .map_err(|e| Error::bad_request(format!("Invalid base URL: {}", e)))?;
         Ok(self)
     }
 
@@ -93,7 +93,7 @@ impl Client {
         let url = self
             .base_url
             .join(endpoint)
-            .map_err(|e| Error::BadRequest(format!("Invalid endpoint: {}", e)))?;
+            .map_err(|e| Error::bad_request(format!("Invalid endpoint: {}", e)))?;
 
         let request = self
             .http_client
@@ -135,7 +135,7 @@ impl Client {
         let url = self
             .base_url
             .join(endpoint)
-            .map_err(|e| Error::BadRequest(format!("Invalid endpoint: {}", e)))?;
+            .map_err(|e| Error::bad_request(format!("Invalid endpoint: {}", e)))?;
 
         let request = self
             .http_client
@@ -209,7 +209,7 @@ impl Client {
         let url = self
             .base_url
             .join(endpoint)
-            .map_err(|e| Error::BadRequest(format!("Invalid endpoint: {}", e)))?;
+            .map_err(|e| Error::bad_request(format!("Invalid endpoint: {}", e)))?;
 
         let request = self
             .http_client
@@ -231,7 +231,7 @@ impl Client {
         let url = self
             .base_url
             .join(endpoint)
-            .map_err(|e| Error::BadRequest(format!("Invalid endpoint: {}", e)))?;
+            .map_err(|e| Error::bad_request(format!("Invalid endpoint: {}", e)))?;
 
         let mut request = self.build_request(method, url);
 
@@ -249,7 +249,7 @@ impl Client {
         let url = self
             .base_url
             .join(endpoint)
-            .map_err(|e| Error::BadRequest(format!("Invalid endpoint: {}", e)))?;
+            .map_err(|e| Error::bad_request(format!("Invalid endpoint: {}", e)))?;
 
         let request = self.build_request_raw(method, url);
         let response = request.send().await.map_err(Error::Http)?;
@@ -290,7 +290,7 @@ impl Client {
         if let Ok(error_response) = serde_json::from_str::<ApiErrorResponse>(&text) {
             Err(Error::from_response(status, error_response.error))
         } else {
-            Err(Error::Unknown(format!(
+            Err(Error::unknown(format!(
                 "HTTP {}: {}",
                 status,
                 text.chars().take(200).collect::<String>()
@@ -345,7 +345,7 @@ impl ClientBuilder {
     pub fn build(self) -> Result<Client> {
         let api_key = self
             .api_key
-            .ok_or_else(|| Error::BadRequest("API key is required".to_string()))?;
+            .ok_or_else(|| Error::bad_request("API key is required"))?;
 
         let mut client = Client::new(api_key, self.tier)?;
 

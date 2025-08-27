@@ -1,31 +1,28 @@
-use std::env;
-use virustotal_rs::{ApiTier, ClientBuilder};
+use virustotal_rs::ApiTier;
+
+#[path = "common/mod.rs"]
+mod common;
+use common::*;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Get API key from environment variable
-    let api_key = env::var("VTI_API_KEY").expect("VTI_API_KEY environment variable not set");
-
-    println!("Using API key from VTI_API_KEY environment variable");
-
-    // Create client
-    let client = ClientBuilder::new()
-        .api_key(api_key)
-        .tier(ApiTier::Public)
-        .build()?;
+async fn main() -> ExampleResult<()> {
+    // Create client using strict API key (will panic if not set)
+    let client = {
+        let api_key = get_api_key_strict("VTI_API_KEY");
+        println!("Using API key from VTI_API_KEY environment variable");
+        create_client(api_key, ApiTier::Public)?
+    };
 
     // Test domain and IP
     let domain = "office.msftupdated.com";
     let ip = "35.208.137.212";
 
-    println!("\n{}", "=".repeat(60));
-    println!("🔍 DOMAIN ANALYSIS: {}", domain);
-    println!("{}", "=".repeat(60));
+    print_section_header(&format!("🔍 DOMAIN ANALYSIS: {}", domain), 60);
 
     // Get domain information
     match client.domains().get(domain).await {
         Ok(domain_info) => {
-            println!("✅ Domain retrieved successfully!");
+            print_success("Domain retrieved successfully!");
 
             // Print raw JSON to understand structure
             println!("\n📋 Domain Object ID: {}", domain_info.object.id);
@@ -47,29 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             // Analysis results
             if let Some(stats) = &domain_info.object.attributes.last_analysis_stats {
-                let total = stats.harmless + stats.suspicious + stats.malicious + stats.undetected;
-                println!("\n🛡️ Security Analysis ({} engines):", total);
-                if stats.malicious > 0 {
-                    println!("  ❌ MALICIOUS detections: {}", stats.malicious);
-                }
-                if stats.suspicious > 0 {
-                    println!("  ⚠️  Suspicious detections: {}", stats.suspicious);
-                }
-                if stats.harmless > 0 {
-                    println!("  ✅ Clean detections: {}", stats.harmless);
-                }
-                println!("  ⚪ No detection: {}", stats.undetected);
-
-                if stats.malicious > 0 || stats.suspicious > 0 {
-                    let detection_rate =
-                        (stats.malicious + stats.suspicious) as f64 / total as f64 * 100.0;
-                    println!(
-                        "\n  🚨 Detection Rate: {:.1}% ({}/{} engines)",
-                        detection_rate,
-                        stats.malicious + stats.suspicious,
-                        total
-                    );
-                }
+                print_analysis_stats_detailed("Security Analysis", stats);
             }
 
             // Get resolutions with better parsing
@@ -88,14 +63,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             let ip_addr = parts[0].trim_end_matches('-').trim_end_matches(domain);
                             println!("  {}. IP: {}", i + 1, ip_addr);
                             if ip_addr == ip {
-                                println!("     ✅ This is our target IP!");
+                                print_success("     This is our target IP!");
                             }
                         } else {
                             println!("  {}. {}", i + 1, resolution.id);
                         }
                     }
                 }
-                Err(e) => println!("  Error: {}", e),
+                Err(e) => print_error(&format!("Failed to get domain resolutions: {}", e)),
             }
 
             // Comments
@@ -103,24 +78,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             match client.domains().get_comments_with_limit(domain, 3).await {
                 Ok(comments) => {
                     if comments.data.is_empty() {
-                        println!("  No comments yet");
+                        print_info("No comments yet");
                     } else {
                         for comment in &comments.data {
-                            println!("  • {}", comment.object.attributes.text);
+                            let truncated = truncate_comment(&comment.object.attributes.text);
+                            println!("  • {}", truncated);
                         }
                     }
                 }
-                Err(_) => println!("  No comments available"),
+                Err(_) => print_info("No comments available"),
             }
         }
         Err(e) => {
-            eprintln!("❌ Error fetching domain: {}", e);
+            print_error(&format!("Error fetching domain: {}", e));
         }
     }
 
-    println!("\n{}", "=".repeat(60));
-    println!("🔍 IP ADDRESS ANALYSIS: {}", ip);
-    println!("{}", "=".repeat(60));
+    print_section_header(&format!("🔍 IP ADDRESS ANALYSIS: {}", ip), 60);
 
     // Get IP information
     match client.ip_addresses().get(ip).await {

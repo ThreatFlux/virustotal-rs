@@ -3,10 +3,12 @@ pub mod attack_tactics;
 pub mod attack_techniques;
 pub mod auth;
 pub mod client;
+pub mod client_utils;
 pub mod collections;
 pub mod comments;
 pub mod common;
 pub mod crowdsourced_yara_rules;
+pub mod display;
 pub mod domains;
 pub mod error;
 pub mod feeds;
@@ -16,6 +18,7 @@ pub mod graphs;
 pub mod groups;
 pub mod ioc_stream;
 pub mod ip_addresses;
+pub mod iterator_utils;
 pub mod livehunt;
 pub mod metadata;
 pub mod objects;
@@ -28,6 +31,7 @@ pub mod retrohunt;
 pub mod search;
 pub mod sigma_rules;
 pub mod threat_actors;
+pub mod url_utils;
 pub mod urls;
 pub mod users;
 pub mod votes;
@@ -40,11 +44,19 @@ pub mod mcp;
 #[cfg(test)]
 mod tests;
 
+#[cfg(test)]
+pub mod test_utils;
+
 pub use analysis::{Analysis, AnalysisResponse};
 pub use attack_tactics::{AttackTactic, AttackTacticClient};
 pub use attack_techniques::{AttackTechnique, AttackTechniqueClient};
 pub use auth::{ApiKey, ApiTier};
 pub use client::{Client, ClientBuilder};
+pub use client_utils::{
+    detect_api_tier, ClientUtils, EnhancedClientBuilder, HeaderUtils, RateLimitStatus, RateLimiter,
+    RetryConfig, TokenBucketLimiter, COMMON_API_KEY_VARS, DEFAULT_RETRY_ATTEMPTS,
+    DEFAULT_RETRY_DELAY, DEFAULT_TIMEOUT, PRIVATE_API_KEY_VARS,
+};
 pub use collections::{
     Collection as IocCollection, CollectionAttributes, CollectionItemsRequest, CollectionOrder,
     CollectionsClient, CreateCollectionRequest, DomainDescriptor, ExportFormat, FileDescriptor,
@@ -55,6 +67,11 @@ pub use comments::{
 };
 pub use crowdsourced_yara_rules::{
     CrowdsourcedYaraRule, CrowdsourcedYaraRulesClient, YaraRuleMeta, YaraRuleOrder,
+};
+pub use display::{
+    display_options, format_file_size, format_list, format_reputation, format_table,
+    format_timestamp, format_timestamp_relative, pretty_print_json, truncate_hash, truncate_text,
+    DisplayDetails, DisplayOptions, DisplayStats, DisplayVotes, ThreatLevel, VoteConsensus,
 };
 pub use domains::{Domain, DomainClient};
 pub use error::{Error, Result};
@@ -82,6 +99,12 @@ pub use ioc_stream::{
     IocStreamObject, IocStreamOrder, NotificationSource, SourceType,
 };
 pub use ip_addresses::{IpAddress, IpAddressClient};
+pub use iterator_utils::{
+    BatchIterator, CachedIterator, Collectable, CollectionIteratorAdapter,
+    EnhancedCollectionIterator, FilteredIterator, IteratorExt, MappedIterator, Pageable,
+    PaginatedIterator, ProgressIterator, ProgressStats, ProgressTracker, RetryIterator,
+    SkippedIterator, TakeUntilIterator, ThrottledIterator,
+};
 pub use livehunt::{
     AddEditorsRequest, CreateLivehuntRulesetRequest, EditorDescriptor, LivehuntClient,
     LivehuntNotification, LivehuntRuleset, LivehuntRulesetOrder, MatchObjectType, NotificationFile,
@@ -110,6 +133,10 @@ pub use retrohunt::{
 pub use search::{FileSearchResult, SearchClient, SearchOrder, SearchResult, SnippetResponse};
 pub use sigma_rules::{SigmaRule, SigmaRuleResponse, SigmaRulesClient};
 pub use threat_actors::{RelationshipOrder, ThreatActor, ThreatActorOrder, ThreatActorsClient};
+pub use url_utils::{
+    build_query_string, encode_path_segment, validate_domain, validate_hash, validate_ip,
+    EndpointBuilder, Endpoints, QueryBuilder, VirusTotalUrlBuilder, VT_API_BASE,
+};
 pub use urls::{Url, UrlClient};
 pub use users::{
     ApiQuota, User, UserAttributes, UserPrivileges, UserQuotas, UserResponse, UserUpdate,

@@ -340,8 +340,8 @@ impl<'a> RetrohuntClient<'a> {
             }
         }
 
-        Err(crate::Error::Unknown(
-            "Timeout waiting for Retrohunt job completion".to_string(),
+        Err(crate::Error::unknown(
+            "Timeout waiting for Retrohunt job completion",
         ))
     }
 }

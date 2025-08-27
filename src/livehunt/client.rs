@@ -97,8 +97,8 @@ impl<'a> LivehuntClient<'a> {
     }
 
     pub async fn delete_all_rulesets(&self, _username: &str) -> Result<OperationResponse> {
-        Err(crate::Error::Unknown(
-            "delete_all_rulesets requires x-confirm-delete header support".to_string(),
+        Err(crate::Error::unknown(
+            "delete_all_rulesets requires x-confirm-delete header support",
         ))
     }
 

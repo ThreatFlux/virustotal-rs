@@ -1,4 +1,5 @@
 use crate::objects::{Collection, CollectionIterator};
+use crate::url_utils::EndpointBuilder;
 use crate::{Client, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -188,15 +189,19 @@ impl<'a> SearchClient<'a> {
     /// - An IP address - Returns an IP address object
     /// - Comments by tags - Returns a list of Comment objects
     pub async fn search(&self, query: &str) -> Result<Collection<SearchResult>> {
-        let encoded_query = urlencoding::encode(query);
-        let endpoint = format!("search?query={}", encoded_query);
+        let endpoint = EndpointBuilder::new()
+            .raw_segment("search")
+            .query("query", query)
+            .build();
         self.client.get(&endpoint).await
     }
 
     /// Search with pagination support
     pub fn search_iterator(&self, query: &str) -> CollectionIterator<'_, SearchResult> {
-        let encoded_query = urlencoding::encode(query);
-        let url = format!("search?query={}", encoded_query);
+        let url = EndpointBuilder::new()
+            .raw_segment("search")
+            .query("query", query)
+            .build();
         CollectionIterator::new(self.client, url)
     }
 

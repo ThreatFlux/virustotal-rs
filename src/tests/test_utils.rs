@@ -1,3 +1,7 @@
+// Re-export the main test utilities to maintain backward compatibility
+#[allow(unused_imports)]
+pub use crate::test_utils::test_utilities::*;
+
 use crate::auth::ApiTier;
 use crate::client::{Client, ClientBuilder};
 use crate::error::Result;
@@ -5,7 +9,8 @@ use serde_json::json;
 use std::time::Duration;
 use wiremock::{MockServer, ResponseTemplate};
 
-/// Test utilities for creating mock clients and servers
+/// Legacy test utilities for backward compatibility
+/// Use the new test_utilities module for new tests
 pub struct TestUtils;
 
 impl TestUtils {

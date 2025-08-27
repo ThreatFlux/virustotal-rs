@@ -71,6 +71,13 @@ pub fn convert_vt_error(err: crate::Error) -> anyhow::Error {
         crate::Error::TooManyRequests => anyhow::anyhow!("Too many requests"),
         crate::Error::TransientError => anyhow::anyhow!("Transient server error"),
         crate::Error::DeadlineExceeded => anyhow::anyhow!("Operation deadline exceeded"),
+        crate::Error::Configuration { message } => {
+            anyhow::anyhow!("Configuration error: {}", message)
+        }
+        crate::Error::Validation { message, .. } => {
+            anyhow::anyhow!("Validation error: {}", message)
+        }
+        crate::Error::Io { message } => anyhow::anyhow!("IO error: {}", message),
     }
 }
 

@@ -4,6 +4,7 @@ use crate::comments::{
 };
 use crate::common::AnalysisStats;
 use crate::objects::{Collection, CollectionIterator, Object, ObjectOperations, ObjectResponse};
+use crate::url_utils::Endpoints;
 use crate::votes::{Vote, VoteRequest, VoteVerdict};
 use crate::{Client, Result};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
@@ -183,7 +184,7 @@ impl<'a> UrlClient<'a> {
 
     /// Request a URL rescan (re-analyze)
     pub async fn rescan(&self, url_id: &str) -> Result<AnalysisResponse> {
-        let endpoint = format!("{}/{}/analyse", Url::collection_name(), url_id);
+        let endpoint = Endpoints::url(url_id).raw_segment("analyse").build();
         self.client.post(&endpoint, &()).await
     }
 
@@ -195,19 +196,19 @@ impl<'a> UrlClient<'a> {
 
     /// Get comments on a URL
     pub async fn get_comments(&self, url_id: &str) -> Result<Collection<Comment>> {
-        let endpoint = format!("{}/{}/comments", Url::collection_name(), url_id);
+        let endpoint = Endpoints::comments("urls", url_id).build();
         self.client.get(&endpoint).await
     }
 
     /// Get comments iterator for paginated results
     pub fn get_comments_iterator(&self, url_id: &str) -> CommentIterator<'_> {
-        let url = format!("{}/{}/comments", Url::collection_name(), url_id);
+        let url = Endpoints::comments("urls", url_id).build();
         CommentIterator::new(self.client, url)
     }
 
     /// Add a comment on a URL
     pub async fn add_comment(&self, url_id: &str, text: &str) -> Result<Comment> {
-        let endpoint = format!("{}/{}/comments", Url::collection_name(), url_id);
+        let endpoint = Endpoints::comments("urls", url_id).build();
         let request = CreateCommentRequest {
             data: CreateCommentData {
                 object_type: "comment".to_string(),
@@ -221,19 +222,19 @@ impl<'a> UrlClient<'a> {
 
     /// Get votes on a URL
     pub async fn get_votes(&self, url_id: &str) -> Result<Collection<Vote>> {
-        let endpoint = format!("{}/{}/votes", Url::collection_name(), url_id);
+        let endpoint = Endpoints::votes("urls", url_id).build();
         self.client.get(&endpoint).await
     }
 
     /// Get votes iterator for paginated results
     pub fn get_votes_iterator(&self, url_id: &str) -> CollectionIterator<'_, Vote> {
-        let url = format!("{}/{}/votes", Url::collection_name(), url_id);
+        let url = Endpoints::votes("urls", url_id).build();
         CollectionIterator::new(self.client, url)
     }
 
     /// Add a vote on a URL
     pub async fn add_vote(&self, url_id: &str, verdict: VoteVerdict) -> Result<Vote> {
-        let endpoint = format!("{}/{}/votes", Url::collection_name(), url_id);
+        let endpoint = Endpoints::votes("urls", url_id).build();
         let request = VoteRequest::new(verdict);
         self.client.post(&endpoint, &request).await
     }
