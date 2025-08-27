@@ -697,6 +697,324 @@ pub fn print_info(message: &str) {
     println!("ℹ️  {}", message);
 }
 
+/// Enhanced console output utilities to eliminate duplication across examples
+pub mod console {
+    /// Print a test header with the format "=== Title ==="
+    ///
+    /// This function eliminates the duplication of header printing across example files.
+    ///
+    /// # Arguments
+    ///
+    /// * `title` - The title to display
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use common::console::print_test_header;
+    /// print_test_header("Testing File API");
+    /// // Output: === Testing File API ===
+    /// ```
+    pub fn print_test_header(title: &str) {
+        println!("\n=== {} ===", title);
+    }
+
+    /// Print a completion message with the format "=== Message ==="
+    pub fn print_completion(message: &str) {
+        println!("\n=== {} ===", message);
+    }
+
+    /// Print an indented step or action message
+    pub fn print_step(message: &str) {
+        println!("  {}", message);
+    }
+
+    /// Print a numbered step
+    pub fn print_numbered_step(step: u32, message: &str) {
+        println!("{}. {}", step, message);
+    }
+
+    /// Print a subsection header with dashes
+    pub fn print_subsection(title: &str) {
+        println!("\n--- {} ---", title);
+    }
+
+    /// Print a workflow section with arrow indicator
+    pub fn print_workflow_step(step: &str) {
+        println!("➤ {}", step);
+    }
+
+    /// Print fetching/loading message
+    pub fn print_fetching(item: &str, identifier: &str) {
+        println!("Fetching {}: {}", item, identifier);
+    }
+
+    /// Print a section divider
+    pub fn print_divider(width: usize) {
+        println!("{}", "=".repeat(width));
+    }
+
+    /// Print an emoji-prefixed success message
+    pub fn print_check_success(message: &str) {
+        println!("✓ {}", message);
+    }
+
+    /// Print an emoji-prefixed error message
+    pub fn print_x_error(message: &str) {
+        println!("✗ {}", message);
+    }
+
+    /// Print an emoji-prefixed info message
+    pub fn print_info_arrow(message: &str) {
+        println!("→ {}", message);
+    }
+}
+
+/// Enhanced error handling patterns to eliminate duplication
+pub mod error_handling {
+    /// Standard error handling pattern used across examples
+    ///
+    /// This eliminates the duplicate "Err(e) =>" patterns found in 36+ files.
+    ///
+    /// # Arguments
+    ///
+    /// * `result` - The result to handle
+    /// * `context` - Context for the error message
+    ///
+    /// # Returns
+    ///
+    /// Returns the unwrapped value or prints error and returns None
+    pub fn handle_api_error<T, E: std::fmt::Display>(
+        result: Result<T, E>,
+        context: &str,
+    ) -> Option<T> {
+        match result {
+            Ok(value) => Some(value),
+            Err(e) => {
+                eprintln!("Error {}: {}", context, e);
+                None
+            }
+        }
+    }
+
+    /// Handle error with suggestion
+    pub fn handle_api_error_with_suggestion<T, E: std::fmt::Display>(
+        result: Result<T, E>,
+        context: &str,
+        suggestion: &str,
+    ) -> Option<T> {
+        match result {
+            Ok(value) => Some(value),
+            Err(e) => {
+                eprintln!("Error {}: {}", context, e);
+                eprintln!("Suggestion: {}", suggestion);
+                None
+            }
+        }
+    }
+
+    /// Common pattern: handle error and return early from async function
+    pub async fn handle_or_return<T, E: std::fmt::Display>(
+        result: Result<T, E>,
+        context: &str,
+    ) -> Result<T, Box<dyn std::error::Error>> {
+        result.map_err(|e| {
+            eprintln!("Error {}: {}", context, e);
+            Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("{}: {}", context, e),
+            )) as Box<dyn std::error::Error>
+        })
+    }
+}
+
+/// Enhanced file information display patterns
+pub mod file_info {
+    use virustotal_rs::File;
+
+    /// Standard file information display pattern used across examples
+    ///
+    /// This eliminates duplicate SHA256/MD5/file info patterns found in 9 files.
+    pub fn print_standard_file_info(file: &File) {
+        println!("\n✓ File retrieved successfully!");
+
+        if let Some(type_desc) = &file.object.attributes.type_description {
+            println!("  Type: {}", type_desc);
+        }
+
+        if let Some(size) = file.object.attributes.size {
+            println!("  Size: {} bytes", size);
+        }
+
+        if let Some(sha256) = &file.object.attributes.sha256 {
+            println!("  SHA256: {}", sha256);
+        }
+
+        if let Some(md5) = &file.object.attributes.md5 {
+            println!("  MD5: {}", md5);
+        }
+
+        if let Some(sha1) = &file.object.attributes.sha1 {
+            println!("  SHA1: {}", sha1);
+        }
+
+        if let Some(names) = &file.object.attributes.names {
+            if !names.is_empty() {
+                println!("  Names: {:?}", names);
+            }
+        }
+
+        if let Some(meaningful_name) = &file.object.attributes.meaningful_name {
+            println!("  Meaningful name: {}", meaningful_name);
+        }
+
+        // Use the existing print_analysis_stats function
+        if let Some(stats) = &file.object.attributes.last_analysis_stats {
+            super::print_analysis_stats("Last Analysis Stats", stats);
+        }
+
+        if let Some(reputation) = file.object.attributes.reputation {
+            println!("  Reputation: {}", reputation);
+        }
+    }
+
+    /// Compact file info display for lists
+    pub fn print_compact_file_info(file: &File) {
+        let unknown = "Unknown".to_string();
+        let name = file
+            .object
+            .attributes
+            .meaningful_name
+            .as_ref()
+            .or_else(|| file.object.attributes.names.as_ref()?.first())
+            .unwrap_or(&unknown);
+
+        let size = file
+            .object
+            .attributes
+            .size
+            .map(|s| super::format_file_size(s))
+            .unwrap_or_else(|| "Unknown".to_string());
+
+        println!("  • {} ({})", name, size);
+
+        if let Some(stats) = &file.object.attributes.last_analysis_stats {
+            use virustotal_rs::DisplayStats;
+            println!("    {}", stats.display_summary());
+        }
+    }
+}
+
+/// Enhanced workflow patterns to eliminate common example structures
+pub mod workflow {
+    use virustotal_rs::Client;
+
+    /// Standard example workflow wrapper
+    ///
+    /// This eliminates the duplicate async main patterns and provides consistent
+    /// error handling and structure.
+    pub async fn run_example_workflow<F, Fut>(
+        title: &str,
+        api_key_var: &str,
+        tier: virustotal_rs::ApiTier,
+        workflow: F,
+    ) -> Result<(), Box<dyn std::error::Error>>
+    where
+        F: FnOnce(Client) -> Fut,
+        Fut: std::future::Future<Output = Result<(), Box<dyn std::error::Error>>>,
+    {
+        super::console::print_test_header(title);
+
+        let client = super::create_client_from_env(api_key_var, tier)?;
+
+        match workflow(client).await {
+            Ok(()) => {
+                super::console::print_completion("All tests completed successfully!");
+                Ok(())
+            }
+            Err(e) => {
+                super::console::print_x_error(&format!("Workflow failed: {}", e));
+                Err(e)
+            }
+        }
+    }
+
+    /// Standard test section workflow
+    pub async fn run_test_section<F, Fut>(
+        section_name: &str,
+        test: F,
+    ) -> Result<(), Box<dyn std::error::Error>>
+    where
+        F: FnOnce() -> Fut,
+        Fut: std::future::Future<Output = Result<(), Box<dyn std::error::Error>>>,
+    {
+        super::console::print_subsection(section_name);
+
+        match test().await {
+            Ok(()) => {
+                super::console::print_check_success(&format!("{} completed", section_name));
+                Ok(())
+            }
+            Err(e) => {
+                super::console::print_x_error(&format!("{} failed: {}", section_name, e));
+                Err(e)
+            }
+        }
+    }
+}
+
+/// Enhanced relationship testing patterns
+pub mod relationships {
+    use serde_json::Value;
+    use virustotal_rs::{error::Result, Client};
+
+    /// Standard relationship testing pattern used across examples
+    pub async fn test_standard_relationships(
+        _client: &Client,
+        object_type: &str,
+        _object_id: &str,
+        relationships: &[&str],
+    ) -> Result<()> {
+        super::console::print_subsection(&format!("Testing {} Relationships", object_type));
+
+        for relationship in relationships {
+            super::console::print_workflow_step(&format!("Testing {} relationship", relationship));
+
+            // This would be implemented with specific client methods
+            println!("    Relationship '{}' test would go here", relationship);
+        }
+
+        Ok(())
+    }
+
+    /// Test comments relationship (common across many objects)
+    pub async fn test_comments_relationship<F, Fut>(
+        object_type: &str,
+        _object_id: &str,
+        get_comments: F,
+    ) -> Result<()>
+    where
+        F: FnOnce() -> Fut,
+        Fut: std::future::Future<Output = Result<Value>>,
+    {
+        super::console::print_workflow_step(&format!("Getting {} comments", object_type));
+
+        match get_comments().await {
+            Ok(_comments) => {
+                super::console::print_check_success(&format!("Retrieved {} comments", object_type));
+                // Could add comment processing logic here
+                Ok(())
+            }
+            Err(e) => {
+                super::console::print_x_error(&format!(
+                    "Failed to get {} comments: {}",
+                    object_type, e
+                ));
+                Err(e)
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -66,32 +66,52 @@ async fn test_file_upload(private_client: &virustotal_rs::PrivateFilesClient<'_>
     let test_content = b"This is a test file for private scanning";
     let upload_params = create_upload_params();
 
+    print_upload_info(test_content.len());
+
+    match upload_test_file(private_client, test_content, upload_params).await {
+        Ok(response) => {
+            print_upload_success(&response);
+            tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+            check_analysis_status(private_client, &response.data.id).await;
+        }
+        Err(e) => print_upload_error(&e),
+    }
+}
+
+/// Print upload information
+fn print_upload_info(content_len: usize) {
     println!(
         "Uploading small test file ({} bytes) with parameters...",
-        test_content.len()
+        content_len
     );
     println!("  - Sandbox: enabled");
     println!("  - Internet: disabled");
     println!("  - Retention: 7 days");
     println!("  - Storage: US");
+}
 
-    match private_client
+/// Upload test file with parameters
+async fn upload_test_file(
+    private_client: &virustotal_rs::PrivateFilesClient<'_>,
+    test_content: &[u8],
+    upload_params: virustotal_rs::PrivateFileUploadParams,
+) -> Result<virustotal_rs::PrivateFileUploadResponse, virustotal_rs::Error> {
+    private_client
         .upload_file(test_content, Some(upload_params))
         .await
-    {
-        Ok(response) => {
-            print_success("File uploaded successfully");
-            println!("  Analysis ID: {}", response.data.id);
-            println!("  Type: {}", response.data.object_type);
+}
 
-            tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-            check_analysis_status(private_client, &response.data.id).await;
-        }
-        Err(e) => {
-            print_error(&format!("Error uploading file: {}", e));
-            println!("  Note: Private scanning requires special API privileges");
-        }
-    }
+/// Print successful upload result
+fn print_upload_success(response: &virustotal_rs::PrivateFileUploadResponse) {
+    print_success("File uploaded successfully");
+    println!("  Analysis ID: {}", response.data.id);
+    println!("  Type: {}", response.data.object_type);
+}
+
+/// Print upload error
+fn print_upload_error(error: &virustotal_rs::Error) {
+    print_error(&format!("Error uploading file: {}", error));
+    println!("  Note: Private scanning requires special API privileges");
 }
 
 /// Check analysis status for uploaded file
@@ -281,16 +301,20 @@ async fn test_mitre_attack_data(
     match private_client.get_mitre_attack_data(hash).await {
         Ok(mitre_data) => {
             print_success("Retrieved MITRE ATT&CK data");
-            display_mitre_data(&mitre_data);
+            display_mitre_overview(&mitre_data);
+            display_mitre_sandboxes(&mitre_data);
         }
         Err(e) => print_error(&format!("Error getting MITRE ATT&CK data: {}", e)),
     }
 }
 
-/// Display MITRE ATT&CK data
-fn display_mitre_data(mitre_data: &virustotal_rs::MitreTrees) {
+/// Display MITRE data overview
+fn display_mitre_overview(mitre_data: &virustotal_rs::MitreTrees) {
     println!("  Sandboxes analyzed: {}", mitre_data.data.len());
+}
 
+/// Display MITRE sandbox data
+fn display_mitre_sandboxes(mitre_data: &virustotal_rs::MitreTrees) {
     for (sandbox_name, sandbox_data) in mitre_data.data.iter().take(2) {
         println!("\n  Sandbox: {}", sandbox_name);
         println!("    Tactics: {}", sandbox_data.tactics.len());
@@ -381,7 +405,12 @@ async fn test_reanalysis(private_client: &virustotal_rs::PrivateFilesClient<'_>,
 async fn test_comments(private_client: &virustotal_rs::PrivateFilesClient<'_>, hash: &str) {
     print_step_header(10, "COMMENTS");
 
-    // Add comment
+    add_test_comment(private_client, hash).await;
+    retrieve_comments(private_client, hash).await;
+}
+
+/// Add a test comment
+async fn add_test_comment(private_client: &virustotal_rs::PrivateFilesClient<'_>, hash: &str) {
     println!("Adding comment to file...");
     match private_client
         .add_comment(hash, "Test comment from private file scanning API")
@@ -393,20 +422,27 @@ async fn test_comments(private_client: &virustotal_rs::PrivateFilesClient<'_>, h
         }
         Err(e) => print_error(&format!("Error adding comment: {}", e)),
     }
+}
 
-    // Retrieve comments
+/// Retrieve and display comments
+async fn retrieve_comments(private_client: &virustotal_rs::PrivateFilesClient<'_>, hash: &str) {
     println!("\nRetrieving comments...");
     match private_client.get_comments(hash, Some(5), None).await {
         Ok(comments) => {
             print_success(&format!("Retrieved {} comments", comments.data.len()));
-            for comment in comments.data.iter().take(2) {
-                println!(
-                    "  - {}",
-                    truncate_string(&comment.object.attributes.text, 50)
-                );
-            }
+            display_comment_list(&comments.data);
         }
         Err(e) => print_error(&format!("Error getting comments: {}", e)),
+    }
+}
+
+/// Display list of comments
+fn display_comment_list(comments: &[virustotal_rs::Comment]) {
+    for comment in comments.iter().take(2) {
+        println!(
+            "  - {}",
+            truncate_string(&comment.object.attributes.text, 50)
+        );
     }
 }
 
@@ -435,6 +471,11 @@ async fn test_file_download(private_client: &virustotal_rs::PrivateFilesClient<'
 async fn test_pagination(private_client: &virustotal_rs::PrivateFilesClient<'_>, hash: &str) {
     print_step_header(12, "ANALYSES PAGINATION");
 
+    fetch_analysis_batch(private_client, hash).await;
+}
+
+/// Fetch and display analysis batch
+async fn fetch_analysis_batch(private_client: &virustotal_rs::PrivateFilesClient<'_>, hash: &str) {
     println!("Getting analysis history with pagination...");
     let mut analyses_iterator = private_client.get_analyses_iterator(hash);
 
@@ -454,12 +495,17 @@ async fn test_pagination(private_client: &virustotal_rs::PrivateFilesClient<'_>,
 fn display_analyses_batch(batch: &[virustotal_rs::PrivateAnalysis]) {
     for analysis in batch.iter().take(2) {
         println!("  - Analysis ID: {}", analysis.object.id);
-        if let Some(date) = &analysis.object.attributes.date {
-            println!("    Date: {}", date);
-        }
-        if let Some(status) = &analysis.object.attributes.status {
-            println!("    Status: {:?}", status);
-        }
+        display_analysis_metadata(analysis);
+    }
+}
+
+/// Display analysis metadata
+fn display_analysis_metadata(analysis: &virustotal_rs::PrivateAnalysis) {
+    if let Some(date) = &analysis.object.attributes.date {
+        println!("    Date: {}", date);
+    }
+    if let Some(status) = &analysis.object.attributes.status {
+        println!("    Status: {:?}", status);
     }
 }
 

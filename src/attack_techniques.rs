@@ -133,12 +133,17 @@ impl<'a> AttackTechniqueClient<'a> {
     where
         T: for<'de> Deserialize<'de> + Clone,
     {
-        let url = AttackTechnique::relationship_objects_url(technique_id, relationship);
-        CollectionIterator::new(self.client, url)
+        use crate::iterator_utils::RelationshipIteratorBuilder;
+        RelationshipIteratorBuilder::create::<AttackTechnique, T>(
+            self.client,
+            technique_id,
+            relationship,
+        )
     }
+}
 
-    // Convenience methods for common relationships
-
+/// Convenience methods for common attack technique relationships
+impl<'a> AttackTechniqueClient<'a> {
     /// Get attack tactics associated with this technique
     pub async fn get_tactics(&self, technique_id: &str) -> Result<Collection<serde_json::Value>> {
         self.get_relationship(technique_id, "attack_tactics").await

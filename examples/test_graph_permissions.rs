@@ -139,19 +139,34 @@ async fn list_graph_editors(graph_client: &GraphClient<'_>, graph_id: &str) {
     println!("\n3. LISTING GRAPH EDITORS");
     println!("------------------------");
 
-    match graph_client
-        .get_graph_editors_descriptors(graph_id, Some(20), None)
-        .await
-    {
+    match fetch_editor_descriptors(graph_client, graph_id).await {
         Ok(descriptors) => {
-            println!("✓ Retrieved editor descriptors");
-            println!("  Total editors: {}", descriptors.data.len());
+            print_editor_success(&descriptors.data);
             display_editor_descriptors(&descriptors.data);
         }
-        Err(e) => {
-            println!("✗ Error getting editor descriptors: {}", e);
-        }
+        Err(e) => print_editor_error(&e),
     }
+}
+
+/// Fetch editor descriptors
+async fn fetch_editor_descriptors(
+    graph_client: &GraphClient<'_>,
+    graph_id: &str,
+) -> Result<virustotal_rs::Collection<GraphRelationshipDescriptor>, virustotal_rs::Error> {
+    graph_client
+        .get_graph_editors_descriptors(graph_id, Some(20), None)
+        .await
+}
+
+/// Print editor success message
+fn print_editor_success(descriptors: &[GraphRelationshipDescriptor]) {
+    println!("✓ Retrieved editor descriptors");
+    println!("  Total editors: {}", descriptors.len());
+}
+
+/// Print editor error message
+fn print_editor_error(error: &virustotal_rs::Error) {
+    println!("✗ Error getting editor descriptors: {}", error);
 }
 
 fn display_editor_descriptors(descriptors: &[GraphRelationshipDescriptor]) {

@@ -20,6 +20,7 @@ pub struct EnhancedCollectionIterator<'a, T> {
     _phantom: PhantomData<T>,
 }
 
+/// Constructor methods for EnhancedCollectionIterator
 impl<'a, T> EnhancedCollectionIterator<'a, T>
 where
     T: DeserializeOwned + Clone,
@@ -38,7 +39,13 @@ where
             _phantom: PhantomData,
         }
     }
+}
 
+/// Builder pattern methods for EnhancedCollectionIterator
+impl<'a, T> EnhancedCollectionIterator<'a, T>
+where
+    T: DeserializeOwned + Clone,
+{
     /// Set batch size limit
     pub fn with_limit(mut self, limit: u32) -> Self {
         self.limit = Some(limit);
@@ -53,7 +60,13 @@ where
         self.rate_limiter = Some(limiter);
         self
     }
+}
 
+/// Accessor methods for EnhancedCollectionIterator
+impl<'a, T> EnhancedCollectionIterator<'a, T>
+where
+    T: DeserializeOwned + Clone,
+{
     /// Get total items fetched so far
     pub fn total_fetched(&self) -> u64 {
         self.total_fetched
@@ -63,7 +76,13 @@ where
     pub fn batch_count(&self) -> u32 {
         self.batch_count
     }
+}
 
+/// Internal utility methods for EnhancedCollectionIterator
+impl<'a, T> EnhancedCollectionIterator<'a, T>
+where
+    T: DeserializeOwned + Clone,
+{
     /// Build the API URL with query parameters
     fn build_url(&self) -> String {
         let mut url = self.url.clone();

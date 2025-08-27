@@ -15,9 +15,8 @@ fn demo_url_identifier_generation(_url_client: &UrlClient, test_url: &str) -> St
     base64_id
 }
 
-/// Test basic URL operations (scan, get report, rescan)
-async fn test_basic_url_operations(url_client: &UrlClient<'_>, test_url: &str, base64_id: &str) {
-    // Test scanning a URL
+/// Test scanning a URL
+async fn test_scan_url(url_client: &UrlClient<'_>, test_url: &str) {
     print_test_header("2. Scanning URL");
     handle_result_with(
         url_client.scan(test_url).await,
@@ -28,40 +27,42 @@ async fn test_basic_url_operations(url_client: &UrlClient<'_>, test_url: &str, b
         },
         "Failed to scan URL",
     );
+}
 
-    // Test getting URL report by ID
+/// Test getting URL report by ID
+async fn test_get_url_report_by_id(url_client: &UrlClient<'_>, base64_id: &str) {
     print_test_header("3. Getting URL report");
     handle_result_with(
         url_client.get(base64_id).await,
         |url_report| {
             print_success("Successfully retrieved URL report");
-            println!("   - URL: {:?}", url_report.object.attributes.url);
-            println!(
-                "   - Final URL: {:?}",
-                url_report.object.attributes.final_url
-            );
-            println!("   - Title: {:?}", url_report.object.attributes.title);
-            println!(
-                "   - Reputation: {:?}",
-                url_report.object.attributes.reputation
-            );
-            println!(
-                "   - Times submitted: {:?}",
-                url_report.object.attributes.times_submitted
-            );
-
-            if let Some(stats) = &url_report.object.attributes.last_analysis_stats {
-                print_analysis_stats("Last analysis stats", stats);
-            }
-
-            if let Some(votes) = &url_report.object.attributes.total_votes {
-                print_vote_stats("Total votes", votes.harmless, votes.malicious);
-            }
+            display_url_report_details(&url_report.object.attributes);
         },
         "Failed to get URL report",
     );
+}
 
-    // Test getting URL report by actual URL (convenience method)
+use virustotal_rs::urls::UrlAttributes;
+
+/// Display URL report details
+fn display_url_report_details(attributes: &UrlAttributes) {
+    println!("   - URL: {:?}", attributes.url);
+    println!("   - Final URL: {:?}", attributes.final_url);
+    println!("   - Title: {:?}", attributes.title);
+    println!("   - Reputation: {:?}", attributes.reputation);
+    println!("   - Times submitted: {:?}", attributes.times_submitted);
+
+    if let Some(stats) = &attributes.last_analysis_stats {
+        print_analysis_stats("Last analysis stats", stats);
+    }
+
+    if let Some(votes) = &attributes.total_votes {
+        print_vote_stats("Total votes", votes.harmless, votes.malicious);
+    }
+}
+
+/// Test getting URL report by actual URL (convenience method)
+async fn test_get_url_report_by_url(url_client: &UrlClient<'_>, test_url: &str) {
     print_test_header("4. Getting URL report by actual URL");
     handle_result_with(
         url_client.get_by_url(test_url).await,
@@ -71,8 +72,10 @@ async fn test_basic_url_operations(url_client: &UrlClient<'_>, test_url: &str, b
         },
         "Failed to get URL report by URL",
     );
+}
 
-    // Test rescanning a URL
+/// Test rescanning a URL
+async fn test_rescan_url(url_client: &UrlClient<'_>, base64_id: &str) {
     print_test_header("5. Requesting URL rescan");
     handle_result_with(
         url_client.rescan(base64_id).await,
@@ -82,6 +85,14 @@ async fn test_basic_url_operations(url_client: &UrlClient<'_>, test_url: &str, b
         },
         "Failed to request rescan",
     );
+}
+
+/// Test basic URL operations (scan, get report, rescan)
+async fn test_basic_url_operations(url_client: &UrlClient<'_>, test_url: &str, base64_id: &str) {
+    test_scan_url(url_client, test_url).await;
+    test_get_url_report_by_id(url_client, base64_id).await;
+    test_get_url_report_by_url(url_client, test_url).await;
+    test_rescan_url(url_client, base64_id).await;
 }
 
 /// Test comment and voting functionality
@@ -149,11 +160,8 @@ async fn test_comments_and_votes(url_client: &UrlClient<'_>, base64_id: &str) {
     );
 }
 
-/// Test URL relationship retrieval
-async fn test_url_relationships(url_client: &UrlClient<'_>, base64_id: &str) {
-    print_test_header("10. Getting URL relationships");
-
-    // Get analyses
+/// Get URL analyses
+async fn get_url_analyses(url_client: &UrlClient<'_>, base64_id: &str) {
     handle_result_with(
         url_client.get_analyses(base64_id).await,
         |analyses| {
@@ -166,8 +174,10 @@ async fn test_url_relationships(url_client: &UrlClient<'_>, base64_id: &str) {
         },
         "Error getting analyses",
     );
+}
 
-    // Get downloaded files
+/// Get URL downloaded files
+async fn get_url_downloaded_files(url_client: &UrlClient<'_>, base64_id: &str) {
     handle_result_with(
         url_client.get_downloaded_files(base64_id).await,
         |files| {
@@ -180,8 +190,10 @@ async fn test_url_relationships(url_client: &UrlClient<'_>, base64_id: &str) {
         },
         "Error getting downloaded files",
     );
+}
 
-    // Get redirecting URLs
+/// Get URL redirecting URLs
+async fn get_url_redirecting_urls(url_client: &UrlClient<'_>, base64_id: &str) {
     handle_result_with(
         url_client.get_redirecting_urls(base64_id).await,
         |urls| {
@@ -194,6 +206,14 @@ async fn test_url_relationships(url_client: &UrlClient<'_>, base64_id: &str) {
         },
         "Error getting redirecting URLs",
     );
+}
+
+/// Test URL relationship retrieval
+async fn test_url_relationships(url_client: &UrlClient<'_>, base64_id: &str) {
+    print_test_header("10. Getting URL relationships");
+    get_url_analyses(url_client, base64_id).await;
+    get_url_downloaded_files(url_client, base64_id).await;
+    get_url_redirecting_urls(url_client, base64_id).await;
 }
 
 /// Test paginated results with iterators

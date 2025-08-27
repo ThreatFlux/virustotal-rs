@@ -56,7 +56,9 @@
 
 pub mod adapters;
 pub mod core;
+pub mod lookup;
 pub mod progress;
+pub mod shared;
 pub mod traits;
 
 #[cfg(test)]
@@ -65,5 +67,7 @@ mod tests;
 // Re-export key types and traits for public API
 pub use adapters::*;
 pub use core::*;
+pub use lookup::*;
 pub use progress::*;
+pub use shared::*;
 pub use traits::*;

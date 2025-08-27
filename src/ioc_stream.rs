@@ -236,26 +236,26 @@ impl<'a> IocStreamClient<'a> {
         order: Option<IocStreamOrder>,
         descriptors_only: Option<bool>,
     ) -> CollectionIterator<'_, IocStreamObject> {
-        let mut url = String::from("ioc_stream?");
+        use crate::iterator_utils::QueryUrlBuilder;
+        let mut builder = QueryUrlBuilder::new("ioc_stream");
 
         if let Some(f) = filter {
-            url.push_str(&format!("filter={}&", urlencoding::encode(f)));
+            builder = builder.filter(f);
         }
-
         if let Some(o) = order {
-            url.push_str(&format!("order={}&", o.to_string()));
+            builder = builder.order(o.to_string());
         }
-
         if let Some(d) = descriptors_only {
-            url.push_str(&format!("descriptors_only={}&", d));
+            builder = builder.param("descriptors_only", d);
         }
 
-        // Remove trailing '&' or '?'
-        url.pop();
-
+        let url = builder.build_clean();
         CollectionIterator::new(self.client, url)
     }
+}
 
+/// Notification management methods for IoC Stream
+impl<'a> IocStreamClient<'a> {
     /// Delete notifications from the IoC Stream
     ///
     /// Uses the same filters as get_stream() to delete all matching notifications
@@ -281,7 +281,10 @@ impl<'a> IocStreamClient<'a> {
         );
         self.client.delete(&url).await
     }
+}
 
+/// Filter building helper methods for IoC Stream
+impl<'a> IocStreamClient<'a> {
     /// Helper to build a filter for date range
     pub fn build_date_filter(start: Option<&str>, end: Option<&str>) -> String {
         let mut filter = String::new();

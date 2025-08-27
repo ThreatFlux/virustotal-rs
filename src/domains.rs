@@ -181,11 +181,13 @@ impl<'a> DomainClient<'a> {
     where
         T: for<'de> Deserialize<'de> + Clone,
     {
-        let url = Domain::relationship_objects_url(domain, relationship);
-        CollectionIterator::new(self.client, url)
+        use crate::iterator_utils::RelationshipIteratorBuilder;
+        RelationshipIteratorBuilder::create::<Domain, T>(self.client, domain, relationship)
     }
+}
 
-    // Domain-specific convenience methods
+/// Domain-specific convenience methods for relationships
+impl<'a> DomainClient<'a> {
     pub async fn get_subdomains(&self, domain: &str) -> Result<Collection<serde_json::Value>> {
         self.get_relationship(domain, "subdomains").await
     }

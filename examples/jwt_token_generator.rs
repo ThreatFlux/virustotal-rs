@@ -205,69 +205,68 @@ fn format_timestamp(timestamp: usize) -> String {
 #[cfg(all(feature = "mcp-jwt", not(feature = "clap")))]
 fn parse_args() -> Args {
     let args: Vec<String> = std::env::args().collect();
-    let mut parsed_args = Args {
+    let mut parsed_args = create_default_args();
+
+    parse_command_line_arguments(&args, &mut parsed_args);
+    parsed_args
+}
+
+/// Create default argument values
+fn create_default_args() -> Args {
+    Args {
         user: "admin".to_string(),
         role: "admin".to_string(),
         secret: None,
         expiry: 86400,
         permissions: None,
         output: "token".to_string(),
-    };
+    }
+}
 
+/// Parse command line arguments
+fn parse_command_line_arguments(args: &[String], parsed_args: &mut Args) {
     let mut i = 1;
     while i < args.len() {
         match args[i].as_str() {
-            "--user" | "-u" => {
-                if i + 1 < args.len() {
-                    parsed_args.user = args[i + 1].clone();
-                    i += 2;
-                } else {
-                    i += 1;
-                }
-            }
-            "--role" | "-r" => {
-                if i + 1 < args.len() {
-                    parsed_args.role = args[i + 1].clone();
-                    i += 2;
-                } else {
-                    i += 1;
-                }
-            }
-            "--secret" | "-s" => {
-                if i + 1 < args.len() {
-                    parsed_args.secret = Some(args[i + 1].clone());
-                    i += 2;
-                } else {
-                    i += 1;
-                }
-            }
-            "--expiry" | "-e" => {
-                if i + 1 < args.len() {
-                    parsed_args.expiry = args[i + 1].parse().unwrap_or(86400);
-                    i += 2;
-                } else {
-                    i += 1;
-                }
-            }
-            "--output" | "-o" => {
-                if i + 1 < args.len() {
-                    parsed_args.output = args[i + 1].clone();
-                    i += 2;
-                } else {
-                    i += 1;
-                }
-            }
+            "--user" | "-u" => i = parse_string_arg(args, i, &mut parsed_args.user),
+            "--role" | "-r" => i = parse_string_arg(args, i, &mut parsed_args.role),
+            "--secret" | "-s" => i = parse_optional_string_arg(args, i, &mut parsed_args.secret),
+            "--expiry" | "-e" => i = parse_expiry_arg(args, i, &mut parsed_args.expiry),
+            "--output" | "-o" => i = parse_string_arg(args, i, &mut parsed_args.output),
             "--permissions" | "-p" => {
-                if i + 1 < args.len() {
-                    parsed_args.permissions = Some(args[i + 1].clone());
-                    i += 2;
-                } else {
-                    i += 1;
-                }
+                i = parse_optional_string_arg(args, i, &mut parsed_args.permissions)
             }
             _ => i += 1,
         }
     }
+}
 
-    parsed_args
+/// Parse string argument
+fn parse_string_arg(args: &[String], i: usize, target: &mut String) -> usize {
+    if i + 1 < args.len() {
+        *target = args[i + 1].clone();
+        i + 2
+    } else {
+        i + 1
+    }
+}
+
+/// Parse optional string argument
+fn parse_optional_string_arg(args: &[String], i: usize, target: &mut Option<String>) -> usize {
+    if i + 1 < args.len() {
+        *target = Some(args[i + 1].clone());
+        i + 2
+    } else {
+        i + 1
+    }
+}
+
+/// Parse expiry argument
+fn parse_expiry_arg(args: &[String], i: usize, target: &mut u64) -> usize {
+    if i + 1 < args.len() {
+        *target = args[i + 1].parse().unwrap_or(86400);
+        i + 2
+    } else {
+        i + 1
+    }
 }

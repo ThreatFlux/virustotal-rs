@@ -24,6 +24,33 @@ rule TestMalware {
     .to_string()
 }
 
+/// Display pagination cursor for rulesets
+fn display_rulesets_pagination_cursor(meta: &Option<virustotal_rs::objects::CollectionMeta>) {
+    if let Some(meta) = meta {
+        if let Some(cursor) = &meta.cursor {
+            println!(
+                "   - Cursor for pagination: {}",
+                truncate_string(cursor, 20)
+            );
+        }
+    }
+}
+
+/// Handle ruleset listing result
+fn handle_rulesets_result(
+    result: Option<virustotal_rs::Collection<virustotal_rs::LivehuntRuleset>>,
+) {
+    match result {
+        Some(rulesets) => {
+            display_rulesets_pagination_cursor(&rulesets.meta);
+            display_rulesets(&rulesets.data);
+        }
+        None => {
+            print_warning("Livehunt requires premium API privileges");
+        }
+    }
+}
+
 /// Test listing existing rulesets
 async fn test_list_rulesets(livehunt: &virustotal_rs::LivehuntClient<'_>) {
     print_step_header(1, "LISTING RULESETS");
@@ -37,22 +64,8 @@ async fn test_list_rulesets(livehunt: &virustotal_rs::LivehuntClient<'_>) {
         )
         .await;
 
-    match handle_result(result, "Retrieved rulesets", "Error listing rulesets") {
-        Some(rulesets) => {
-            if let Some(meta) = &rulesets.meta {
-                if let Some(cursor) = &meta.cursor {
-                    println!(
-                        "   - Cursor for pagination: {}",
-                        truncate_string(cursor, 20)
-                    );
-                }
-            }
-            display_rulesets(&rulesets.data);
-        }
-        None => {
-            print_warning("Livehunt requires premium API privileges");
-        }
-    }
+    let rulesets_result = handle_result(result, "Retrieved rulesets", "Error listing rulesets");
+    handle_rulesets_result(rulesets_result);
 }
 
 /// Display ruleset information
@@ -151,13 +164,12 @@ async fn test_permission_management(
     test_permission_operations(livehunt, ruleset_id, &editors_request).await;
 }
 
-/// Test the permission operations sequence
-async fn test_permission_operations(
+/// Grant edit permissions to users
+async fn grant_permissions(
     livehunt: &virustotal_rs::LivehuntClient<'_>,
     ruleset_id: &str,
     editors_request: &AddEditorsRequest,
 ) {
-    // Grant permissions
     match livehunt
         .grant_edit_permissions(ruleset_id, editors_request)
         .await
@@ -165,8 +177,10 @@ async fn test_permission_operations(
         Ok(_) => print_success("Edit permissions granted"),
         Err(e) => print_error(&format!("Error granting permissions: {}", e)),
     }
+}
 
-    // Check permissions
+/// Check user permissions
+async fn check_permissions(livehunt: &virustotal_rs::LivehuntClient<'_>, ruleset_id: &str) {
     match livehunt
         .check_editor_permission(ruleset_id, "example_user")
         .await
@@ -176,8 +190,10 @@ async fn test_permission_operations(
         }
         Err(e) => print_error(&format!("Error checking permissions: {}", e)),
     }
+}
 
-    // Revoke permissions
+/// Revoke user permissions
+async fn revoke_permissions(livehunt: &virustotal_rs::LivehuntClient<'_>, ruleset_id: &str) {
     match livehunt
         .revoke_edit_permission(ruleset_id, "example_user")
         .await
@@ -185,6 +201,17 @@ async fn test_permission_operations(
         Ok(_) => print_success("Edit permissions revoked"),
         Err(e) => print_error(&format!("Error revoking permissions: {}", e)),
     }
+}
+
+/// Test the permission operations sequence
+async fn test_permission_operations(
+    livehunt: &virustotal_rs::LivehuntClient<'_>,
+    ruleset_id: &str,
+    editors_request: &AddEditorsRequest,
+) {
+    grant_permissions(livehunt, ruleset_id, editors_request).await;
+    check_permissions(livehunt, ruleset_id).await;
+    revoke_permissions(livehunt, ruleset_id).await;
 }
 
 /// Test notifications listing

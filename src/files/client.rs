@@ -291,11 +291,13 @@ impl<'a> FileClient<'a> {
     where
         T: for<'de> Deserialize<'de> + Clone,
     {
-        let url = File::relationship_objects_url(file_id, relationship);
-        CollectionIterator::new(self.client, url)
+        use crate::iterator_utils::RelationshipIteratorBuilder;
+        RelationshipIteratorBuilder::create::<File, T>(self.client, file_id, relationship)
     }
+}
 
-    // File-specific convenience methods for relationships
+/// File-specific convenience methods for relationships
+impl<'a> FileClient<'a> {
     pub async fn get_behaviours(&self, file_id: &str) -> Result<Collection<serde_json::Value>> {
         self.get_relationship(file_id, "behaviours").await
     }

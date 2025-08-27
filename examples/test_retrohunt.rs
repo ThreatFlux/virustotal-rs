@@ -31,6 +31,33 @@ fn calculate_time_range() -> ExampleResult<(i64, i64)> {
     Ok((seven_days_ago, now))
 }
 
+/// Display pagination cursor if available
+fn display_pagination_cursor(meta: &Option<virustotal_rs::objects::CollectionMeta>) {
+    if let Some(meta) = meta {
+        if let Some(cursor) = &meta.cursor {
+            println!(
+                "   - Cursor for pagination: {}",
+                truncate_string(cursor, 20)
+            );
+        }
+    }
+}
+
+/// Handle job listing result and display information
+fn handle_job_listing_result(
+    result: Option<virustotal_rs::Collection<virustotal_rs::RetrohuntJob>>,
+) {
+    match result {
+        Some(jobs) => {
+            display_pagination_cursor(&jobs.meta);
+            display_job_list(&jobs.data);
+        }
+        None => {
+            print_warning("Retrohunt requires premium API privileges");
+        }
+    }
+}
+
 /// List existing retrohunt jobs
 async fn list_retrohunt_jobs(retrohunt: &virustotal_rs::RetrohuntClient<'_>) {
     print_step_header(1, "LISTING RETROHUNT JOBS");
@@ -39,22 +66,8 @@ async fn list_retrohunt_jobs(retrohunt: &virustotal_rs::RetrohuntClient<'_>) {
         .list_jobs(Some("status:finished"), Some(10), None)
         .await;
 
-    match handle_result(result, "Retrieved Retrohunt jobs", "Error listing jobs") {
-        Some(jobs) => {
-            if let Some(meta) = &jobs.meta {
-                if let Some(cursor) = &meta.cursor {
-                    println!(
-                        "   - Cursor for pagination: {}",
-                        truncate_string(cursor, 20)
-                    );
-                }
-            }
-            display_job_list(&jobs.data);
-        }
-        None => {
-            print_warning("Retrohunt requires premium API privileges");
-        }
-    }
+    let jobs_result = handle_result(result, "Retrieved Retrohunt jobs", "Error listing jobs");
+    handle_job_listing_result(jobs_result);
 }
 
 /// Display job list information
@@ -132,42 +145,62 @@ fn display_created_job(job: &virustotal_rs::RetrohuntJob) {
     }
 }
 
+/// Check and display job status
+fn check_and_display_status(job: &virustotal_rs::RetrohuntJob) -> bool {
+    if let Some(status) = &job.object.attributes.status {
+        print!("   - Status: {:?}", status);
+        match status {
+            JobStatus::Finished => {
+                println!(" ✓");
+                return true;
+            }
+            JobStatus::Aborted => {
+                println!(" ✗");
+                if let Some(error) = &job.object.attributes.error {
+                    println!("   - Error: {}", error);
+                }
+                return true;
+            }
+            _ => println!(),
+        }
+    }
+    false
+}
+
+/// Perform single job status check
+async fn perform_job_check(
+    retrohunt: &virustotal_rs::RetrohuntClient<'_>,
+    job_id: &str,
+    check_number: usize,
+) -> Result<bool, String> {
+    match retrohunt.get_job(job_id).await {
+        Ok(job) => {
+            println!("\n   Check #{}: Job {}", check_number + 1, job.object.id);
+            let is_terminal = check_and_display_status(&job);
+            display_job_progress(&job);
+            Ok(is_terminal)
+        }
+        Err(e) => Err(format!("Error checking job status: {}", e)),
+    }
+}
+
 /// Monitor job progress with polling
 async fn monitor_job_progress(retrohunt: &virustotal_rs::RetrohuntClient<'_>, job_id: &str) {
     print_step_header(3, "MONITORING JOB PROGRESS");
 
     for i in 0..3 {
-        match retrohunt.get_job(job_id).await {
-            Ok(job) => {
-                println!("\n   Check #{}: Job {}", i + 1, job.object.id);
-
-                if let Some(status) = &job.object.attributes.status {
-                    print!("   - Status: {:?}", status);
-                    match status {
-                        JobStatus::Finished => {
-                            println!(" ✓");
-                            break;
-                        }
-                        JobStatus::Aborted => {
-                            println!(" ✗");
-                            if let Some(error) = &job.object.attributes.error {
-                                println!("   - Error: {}", error);
-                            }
-                            break;
-                        }
-                        _ => println!(),
-                    }
+        match perform_job_check(retrohunt, job_id, i).await {
+            Ok(is_terminal) => {
+                if is_terminal {
+                    break;
                 }
-
-                display_job_progress(&job);
-
                 if i < 2 {
                     println!("   Waiting 5 seconds before next check...");
                     tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
                 }
             }
-            Err(e) => {
-                print_error(&format!("Error checking job status: {}", e));
+            Err(error_msg) => {
+                print_error(&error_msg);
                 break;
             }
         }
@@ -230,6 +263,32 @@ fn display_matching_files(files: &[virustotal_rs::RetrohuntMatchingFile]) {
     }
 }
 
+/// Display batch information for matching files
+fn display_matching_files_batch(batch: &[virustotal_rs::RetrohuntMatchingFile]) {
+    for file in batch.iter().take(3) {
+        if let Some(context) = &file.context_attributes {
+            if let Some(rule) = &context.rule_name {
+                println!("   - Matched by rule: {}", rule);
+            }
+        }
+    }
+}
+
+/// Handle pagination batch result
+fn handle_pagination_batch_result(
+    result: Result<Vec<virustotal_rs::RetrohuntMatchingFile>, virustotal_rs::Error>,
+) {
+    match result {
+        Ok(batch) => {
+            print_success(&format!("Retrieved {} files in first batch", batch.len()));
+            display_matching_files_batch(&batch);
+        }
+        Err(e) => {
+            print_error(&format!("Error fetching batch: {}", e));
+        }
+    }
+}
+
 /// Test pagination functionality
 async fn test_pagination(retrohunt: &virustotal_rs::RetrohuntClient<'_>, job_id: &str) {
     print_step_header(5, "PAGINATION TEST");
@@ -237,21 +296,8 @@ async fn test_pagination(retrohunt: &virustotal_rs::RetrohuntClient<'_>, job_id:
     let mut files_iterator = retrohunt.get_matching_files_iterator(job_id);
 
     println!("Fetching first batch of matching files:");
-    match files_iterator.next_batch().await {
-        Ok(batch) => {
-            print_success(&format!("Retrieved {} files in first batch", batch.len()));
-            for file in batch.iter().take(3) {
-                if let Some(context) = &file.context_attributes {
-                    if let Some(rule) = &context.rule_name {
-                        println!("   - Matched by rule: {}", rule);
-                    }
-                }
-            }
-        }
-        Err(e) => {
-            print_error(&format!("Error fetching batch: {}", e));
-        }
-    }
+    let batch_result = files_iterator.next_batch().await;
+    handle_pagination_batch_result(batch_result);
 }
 
 /// Manage job lifecycle (abort if needed)

@@ -1,89 +1,80 @@
-use virustotal_rs::{ApiTier, Client, File};
+use virustotal_rs::{ApiTier, Client};
 #[path = "common/mod.rs"]
 mod common;
-use common::{build_client_from_env, print_analysis_stats, SAMPLE_FILE_HASH};
+use common::{console, error_handling, file_info, workflow, SAMPLE_FILE_HASH};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let client = build_client_from_env("VTI_API_KEY", ApiTier::Public)?;
-    run_workflow(&client, SAMPLE_FILE_HASH).await?;
+    // Use the new workflow utility to eliminate duplicate main patterns
+    workflow::run_example_workflow(
+        "Testing File API",
+        "VTI_API_KEY",
+        ApiTier::Public,
+        |client| run_workflow(client, SAMPLE_FILE_HASH),
+    )
+    .await
+}
+
+async fn run_workflow(client: Client, file_hash: &str) -> Result<(), Box<dyn std::error::Error>> {
+    console::print_fetching("file", file_hash);
+
+    // Use enhanced error handling
+    if let Some(file) =
+        error_handling::handle_api_error(client.files().get(file_hash).await, "fetching file")
+    {
+        file_info::print_standard_file_info(&file);
+
+        workflow::run_test_section("Testing Comments", || async {
+            show_comments(&client, file_hash).await
+        })
+        .await?;
+
+        workflow::run_test_section("Testing Votes", || async {
+            show_votes(&client, file_hash).await
+        })
+        .await?;
+
+        workflow::run_test_section("Testing Relationships", || async {
+            show_relationships(&client, file_hash).await
+        })
+        .await?;
+    } else {
+        println!("Suggestion: Make sure your API key is valid and has access to this file");
+    }
+
     Ok(())
 }
 
-async fn run_workflow(client: &Client, file_hash: &str) -> Result<(), Box<dyn std::error::Error>> {
-    println!("\n=== Testing File API ===");
-    println!("Fetching file: {}", file_hash);
-
-    match client.files().get(file_hash).await {
-        Ok(file) => {
-            print_file_info(&file);
-            show_comments(client, file_hash).await?;
-            show_votes(client, file_hash).await?;
-            show_relationships(client, file_hash).await?;
-            println!("\n=== All tests completed successfully! ===");
-        }
-        Err(e) => {
-            eprintln!("Error fetching file: {}", e);
-            eprintln!("Make sure your API key is valid and has access to this file");
-        }
-    }
-
-    Ok(())
-}
-
-fn print_file_info(file: &File) {
-    println!("\n✓ File retrieved successfully!");
-    println!("  Type: {:?}", file.object.attributes.type_description);
-    println!("  Size: {:?} bytes", file.object.attributes.size);
-    println!("  SHA256: {:?}", file.object.attributes.sha256);
-    println!("  MD5: {:?}", file.object.attributes.md5);
-    println!("  Names: {:?}", file.object.attributes.names);
-    println!(
-        "  Meaningful name: {:?}",
-        file.object.attributes.meaningful_name
-    );
-
-    if let Some(stats) = &file.object.attributes.last_analysis_stats {
-        print_analysis_stats("Last Analysis Stats", stats);
-    }
-
-    if let Some(reputation) = file.object.attributes.reputation {
-        println!("\n  Reputation: {}", reputation);
-    }
-
-    if let Some(votes) = &file.object.attributes.total_votes {
-        println!(
-            "  Total Votes - Harmless: {}, Malicious: {}",
-            votes.harmless, votes.malicious
-        );
-    }
-}
+// Function removed - now using file_info::print_standard_file_info()
 
 async fn show_comments(client: &Client, file_hash: &str) -> Result<(), Box<dyn std::error::Error>> {
-    println!("\n=== Testing Comments ===");
-    match client.files().get_comments_with_limit(file_hash, 5).await {
-        Ok(comments) => {
-            println!("✓ Retrieved {} comments", comments.data.len());
-            for (i, comment) in comments.data.iter().take(3).enumerate() {
-                let snippet: String = comment.object.attributes.text.chars().take(100).collect();
-                println!("  Comment {}: {}", i + 1, snippet);
-            }
+    // Use enhanced error handling pattern
+    if let Some(comments) = error_handling::handle_api_error(
+        client.files().get_comments_with_limit(file_hash, 5).await,
+        "retrieving comments",
+    ) {
+        console::print_check_success(&format!("Retrieved {} comments", comments.data.len()));
+        for (i, comment) in comments.data.iter().take(3).enumerate() {
+            let snippet: String = comment.object.attributes.text.chars().take(100).collect();
+            console::print_step(&format!("Comment {}: {}", i + 1, snippet));
         }
-        Err(e) => println!("  No comments or error: {}", e),
     }
     Ok(())
 }
 
 async fn show_votes(client: &Client, file_hash: &str) -> Result<(), Box<dyn std::error::Error>> {
-    println!("\n=== Testing Votes ===");
-    match client.files().get_votes(file_hash).await {
-        Ok(votes) => {
-            println!("✓ Retrieved {} votes", votes.data.len());
-            for (i, vote) in votes.data.iter().take(3).enumerate() {
-                println!("  Vote {}: {:?}", i + 1, vote.object.attributes.verdict);
-            }
+    if let Some(votes) = error_handling::handle_api_error(
+        client.files().get_votes(file_hash).await,
+        "retrieving votes",
+    ) {
+        console::print_check_success(&format!("Retrieved {} votes", votes.data.len()));
+        for (i, vote) in votes.data.iter().take(3).enumerate() {
+            console::print_step(&format!(
+                "Vote {}: {:?}",
+                i + 1,
+                vote.object.attributes.verdict
+            ));
         }
-        Err(e) => println!("  No votes or error: {}", e),
     }
     Ok(())
 }
@@ -92,23 +83,23 @@ async fn show_relationships(
     client: &Client,
     file_hash: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    println!("\n=== Testing Relationships ===");
-
-    match client.files().get_contacted_domains(file_hash).await {
-        Ok(domains) => {
-            println!("✓ Contacted domains: {} found", domains.data.len());
-            for (i, domain) in domains.data.iter().take(3).enumerate() {
-                if let Some(id) = domain.get("id").and_then(|v| v.as_str()) {
-                    println!("  Domain {}: {}", i + 1, id);
-                }
+    if let Some(domains) = error_handling::handle_api_error(
+        client.files().get_contacted_domains(file_hash).await,
+        "retrieving contacted domains",
+    ) {
+        console::print_check_success(&format!("Contacted domains: {} found", domains.data.len()));
+        for (i, domain) in domains.data.iter().take(3).enumerate() {
+            if let Some(id) = domain.get("id").and_then(|v| v.as_str()) {
+                console::print_step(&format!("Domain {}: {}", i + 1, id));
             }
         }
-        Err(e) => println!("  No contacted domains or error: {}", e),
     }
 
-    match client.files().get_similar_files(file_hash).await {
-        Ok(similar) => println!("✓ Similar files: {} found", similar.data.len()),
-        Err(e) => println!("  No similar files or error: {}", e),
+    if let Some(similar) = error_handling::handle_api_error(
+        client.files().get_similar_files(file_hash).await,
+        "retrieving similar files",
+    ) {
+        console::print_check_success(&format!("Similar files: {} found", similar.data.len()));
     }
 
     Ok(())

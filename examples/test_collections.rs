@@ -6,27 +6,42 @@ use virustotal_rs::{
 mod common;
 use common::*;
 
-/// Create a sample collection with test data
-async fn create_test_collection(
-    collections_client: &virustotal_rs::CollectionsClient<'_>,
-) -> ExampleResult<String> {
-    print_test_header("1. Creating a new collection");
+/// Create sample IOCs for the collection
+fn create_sample_iocs() -> (
+    Vec<String>, // domains
+    Vec<String>, // urls
+    Vec<String>, // ip_addresses
+    Vec<String>, // files
+) {
+    let domains = vec![
+        "malicious-domain.com".to_string(),
+        "c2-server.net".to_string(),
+    ];
+    let urls = vec!["https://phishing-site.com/payload".to_string()];
+    let ip_addresses = vec!["192.168.1.100".to_string(), "10.0.0.5".to_string()];
+    let files = vec!["abc123def456789012345678901234567890123456789012345678901234567".to_string()];
+    (domains, urls, ip_addresses, files)
+}
 
-    let create_request = CreateCollectionRequest::new(
+/// Build collection creation request
+fn build_collection_request() -> CreateCollectionRequest {
+    let (domains, urls, ip_addresses, files) = create_sample_iocs();
+
+    CreateCollectionRequest::new(
         "APT Campaign IOCs".to_string(),
         Some("Collection of indicators from recent APT campaign".to_string()),
     )
-    .with_domains(vec![
-        "malicious-domain.com".to_string(),
-        "c2-server.net".to_string(),
-    ])
-    .with_urls(vec!["https://phishing-site.com/payload".to_string()])
-    .with_ip_addresses(vec!["192.168.1.100".to_string(), "10.0.0.5".to_string()])
-    .with_files(vec![
-        "abc123def456789012345678901234567890123456789012345678901234567".to_string(),
-    ]);
+    .with_domains(domains)
+    .with_urls(urls)
+    .with_ip_addresses(ip_addresses)
+    .with_files(files)
+}
 
-    match collections_client.create(&create_request).await {
+/// Handle collection creation result
+fn handle_collection_creation_result(
+    result: Result<virustotal_rs::IocCollection, virustotal_rs::Error>,
+) -> ExampleResult<String> {
+    match result {
         Ok(collection) => {
             print_success("Collection created successfully");
             if let Some(name) = &collection.object.attributes.name {
@@ -41,6 +56,17 @@ async fn create_test_collection(
             Ok("mock-collection-id".to_string())
         }
     }
+}
+
+/// Create a sample collection with test data
+async fn create_test_collection(
+    collections_client: &virustotal_rs::CollectionsClient<'_>,
+) -> ExampleResult<String> {
+    print_test_header("1. Creating a new collection");
+
+    let create_request = build_collection_request();
+    let result = collections_client.create(&create_request).await;
+    handle_collection_creation_result(result)
 }
 
 /// List existing collections
@@ -77,15 +103,9 @@ async fn list_collections(collections_client: &virustotal_rs::CollectionsClient<
     }
 }
 
-/// Update an existing collection
-async fn test_update_collection(
-    client: &virustotal_rs::CollectionsClient<'_>,
-    collection_id: &str,
-) {
-    println!("\n3. Updating collection");
-    println!("----------------------");
-
-    let update_request = UpdateCollectionRequest {
+/// Build collection update request
+fn build_update_request() -> UpdateCollectionRequest {
+    UpdateCollectionRequest {
         data: virustotal_rs::collections::UpdateCollectionData {
             attributes: Some(virustotal_rs::collections::UpdateCollectionAttributes {
                 name: Some("Updated APT Campaign IOCs".to_string()),
@@ -94,9 +114,12 @@ async fn test_update_collection(
             raw_items: Some("Additional IOCs: evil.com, 192.168.2.100".to_string()),
             object_type: "collection".to_string(),
         },
-    };
+    }
+}
 
-    match client.update(collection_id, &update_request).await {
+/// Handle collection update result
+fn handle_update_result(result: Result<virustotal_rs::IocCollection, virustotal_rs::Error>) {
+    match result {
         Ok(updated) => {
             print_success("Collection updated successfully");
             if let Some(name) = &updated.object.attributes.name {
@@ -105,6 +128,19 @@ async fn test_update_collection(
         }
         Err(e) => print_error(&format!("Error updating collection: {}", e)),
     }
+}
+
+/// Update an existing collection
+async fn test_update_collection(
+    client: &virustotal_rs::CollectionsClient<'_>,
+    collection_id: &str,
+) {
+    println!("\n3. Updating collection");
+    println!("----------------------");
+
+    let update_request = build_update_request();
+    let result = client.update(collection_id, &update_request).await;
+    handle_update_result(result);
 }
 
 /// Add items to a collection
@@ -225,12 +261,11 @@ async fn test_relationships(client: &virustotal_rs::CollectionsClient<'_>, colle
     }
 }
 
-/// Test advanced collection operations
-async fn test_advanced_operations(
+/// Test collection export functionality
+async fn test_collection_export(
     client: &virustotal_rs::CollectionsClient<'_>,
     collection_id: &str,
 ) {
-    // Export collection
     println!("\n7. Exporting collection");
     println!("-----------------------");
 
@@ -244,8 +279,13 @@ async fn test_advanced_operations(
             println!("   Note: Export requires special Threat Landscape privileges");
         }
     }
+}
 
-    // Search within collection
+/// Test collection search functionality
+async fn test_collection_search(
+    client: &virustotal_rs::CollectionsClient<'_>,
+    collection_id: &str,
+) {
     println!("\n8. Searching within collection");
     println!("------------------------------");
 
@@ -272,6 +312,15 @@ async fn test_advanced_operations(
             println!("   Note: Search requires special Threat Landscape privileges");
         }
     }
+}
+
+/// Test advanced collection operations
+async fn test_advanced_operations(
+    client: &virustotal_rs::CollectionsClient<'_>,
+    collection_id: &str,
+) {
+    test_collection_export(client, collection_id).await;
+    test_collection_search(client, collection_id).await;
 }
 
 /// Test item removal from collection

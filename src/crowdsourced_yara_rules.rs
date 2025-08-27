@@ -169,8 +169,9 @@ impl<'a> CrowdsourcedYaraRulesClient<'a> {
         filter: Option<&str>,
         order: Option<YaraRuleOrder>,
     ) -> CollectionIterator<'_, CrowdsourcedYaraRule> {
-        let url = Self::build_list_url(filter, order, None, None);
-        CollectionIterator::new(self.client, url)
+        use crate::iterator_utils::ListIteratorBuilder;
+        ListIteratorBuilder::new(self.client, "yara_rules")
+            .create(filter, order.map(|o| o.to_string()))
     }
 
     /// Get a crowdsourced YARA rule by ID
@@ -178,36 +179,10 @@ impl<'a> CrowdsourcedYaraRulesClient<'a> {
         let url = format!("yara_rules/{}", urlencoding::encode(rule_id));
         self.client.get(&url).await
     }
+}
 
-    /// Build URL for relationship queries with pagination
-    fn build_relationship_url(
-        rule_id: &str,
-        relationship: &str,
-        limit: Option<u32>,
-        cursor: Option<&str>,
-    ) -> String {
-        let mut params = Vec::new();
-
-        if let Some(l) = limit {
-            params.push(format!("limit={}", l));
-        }
-        if let Some(c) = cursor {
-            params.push(format!("cursor={}", urlencoding::encode(c)));
-        }
-
-        let base = format!(
-            "yara_rules/{}/{}",
-            urlencoding::encode(rule_id),
-            relationship
-        );
-
-        if params.is_empty() {
-            base
-        } else {
-            format!("{}?{}", base, params.join("&"))
-        }
-    }
-
+/// Relationship methods for YARA rules
+impl<'a> CrowdsourcedYaraRulesClient<'a> {
     /// Get objects related to a YARA rule
     pub async fn get_relationship<T>(
         &self,
@@ -219,7 +194,10 @@ impl<'a> CrowdsourcedYaraRulesClient<'a> {
     where
         T: serde::de::DeserializeOwned,
     {
-        let url = Self::build_relationship_url(rule_id, relationship, limit, cursor);
+        use crate::iterator_utils::RelationshipUrlBuilder;
+        let base_url =
+            RelationshipUrlBuilder::build_objects_url("yara_rules", rule_id, relationship);
+        let url = RelationshipUrlBuilder::build_paginated_url(base_url, limit, cursor);
         self.client.get(&url).await
     }
 
@@ -232,42 +210,9 @@ impl<'a> CrowdsourcedYaraRulesClient<'a> {
     where
         T: serde::de::DeserializeOwned + Clone + Send + 'static,
     {
-        let url = format!(
-            "yara_rules/{}/{}",
-            urlencoding::encode(rule_id),
-            relationship
-        );
-
+        use crate::iterator_utils::RelationshipUrlBuilder;
+        let url = RelationshipUrlBuilder::build_objects_url("yara_rules", rule_id, relationship);
         CollectionIterator::new(self.client, url)
-    }
-
-    /// Build URL for relationship descriptors with pagination
-    fn build_relationship_descriptors_url(
-        rule_id: &str,
-        relationship: &str,
-        limit: Option<u32>,
-        cursor: Option<&str>,
-    ) -> String {
-        let mut params = Vec::new();
-
-        if let Some(l) = limit {
-            params.push(format!("limit={}", l));
-        }
-        if let Some(c) = cursor {
-            params.push(format!("cursor={}", urlencoding::encode(c)));
-        }
-
-        let base = format!(
-            "yara_rules/{}/relationships/{}",
-            urlencoding::encode(rule_id),
-            relationship
-        );
-
-        if params.is_empty() {
-            base
-        } else {
-            format!("{}?{}", base, params.join("&"))
-        }
     }
 
     /// Get object descriptors related to a YARA rule
@@ -281,7 +226,10 @@ impl<'a> CrowdsourcedYaraRulesClient<'a> {
     where
         T: serde::de::DeserializeOwned,
     {
-        let url = Self::build_relationship_descriptors_url(rule_id, relationship, limit, cursor);
+        use crate::iterator_utils::RelationshipUrlBuilder;
+        let base_url =
+            RelationshipUrlBuilder::build_descriptors_url("yara_rules", rule_id, relationship);
+        let url = RelationshipUrlBuilder::build_paginated_url(base_url, limit, cursor);
         self.client.get(&url).await
     }
 }

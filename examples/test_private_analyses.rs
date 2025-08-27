@@ -40,23 +40,39 @@ async fn list_private_analyses(private_client: &PrivateFilesClient<'_>) {
     print_step_header(1, "LIST PRIVATE ANALYSES");
     println!("Listing recent private analyses...");
 
-    match private_client
-        .list_analyses(Some(10), None, Some("date-"))
-        .await
-    {
+    match fetch_analyses_list(private_client).await {
         Ok(analyses) => {
             println!("✓ Retrieved {} analyses", analyses.data.len());
             display_analyses_overview(&analyses.data);
-
-            if let Some(first_analysis) = analyses.data.first() {
-                test_single_analysis(private_client, &first_analysis.object.id).await;
-            }
+            process_first_analysis(private_client, &analyses.data).await;
         }
-        Err(e) => {
-            println!("✗ Error listing analyses: {}", e);
-            println!("  Note: This requires private scanning privileges");
-        }
+        Err(e) => print_analyses_error(&e),
     }
+}
+
+/// Fetch analyses list from private client
+async fn fetch_analyses_list(
+    private_client: &PrivateFilesClient<'_>,
+) -> Result<virustotal_rs::Collection<PrivateAnalysis>, virustotal_rs::Error> {
+    private_client
+        .list_analyses(Some(10), None, Some("date-"))
+        .await
+}
+
+/// Process the first analysis if available
+async fn process_first_analysis(
+    private_client: &PrivateFilesClient<'_>,
+    analyses: &[PrivateAnalysis],
+) {
+    if let Some(first_analysis) = analyses.first() {
+        test_single_analysis(private_client, &first_analysis.object.id).await;
+    }
+}
+
+/// Print analyses error
+fn print_analyses_error(error: &virustotal_rs::Error) {
+    println!("✗ Error listing analyses: {}", error);
+    println!("  Note: This requires private scanning privileges");
 }
 
 fn display_analyses_overview(analyses: &[PrivateAnalysis]) {
@@ -210,24 +226,40 @@ async fn test_detailed_behavior_analysis(
 async fn get_specific_behavior_report(private_client: &PrivateFilesClient<'_>, sandbox_id: &str) {
     print_step_header(6, "SPECIFIC BEHAVIOR REPORT");
 
-    match private_client.get_file_behavior(sandbox_id).await {
+    match fetch_behavior_report(private_client, sandbox_id).await {
         Ok(behavior) => {
             println!("✓ Retrieved behavior report");
             display_behavior_info(&behavior.object.attributes);
         }
-        Err(e) => {
-            println!("✗ Error getting behavior report: {}", e);
-        }
+        Err(e) => print_behavior_error(&e),
     }
 }
 
+/// Fetch behavior report from private client
+async fn fetch_behavior_report(
+    private_client: &PrivateFilesClient<'_>,
+    sandbox_id: &str,
+) -> Result<virustotal_rs::FileBehavior, virustotal_rs::Error> {
+    private_client.get_file_behavior(sandbox_id).await
+}
+
+/// Print behavior report error
+fn print_behavior_error(error: &virustotal_rs::Error) {
+    println!("✗ Error getting behavior report: {}", error);
+}
+
+/// Display behavior information
 fn display_behavior_info(attributes: &PrivateFileBehaviorAttributes) {
+    display_sandbox_name(attributes);
+    display_report_availability(attributes);
+    display_behavior_details(attributes);
+}
+
+/// Display sandbox name
+fn display_sandbox_name(attributes: &PrivateFileBehaviorAttributes) {
     if let Some(sandbox_name) = &attributes.sandbox_name {
         println!("  Sandbox: {}", sandbox_name);
     }
-
-    display_report_availability(attributes);
-    display_behavior_details(attributes);
 }
 
 fn display_report_availability(attributes: &PrivateFileBehaviorAttributes) {

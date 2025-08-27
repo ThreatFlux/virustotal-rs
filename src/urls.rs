@@ -271,12 +271,13 @@ impl<'a> UrlClient<'a> {
     where
         T: for<'de> Deserialize<'de> + Clone,
     {
-        let url = Url::relationship_objects_url(url_id, relationship);
-        CollectionIterator::new(self.client, url)
+        use crate::iterator_utils::RelationshipIteratorBuilder;
+        RelationshipIteratorBuilder::create::<Url, T>(self.client, url_id, relationship)
     }
+}
 
-    // Convenience methods for common relationships
-
+/// Convenience methods for common URL relationships
+impl<'a> UrlClient<'a> {
     /// Get analyses for a URL
     pub async fn get_analyses(&self, url_id: &str) -> Result<Collection<serde_json::Value>> {
         self.get_relationship(url_id, "analyses").await
