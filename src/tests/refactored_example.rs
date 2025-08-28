@@ -257,7 +257,11 @@ mod refactored_tests {
     }
 
     // Consolidated test helper function for different analysis scenarios
-    async fn setup_file_mock(mock_client: &MockApiClient, endpoint: &str, file_data: serde_json::Value) {
+    async fn setup_file_mock(
+        mock_client: &MockApiClient,
+        endpoint: &str,
+        file_data: serde_json::Value,
+    ) {
         let response = ResponseFactory::success_response(file_data);
 
         Mock::given(method("GET"))
@@ -275,10 +279,12 @@ mod refactored_tests {
         let file_data = FileResponseBuilder::clean_file().build();
         setup_file_mock(&mock_client, "/files/clean", file_data).await;
 
-        let result: crate::Result<serde_json::Value> = mock_client.client().get("files/clean").await;
+        let result: crate::Result<serde_json::Value> =
+            mock_client.client().get("files/clean").await;
         let stats: crate::common::AnalysisStats = serde_json::from_value(
             result.unwrap()["data"]["attributes"]["last_analysis_stats"].clone(),
-        ).unwrap();
+        )
+        .unwrap();
         assert_analysis_clean!(stats);
     }
 
@@ -289,10 +295,12 @@ mod refactored_tests {
         let file_data = FileResponseBuilder::malicious_file().build();
         setup_file_mock(&mock_client, "/files/malicious", file_data).await;
 
-        let result: crate::Result<serde_json::Value> = mock_client.client().get("files/malicious").await;
+        let result: crate::Result<serde_json::Value> =
+            mock_client.client().get("files/malicious").await;
         let stats: crate::common::AnalysisStats = serde_json::from_value(
             result.unwrap()["data"]["attributes"]["last_analysis_stats"].clone(),
-        ).unwrap();
+        )
+        .unwrap();
         assert_analysis_malicious!(stats);
     }
 
@@ -300,24 +308,26 @@ mod refactored_tests {
     #[tokio::test]
     async fn test_custom_analysis_scenario() {
         let mock_client = MockApiClient::new().await.unwrap();
-        
+
         let custom_stats = AnalysisStatsBuilder::new()
             .with_harmless(60)
             .with_malicious(3)
             .with_suspicious(1)
             .with_undetected(2)
             .build();
-        
+
         let file_data = FileResponseBuilder::new("custom-hash")
             .with_stats(custom_stats)
             .build();
-        
+
         setup_file_mock(&mock_client, "/files/custom", file_data).await;
 
-        let result: crate::Result<serde_json::Value> = mock_client.client().get("files/custom").await;
+        let result: crate::Result<serde_json::Value> =
+            mock_client.client().get("files/custom").await;
         let stats: crate::common::AnalysisStats = serde_json::from_value(
             result.unwrap()["data"]["attributes"]["last_analysis_stats"].clone(),
-        ).unwrap();
+        )
+        .unwrap();
 
         assert_eq!(stats.harmless, 60);
         assert_eq!(stats.malicious, 3);

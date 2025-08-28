@@ -70,7 +70,7 @@ impl<'a> GraphClient<'a> {
         cursor: Option<&str>,
     ) -> Result<Collection<Graph>> {
         let order_str = order.map(|o| o.to_string());
-        let url = Self::build_url("graphs", filter, order_str.as_deref(), limit, cursor);
+        let url = Self::build_url("graphs", filter, order_str, limit, cursor);
         self.client.get(&url).await
     }
 
@@ -81,7 +81,7 @@ impl<'a> GraphClient<'a> {
         order: Option<GraphOrder>,
     ) -> CollectionIterator<'_, Graph> {
         let order_str = order.map(|o| o.to_string());
-        let url = Self::build_url("graphs", filter, order_str.as_deref(), None, None);
+        let url = Self::build_url("graphs", filter, order_str, None, None);
         CollectionIterator::new(self.client, url)
     }
 
@@ -97,7 +97,11 @@ impl<'a> GraphClient<'a> {
     }
 
     /// Update a graph
-    pub async fn update_graph(&self, graph_id: &str, request: &UpdateGraphRequest) -> Result<Graph> {
+    pub async fn update_graph(
+        &self,
+        graph_id: &str,
+        request: &UpdateGraphRequest,
+    ) -> Result<Graph> {
         let url = format!("graphs/{}", urlencoding::encode(graph_id));
         self.client.patch(&url, request).await
     }

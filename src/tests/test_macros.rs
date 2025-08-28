@@ -25,11 +25,11 @@ macro_rules! setup_test_client {
         setup_test_client!($api_key, ApiTier::Public)
     }};
     ($api_key:expr, $tier:expr) => {{
-        use wiremock::MockServer;
-        use crate::auth::ApiTier;
-        use crate::client::ClientBuilder;
         use std::time::Duration;
-        
+        use wiremock::MockServer;
+        use $crate::auth::ApiTier;
+        use $crate::client::ClientBuilder;
+
         let mock_server = MockServer::start().await;
         let client = ClientBuilder::new()
             .api_key($api_key)
@@ -43,11 +43,11 @@ macro_rules! setup_test_client {
 }
 
 /// Creates a mock with specific HTTP method, path, and response
-#[macro_export] 
+#[macro_export]
 macro_rules! setup_mock_http {
     ($server:expr, $method:expr, $path:expr, $status:expr, $response:expr) => {{
+        use wiremock::matchers::{header, method, path};
         use wiremock::{Mock, ResponseTemplate};
-        use wiremock::matchers::{method, path, header};
         Mock::given(method($method))
             .and(path($path))
             .and(header("x-apikey", "test_key"))
@@ -57,7 +57,7 @@ macro_rules! setup_mock_http {
     }};
 }
 
-/// Creates a standard analysis response 
+/// Creates a standard analysis response
 #[macro_export]
 macro_rules! create_analysis_response {
     ($id:expr) => {{
@@ -108,7 +108,7 @@ macro_rules! create_collection_response {
             "data": data,
             "meta": { "count": count }
         });
-        
+
         if let Some(cursor) = $cursor {
             response["links"] = ::serde_json::json!({
                 "next": format!("https://api.example.com/test?cursor={}", cursor)
@@ -247,20 +247,20 @@ macro_rules! test_error_response {
         #[tokio::test]
         async fn $test_name() {
             let (mock_server, client) = setup_test_client!();
-            
+
             let error_response = serde_json::json!({
                 "error": {
                     "code": $error_code,
                     "message": $error_msg
                 }
             });
-            
+
             setup_mock_http!(&mock_server, "GET", $endpoint, $status, &error_response);
-            
-            let result: crate::Result<serde_json::Value> = client.get($endpoint).await;
+
+            let result: $crate::Result<serde_json::Value> = client.get($endpoint).await;
             assert!(result.is_err());
-            
-            if let Err(crate::Error::$expected_error(_)) = result {
+
+            if let Err($crate::Error::$expected_error(_)) = result {
                 // Expected error type
             } else {
                 panic!("Expected {} error", stringify!($expected_error));
@@ -278,9 +278,9 @@ macro_rules! test_domain_relationship {
             let (mock_server, client) = setup_test_client!();
             let response = create_collection_response!(serde_json::json!([]));
             let path_string = format!("/domains/example.com/{}", $relationship);
-            
+
             setup_mock_http!(&mock_server, "GET", path_string.as_str(), 200, &response);
-            
+
             let domain_client = client.domains();
             let result = match $relationship {
                 "subdomains" => domain_client.get_subdomains("example.com").await,
@@ -292,7 +292,7 @@ macro_rules! test_domain_relationship {
                 "referrer_files" => domain_client.get_referrer_files("example.com").await,
                 _ => panic!("Unknown relationship: {}", $relationship),
             };
-            
+
             assert!(result.is_ok());
         }
     };
@@ -306,10 +306,10 @@ macro_rules! test_get_request {
         async fn test_get_request() {
             let (mock_server, client) = setup_test_client!();
             let response = serde_json::json!({"data": {"type": "test", "id": "test-id"}});
-            
+
             setup_mock_http!(&mock_server, "GET", $endpoint, 200, &response);
-            
-            let result: crate::Result<serde_json::Value> = client.get($endpoint).await;
+
+            let result: $crate::Result<serde_json::Value> = client.get($endpoint).await;
             assert!(result.is_ok());
         }
     };
@@ -324,10 +324,10 @@ macro_rules! test_post_request {
             let (mock_server, client) = setup_test_client!();
             let response = serde_json::json!({"data": {"type": "created", "id": "new-id"}});
             let body = serde_json::json!({"test_field": "test_value"});
-            
+
             setup_mock_http!(&mock_server, "POST", $endpoint, 201, &response);
-            
-            let result: crate::Result<serde_json::Value> = client.post($endpoint, &body).await;
+
+            let result: $crate::Result<serde_json::Value> = client.post($endpoint, &body).await;
             assert!(result.is_ok());
         }
     };
@@ -342,10 +342,10 @@ macro_rules! test_put_request {
             let (mock_server, client) = setup_test_client!();
             let response = serde_json::json!({"data": {"type": "updated", "id": "updated-id"}});
             let body = serde_json::json!({"update_field": "update_value"});
-            
+
             setup_mock_http!(&mock_server, "PUT", $endpoint, 200, &response);
-            
-            let result: crate::Result<serde_json::Value> = client.put($endpoint, &body).await;
+
+            let result: $crate::Result<serde_json::Value> = client.put($endpoint, &body).await;
             assert!(result.is_ok());
         }
     };
@@ -358,9 +358,15 @@ macro_rules! test_delete_request {
         #[tokio::test]
         async fn test_delete_request() {
             let (mock_server, client) = setup_test_client!();
-            
-            setup_mock_http!(&mock_server, "DELETE", $endpoint, 204, &serde_json::json!({}));
-            
+
+            setup_mock_http!(
+                &mock_server,
+                "DELETE",
+                $endpoint,
+                204,
+                &serde_json::json!({})
+            );
+
             let result = client.delete($endpoint).await;
             assert!(result.is_ok());
         }

@@ -65,16 +65,25 @@ async fn add_comment_generic(
     operation: &ResourceOperation<'_>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("\n📝 Adding comment to {}...", operation.display_name);
-    
+
     let result = match operation.resource_type {
         ResourceType::File => {
-            client.files().add_comment(operation.identifier, operation.comment_text).await
+            client
+                .files()
+                .add_comment(operation.identifier, operation.comment_text)
+                .await
         }
         ResourceType::Domain => {
-            client.domains().add_comment(operation.identifier, operation.comment_text).await
+            client
+                .domains()
+                .add_comment(operation.identifier, operation.comment_text)
+                .await
         }
         ResourceType::IpAddress => {
-            client.ip_addresses().add_comment(operation.identifier, operation.comment_text).await
+            client
+                .ip_addresses()
+                .add_comment(operation.identifier, operation.comment_text)
+                .await
         }
     };
 
@@ -98,16 +107,25 @@ async fn add_vote_generic(
     operation: &ResourceOperation<'_>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("\n🗳️ Voting on {} as malicious...", operation.display_name);
-    
+
     let result = match operation.resource_type {
         ResourceType::File => {
-            client.files().add_vote(operation.identifier, VoteVerdict::Malicious).await
+            client
+                .files()
+                .add_vote(operation.identifier, VoteVerdict::Malicious)
+                .await
         }
         ResourceType::Domain => {
-            client.domains().add_vote(operation.identifier, VoteVerdict::Malicious).await
+            client
+                .domains()
+                .add_vote(operation.identifier, VoteVerdict::Malicious)
+                .await
         }
         ResourceType::IpAddress => {
-            client.ip_addresses().add_vote(operation.identifier, VoteVerdict::Malicious).await
+            client
+                .ip_addresses()
+                .add_vote(operation.identifier, VoteVerdict::Malicious)
+                .await
         }
     };
 
@@ -121,10 +139,13 @@ async fn add_vote_generic(
         }
     }
 
-    if matches!(operation.resource_type, ResourceType::File | ResourceType::Domain) {
+    if matches!(
+        operation.resource_type,
+        ResourceType::File | ResourceType::Domain
+    ) {
         sleep(Duration::from_secs(15)).await;
     }
-    
+
     Ok(())
 }
 
@@ -177,11 +198,24 @@ async fn verify_resource_comments_and_votes(
     client: &virustotal_rs::Client,
     operation: &ResourceOperation<'_>,
 ) {
-    println!("\n🔍 Checking {} comments and votes...", operation.display_name);
-    
+    println!(
+        "\n🔍 Checking {} comments and votes...",
+        operation.display_name
+    );
+
     let comments_result = match operation.resource_type {
-        ResourceType::File => client.files().get_comments_with_limit(operation.identifier, 5).await,
-        ResourceType::Domain => client.domains().get_comments_with_limit(operation.identifier, 5).await,
+        ResourceType::File => {
+            client
+                .files()
+                .get_comments_with_limit(operation.identifier, 5)
+                .await
+        }
+        ResourceType::Domain => {
+            client
+                .domains()
+                .get_comments_with_limit(operation.identifier, 5)
+                .await
+        }
         _ => return, // Skip IP verification for brevity
     };
 
@@ -190,7 +224,13 @@ async fn verify_resource_comments_and_votes(
         for comment in comments.data.iter().take(3) {
             println!(
                 "    • {}",
-                comment.object.attributes.text.chars().take(80).collect::<String>()
+                comment
+                    .object
+                    .attributes
+                    .text
+                    .chars()
+                    .take(80)
+                    .collect::<String>()
             );
         }
     } else if let Err(e) = comments_result {
@@ -204,10 +244,14 @@ async fn verify_resource_comments_and_votes(
     };
 
     if let Ok(votes) = votes_result {
-        let malicious = votes.data.iter()
+        let malicious = votes
+            .data
+            .iter()
             .filter(|v| v.object.attributes.verdict == VoteVerdict::Malicious)
             .count();
-        let harmless = votes.data.iter()
+        let harmless = votes
+            .data
+            .iter()
             .filter(|v| v.object.attributes.verdict == VoteVerdict::Harmless)
             .count();
         println!("  Votes: {} malicious, {} harmless", malicious, harmless);

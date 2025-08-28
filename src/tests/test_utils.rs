@@ -30,7 +30,10 @@ impl TestUtils {
     }
 
     /// Create a test client with custom API key and tier
-    pub async fn create_client_with_key_and_tier(api_key: &str, tier: ApiTier) -> (MockServer, Client) {
+    pub async fn create_client_with_key_and_tier(
+        api_key: &str,
+        tier: ApiTier,
+    ) -> (MockServer, Client) {
         let mock_server = Self::create_mock_server().await;
         let client = ClientBuilder::new()
             .api_key(api_key)
@@ -61,15 +64,18 @@ impl TestUtils {
     }
 
     /// Internal helper to create client with tier
-    async fn create_test_client_with_tier(mock_server: &MockServer, tier: ApiTier) -> Result<Client> {
+    async fn create_test_client_with_tier(
+        mock_server: &MockServer,
+        tier: ApiTier,
+    ) -> Result<Client> {
         Self::create_test_client_with_key_and_tier(mock_server, "test_api_key", tier).await
     }
 
     /// Internal helper to create client with key and tier  
     async fn create_test_client_with_key_and_tier(
-        mock_server: &MockServer, 
-        api_key: &str, 
-        tier: ApiTier
+        mock_server: &MockServer,
+        api_key: &str,
+        tier: ApiTier,
     ) -> Result<Client> {
         ClientBuilder::new()
             .api_key(api_key)
@@ -94,6 +100,7 @@ impl TestUtils {
     }
 
     /// Common setup for test scenarios
+    #[allow(dead_code)]
     pub async fn setup_test_scenario() -> (MockServer, Client) {
         let mock_server = Self::create_mock_server().await;
         let client = Self::create_test_client(&mock_server).await.unwrap();
@@ -101,6 +108,7 @@ impl TestUtils {
     }
 
     /// Execute HTTP request by method with common error handling
+    #[allow(dead_code)]
     pub async fn execute_http_request(
         client: &Client,
         method: &str,

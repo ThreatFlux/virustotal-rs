@@ -1,0 +1,14 @@
+# Sample hash file for VirusTotal download
+# Lines starting with # are comments and will be ignored
+# Empty lines are also ignored
+
+# Example MD5 hash
+44d88612fea8a8f36de82e1278abb02f
+
+# Example SHA-256 hash
+275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f
+
+# Example SHA-1 hash
+3395856ce81f2b7382dee72602f798b642f14140
+
+# Add your own hashes below (MD5, SHA-1, or SHA-256)

@@ -6,7 +6,7 @@ use crate::Result;
 fn build_query_url(base: &str, params: &[(Option<&str>, &str)]) -> String {
     let mut url = String::from(base);
     let mut has_query = false;
-    
+
     for (value, key) in params {
         if let Some(v) = value {
             if !has_query {
@@ -18,15 +18,21 @@ fn build_query_url(base: &str, params: &[(Option<&str>, &str)]) -> String {
             url.push_str(&format!("{}={}", key, urlencoding::encode(v)));
         }
     }
-    
+
     url
 }
 
 /// Helper function to build query URL with numeric parameters
-fn build_query_url_with_numeric(base: &str, filter: Option<&str>, limit: Option<u32>, count_limit: Option<u32>, cursor: Option<&str>) -> String {
+fn build_query_url_with_numeric(
+    base: &str,
+    filter: Option<&str>,
+    limit: Option<u32>,
+    count_limit: Option<u32>,
+    cursor: Option<&str>,
+) -> String {
     let mut url = String::from(base);
     let mut has_query = false;
-    
+
     let add_param = |url: &mut String, has_query: &mut bool, key: &str, value: &str| {
         if !*has_query {
             url.push('?');
@@ -36,23 +42,28 @@ fn build_query_url_with_numeric(base: &str, filter: Option<&str>, limit: Option<
         }
         url.push_str(&format!("{}={}", key, value));
     };
-    
+
     if let Some(f) = filter {
         add_param(&mut url, &mut has_query, "filter", &urlencoding::encode(f));
     }
-    
+
     if let Some(l) = limit {
         add_param(&mut url, &mut has_query, "limit", &l.to_string());
     }
-    
+
     if let Some(cl) = count_limit {
-        add_param(&mut url, &mut has_query, "count_limit", &cl.min(10000).to_string());
+        add_param(
+            &mut url,
+            &mut has_query,
+            "count_limit",
+            &cl.min(10000).to_string(),
+        );
     }
-    
+
     if let Some(c) = cursor {
         add_param(&mut url, &mut has_query, "cursor", &urlencoding::encode(c));
     }
-    
+
     url
 }
 
@@ -67,18 +78,18 @@ impl<'a> LivehuntClient<'a> {
         cursor: Option<&str>,
     ) -> Result<Collection<LivehuntNotification>> {
         let mut url = build_query_url_with_numeric(
-            "intelligence/hunting_notifications", 
-            filter, 
-            limit, 
-            count_limit, 
-            cursor
+            "intelligence/hunting_notifications",
+            filter,
+            limit,
+            count_limit,
+            cursor,
         );
-        
+
         if let Some(o) = order {
             let separator = if url.contains('?') { "&" } else { "?" };
             url.push_str(&format!("{}order={}", separator, o.to_string()));
         }
-        
+
         self.client.get(&url).await
     }
 
@@ -90,18 +101,18 @@ impl<'a> LivehuntClient<'a> {
         count_limit: Option<u32>,
     ) -> CollectionIterator<'_, LivehuntNotification> {
         let mut url = build_query_url_with_numeric(
-            "intelligence/hunting_notifications", 
-            filter, 
-            None, 
-            count_limit, 
-            None
+            "intelligence/hunting_notifications",
+            filter,
+            None,
+            count_limit,
+            None,
         );
-        
+
         if let Some(o) = order {
             let separator = if url.contains('?') { "&" } else { "?" };
             url.push_str(&format!("{}order={}", separator, o.to_string()));
         }
-        
+
         CollectionIterator::new(self.client, url)
     }
 
@@ -112,7 +123,7 @@ impl<'a> LivehuntClient<'a> {
             urlencoding::encode(notification_id)
         )
     }
-    
+
     /// Get a specific notification
     pub async fn get_notification(&self, notification_id: &str) -> Result<LivehuntNotification> {
         let url = self.build_notification_id_url(notification_id);
@@ -140,11 +151,11 @@ impl<'a> LivehuntClient<'a> {
         cursor: Option<&str>,
     ) -> Result<Collection<NotificationFile>> {
         let url = build_query_url_with_numeric(
-            "intelligence/hunting_notification_files", 
-            filter, 
-            limit, 
-            count_limit, 
-            cursor
+            "intelligence/hunting_notification_files",
+            filter,
+            limit,
+            count_limit,
+            cursor,
         );
         self.client.get(&url).await
     }

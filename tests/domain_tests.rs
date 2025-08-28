@@ -1,7 +1,51 @@
 use serde_json::json;
-use virustotal_rs::{ApiTier, ClientBuilder, VoteVerdict, setup_test_client, create_analysis_response, create_comment_response, setup_mock_http};
+use std::time::Duration;
+use virustotal_rs::{ApiTier, ClientBuilder, VoteVerdict};
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
+
+// Test utility macros (defined in src/tests/test_macros.rs but not exported)
+macro_rules! setup_test_client {
+    () => {{
+        setup_test_client!("test_key", virustotal_rs::ApiTier::Public)
+    }};
+    ($api_key:expr, $tier:expr) => {{
+        let mock_server = MockServer::start().await;
+        let client = ClientBuilder::new()
+            .api_key($api_key)
+            .tier($tier)
+            .base_url(mock_server.uri())
+            .timeout(Duration::from_secs(5))
+            .build()
+            .unwrap();
+        (mock_server, client)
+    }};
+}
+
+macro_rules! setup_mock_http {
+    ($server:expr, $method:expr, $path:expr, $status:expr, $response:expr) => {{
+        Mock::given(method($method))
+            .and(path($path))
+            .and(header("x-apikey", "test_key"))
+            .respond_with(ResponseTemplate::new($status).set_body_json($response))
+            .mount($server)
+            .await;
+    }};
+}
+
+macro_rules! create_analysis_response {
+    ($id:expr) => {{
+        serde_json::json!({
+            "data": {
+                "type": "analysis",
+                "id": $id,
+                "links": {
+                    "self": format!("https://www.virustotal.com/api/v3/analyses/{}", $id)
+                }
+            }
+        })
+    }};
+}
 
 #[tokio::test]
 async fn test_domain_get() {
@@ -30,7 +74,13 @@ async fn test_domain_get() {
         }
     });
 
-    setup_mock_http!(&mock_server, "GET", "/domains/example.com", 200, &domain_response);
+    setup_mock_http!(
+        &mock_server,
+        "GET",
+        "/domains/example.com",
+        200,
+        &domain_response
+    );
 
     let domain = client.domains().get("example.com").await.unwrap();
 
@@ -49,7 +99,13 @@ async fn test_domain_analyse() {
 
     let analysis_response = create_analysis_response!("d-abc123-1234567890");
 
-    setup_mock_http!(&mock_server, "POST", "/domains/example.com/analyse", 200, &analysis_response);
+    setup_mock_http!(
+        &mock_server,
+        "POST",
+        "/domains/example.com/analyse",
+        200,
+        &analysis_response
+    );
 
     let result = client.domains().analyse("example.com").await.unwrap();
     assert_eq!(result.data.object_type, "analysis");

@@ -4,9 +4,9 @@
 #[cfg(test)]
 pub mod mock_data;
 #[cfg(test)]
-pub mod test_utils;
-#[cfg(test)]
 pub mod test_macros;
+#[cfg(test)]
+pub mod test_utils;
 
 // Unit tests
 #[cfg(test)]

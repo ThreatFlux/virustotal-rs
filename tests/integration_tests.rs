@@ -1,8 +1,8 @@
 use serde_json::json;
+use std::time::Duration;
 use virustotal_rs::{ApiTier, ClientBuilder};
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
-use std::time::Duration;
 
 /// Helper function to create sample IP response
 fn create_sample_ip_response() -> serde_json::Value {
@@ -46,7 +46,10 @@ async fn create_test_client(mock_server: &MockServer) -> virustotal_rs::Client {
 }
 
 /// Helper function to create test client with custom tier
-async fn create_test_client_with_tier(mock_server: &MockServer, tier: ApiTier) -> virustotal_rs::Client {
+async fn create_test_client_with_tier(
+    mock_server: &MockServer,
+    tier: ApiTier,
+) -> virustotal_rs::Client {
     ClientBuilder::new()
         .api_key(TEST_API_KEY)
         .tier(tier)
@@ -71,9 +74,13 @@ fn create_mock_response(status: u16, body: &serde_json::Value) -> ResponseTempla
 }
 
 /// Helper to mount a GET mock for a specific path
-async fn mount_get_mock(mock_server: &MockServer, path: &str, response: serde_json::Value) {
+async fn mount_get_mock(
+    mock_server: &MockServer,
+    endpoint_path: &str,
+    response: serde_json::Value,
+) {
     Mock::given(method("GET"))
-        .and(path(path))
+        .and(path(endpoint_path))
         .and(header("x-apikey", TEST_API_KEY))
         .respond_with(create_mock_response(200, &response))
         .mount(mock_server)
@@ -81,9 +88,13 @@ async fn mount_get_mock(mock_server: &MockServer, path: &str, response: serde_js
 }
 
 /// Helper to mount a POST mock for a specific path
-async fn mount_post_mock(mock_server: &MockServer, path: &str, response: serde_json::Value) {
+async fn mount_post_mock(
+    mock_server: &MockServer,
+    endpoint_path: &str,
+    response: serde_json::Value,
+) {
     Mock::given(method("POST"))
-        .and(path(path))
+        .and(path(endpoint_path))
         .and(header("x-apikey", TEST_API_KEY))
         .respond_with(create_mock_response(200, &response))
         .mount(mock_server)
@@ -158,7 +169,10 @@ async fn test_ip_address_with_relationships() {
 }
 
 /// Helper to create paginated collection response
-fn create_paginated_response(items: Vec<serde_json::Value>, cursor: Option<&str>) -> serde_json::Value {
+fn create_paginated_response(
+    items: Vec<serde_json::Value>,
+    cursor: Option<&str>,
+) -> serde_json::Value {
     let mut response = json!({
         "data": items,
         "meta": {},
@@ -166,15 +180,15 @@ fn create_paginated_response(items: Vec<serde_json::Value>, cursor: Option<&str>
             "self": format!("https://www.virustotal.com/api/v3/ip_addresses/{}/urls", TEST_IP)
         }
     });
-    
+
     if let Some(cursor_value) = cursor {
         response["meta"]["cursor"] = json!(cursor_value);
         response["links"]["next"] = json!(format!(
-            "https://www.virustotal.com/api/v3/ip_addresses/{}/urls?cursor={}", 
+            "https://www.virustotal.com/api/v3/ip_addresses/{}/urls?cursor={}",
             TEST_IP, cursor_value
         ));
     }
-    
+
     response
 }
 
@@ -185,7 +199,7 @@ async fn test_collection_pagination() {
 
     let page1_items = vec![
         json!({"type": "url", "id": "url1"}),
-        json!({"type": "url", "id": "url2"})
+        json!({"type": "url", "id": "url2"}),
     ];
     let page1_response = create_paginated_response(page1_items, Some("next_cursor"));
 

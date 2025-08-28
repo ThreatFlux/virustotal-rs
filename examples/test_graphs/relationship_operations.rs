@@ -19,10 +19,22 @@ pub async fn execute_relationship_tests(graph_client: &GraphClient<'_>, graph_id
 
 pub async fn get_graph_owner(graph_client: &GraphClient<'_>, graph_id: &str) {
     println!("\nGetting graph owner:");
-    match graph_client.get_graph_owner(graph_id).await {
-        Ok(owner) => {
-            println!("   ✓ Retrieved graph owner");
-            display_owner_info(&owner);
+    match graph_client
+        .get_graph_relationship::<virustotal_rs::graphs::GraphOwner>(
+            graph_id,
+            "owner",
+            Some(1),
+            None,
+        )
+        .await
+    {
+        Ok(owner_collection) => {
+            if let Some(owner) = owner_collection.data.first() {
+                println!("   ✓ Retrieved graph owner");
+                display_owner_info(owner);
+            } else {
+                println!("   ✗ No owner found");
+            }
         }
         Err(e) => {
             println!("   ✗ Error getting owner: {}", e);
@@ -33,7 +45,12 @@ pub async fn get_graph_owner(graph_client: &GraphClient<'_>, graph_id: &str) {
 pub async fn get_graph_editors(graph_client: &GraphClient<'_>, graph_id: &str) {
     println!("\nGetting graph editors:");
     match graph_client
-        .get_graph_editors(graph_id, Some(10), None)
+        .get_graph_relationship::<virustotal_rs::graphs::GraphOwner>(
+            graph_id,
+            "editors",
+            Some(10),
+            None,
+        )
         .await
     {
         Ok(editors) => {

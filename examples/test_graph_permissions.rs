@@ -1,7 +1,5 @@
 use virustotal_rs::graphs::{GraphOwner, GraphOwnerAttributes, GraphRelationshipDescriptor};
-use virustotal_rs::{
-    ApiTier, ClientBuilder, CreateGraphRequest, GraphClient, GraphVisibility, PermissionDescriptor,
-};
+use virustotal_rs::{ApiTier, ClientBuilder, CreateGraphRequest, GraphClient, GraphVisibility};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -66,43 +64,20 @@ async fn test_editor_permissions(graph_client: &GraphClient<'_>, graph_id: &str)
 }
 
 async fn grant_editor_permissions(graph_client: &GraphClient<'_>, graph_id: &str) {
-    println!("\nGranting edit permissions to users and groups:");
-    let editors = vec![
-        PermissionDescriptor::user("gilfoyle".to_string()),
-        PermissionDescriptor::user("dinesh".to_string()),
-        PermissionDescriptor::group("developers".to_string()),
-    ];
+    println!("\nGranting edit permissions to users:");
+    let editor_ids = vec!["gilfoyle".to_string(), "dinesh".to_string()];
 
-    match graph_client.grant_edit_permission(graph_id, editors).await {
-        Ok(result) => {
+    match graph_client.add_graph_editors(graph_id, &editor_ids).await {
+        Ok(_) => {
             println!("✓ Successfully granted edit permissions");
-            println!("  Added {} editors:", result.data.len());
-            display_granted_editors(&result.data);
+            println!("  Added {} editors", editor_ids.len());
+            for editor_id in &editor_ids {
+                println!("  - User: {}", editor_id);
+            }
         }
         Err(e) => {
             println!("✗ Error granting edit permissions: {}", e);
         }
-    }
-}
-
-fn display_granted_editors(editors: &[GraphOwner]) {
-    for editor in editors {
-        println!(
-            "  - {} (ID: {})",
-            editor.object.object_type, editor.object.id
-        );
-        display_user_details(&editor.object.attributes);
-    }
-}
-
-fn display_user_details(attributes: &GraphOwnerAttributes) {
-    if let Some(first_name) = &attributes.first_name {
-        if let Some(last_name) = &attributes.last_name {
-            println!("    Name: {} {}", first_name, last_name);
-        }
-    }
-    if let Some(status) = &attributes.status {
-        println!("    Status: {}", status);
     }
 }
 
@@ -121,12 +96,18 @@ async fn check_single_edit_permission(
     graph_id: &str,
     user_id: &str,
 ) {
-    match graph_client.check_edit_permission(graph_id, user_id).await {
-        Ok(response) => {
+    // Note: Permission checking is not directly available in the current API
+    // We can check if the user is in the editors list instead
+    match graph_client
+        .get_graph_relationship_descriptors(graph_id, "editors", Some(50), None)
+        .await
+    {
+        Ok(editors) => {
+            let has_access = editors.data.iter().any(|editor| editor.id == user_id);
             println!(
                 "User '{}': {} edit access",
                 user_id,
-                if response.data { "HAS" } else { "NO" }
+                if has_access { "HAS" } else { "NO" }
             );
         }
         Err(e) => {
@@ -154,7 +135,7 @@ async fn fetch_editor_descriptors(
     graph_id: &str,
 ) -> Result<virustotal_rs::Collection<GraphRelationshipDescriptor>, virustotal_rs::Error> {
     graph_client
-        .get_graph_editors_descriptors(graph_id, Some(20), None)
+        .get_graph_relationship_descriptors(graph_id, "editors", Some(20), None)
         .await
 }
 
@@ -209,7 +190,7 @@ async fn fetch_graph_editors(
     graph_id: &str,
 ) -> Result<virustotal_rs::Collection<virustotal_rs::graphs::GraphOwner>, virustotal_rs::Error> {
     graph_client
-        .get_graph_editors(graph_id, Some(10), None)
+        .get_graph_relationship(graph_id, "editors", Some(10), None)
         .await
 }
 
@@ -263,17 +244,15 @@ async fn test_viewer_permissions(graph_client: &GraphClient<'_>, graph_id: &str)
 
 async fn grant_viewer_permissions(graph_client: &GraphClient<'_>, graph_id: &str) {
     println!("\nGranting view permissions:");
-    let viewers = vec![
-        PermissionDescriptor::user("jared".to_string()),
-        PermissionDescriptor::user("monica".to_string()),
-        PermissionDescriptor::group("analysts".to_string()),
-        PermissionDescriptor::group("qa_team".to_string()),
-    ];
+    let viewer_ids = vec!["jared".to_string(), "monica".to_string()];
 
-    match graph_client.grant_view_permission(graph_id, viewers).await {
-        Ok(result) => {
+    match graph_client.add_graph_viewers(graph_id, &viewer_ids).await {
+        Ok(_) => {
             println!("✓ Successfully granted view permissions");
-            println!("  Added {} viewers", result.data.len());
+            println!("  Added {} viewers", viewer_ids.len());
+            for viewer_id in &viewer_ids {
+                println!("  - User: {}", viewer_id);
+            }
         }
         Err(e) => {
             println!("✗ Error granting view permissions: {}", e);
@@ -296,12 +275,18 @@ async fn check_single_view_permission(
     graph_id: &str,
     user_id: &str,
 ) {
-    match graph_client.check_view_permission(graph_id, user_id).await {
-        Ok(response) => {
+    // Note: Permission checking is not directly available in the current API
+    // We can check if the user is in the viewers list instead
+    match graph_client
+        .get_graph_relationship_descriptors(graph_id, "viewers", Some(50), None)
+        .await
+    {
+        Ok(viewers) => {
+            let has_access = viewers.data.iter().any(|viewer| viewer.id == user_id);
             println!(
                 "User '{}': {} view access",
                 user_id,
-                if response.data { "HAS" } else { "NO" }
+                if has_access { "HAS" } else { "NO" }
             );
         }
         Err(e) => {
@@ -320,10 +305,8 @@ async fn test_permission_revocation(graph_client: &GraphClient<'_>, graph_id: &s
 
 async fn revoke_edit_permission(graph_client: &GraphClient<'_>, graph_id: &str) {
     println!("\nRevoking edit permission from 'dinesh':");
-    match graph_client
-        .revoke_edit_permission(graph_id, "dinesh")
-        .await
-    {
+    let user_ids = vec!["dinesh".to_string()];
+    match graph_client.remove_graph_editors(graph_id, &user_ids).await {
         Ok(_) => {
             println!("✓ Successfully revoked edit permission from 'dinesh'");
             verify_permission_revoked(graph_client, graph_id, "dinesh", "edit").await;
@@ -336,7 +319,8 @@ async fn revoke_edit_permission(graph_client: &GraphClient<'_>, graph_id: &str) 
 
 async fn revoke_view_permission(graph_client: &GraphClient<'_>, graph_id: &str) {
     println!("\nRevoking view permission from 'jared':");
-    match graph_client.revoke_view_permission(graph_id, "jared").await {
+    let user_ids = vec!["jared".to_string()];
+    match graph_client.remove_graph_viewers(graph_id, &user_ids).await {
         Ok(_) => {
             println!("✓ Successfully revoked view permission from 'jared'");
             verify_permission_revoked(graph_client, graph_id, "jared", "view").await;
@@ -354,16 +338,21 @@ async fn verify_permission_revoked(
     permission_type: &str,
 ) {
     let result = if permission_type == "edit" {
-        graph_client.check_edit_permission(graph_id, user_id).await
+        graph_client
+            .get_graph_relationship_descriptors(graph_id, "editors", Some(50), None)
+            .await
     } else {
-        graph_client.check_view_permission(graph_id, user_id).await
+        graph_client
+            .get_graph_relationship_descriptors(graph_id, "viewers", Some(50), None)
+            .await
     };
 
     if let Ok(response) = result {
+        let has_access = response.data.iter().any(|item| item.id == user_id);
         println!(
             "  Verification: '{}' {} has {} access",
             user_id,
-            if response.data { "still" } else { "no longer" },
+            if has_access { "still" } else { "no longer" },
             permission_type
         );
     }
@@ -381,13 +370,10 @@ async fn grant_mixed_permissions(graph_client: &GraphClient<'_>, graph_id: &str)
     println!("\nGranting both view and edit permissions to different users:");
 
     // Some users get edit access
-    let new_editors = vec![PermissionDescriptor::user("richard".to_string())];
+    let new_editors = vec!["richard".to_string()];
 
     // Others get only view access
-    let new_viewers = vec![
-        PermissionDescriptor::user("gavin".to_string()),
-        PermissionDescriptor::user("laurie".to_string()),
-    ];
+    let new_viewers = vec!["gavin".to_string(), "laurie".to_string()];
 
     grant_specific_edit_permissions(graph_client, graph_id, new_editors).await;
     grant_specific_view_permissions(graph_client, graph_id, new_viewers).await;
@@ -396,9 +382,9 @@ async fn grant_mixed_permissions(graph_client: &GraphClient<'_>, graph_id: &str)
 async fn grant_specific_edit_permissions(
     graph_client: &GraphClient<'_>,
     graph_id: &str,
-    editors: Vec<PermissionDescriptor>,
+    editor_ids: Vec<String>,
 ) {
-    match graph_client.grant_edit_permission(graph_id, editors).await {
+    match graph_client.add_graph_editors(graph_id, &editor_ids).await {
         Ok(_) => println!("✓ Granted edit permission to 'richard'"),
         Err(e) => println!("✗ Error: {}", e),
     }
@@ -407,9 +393,9 @@ async fn grant_specific_edit_permissions(
 async fn grant_specific_view_permissions(
     graph_client: &GraphClient<'_>,
     graph_id: &str,
-    viewers: Vec<PermissionDescriptor>,
+    viewer_ids: Vec<String>,
 ) {
-    match graph_client.grant_view_permission(graph_id, viewers).await {
+    match graph_client.add_graph_viewers(graph_id, &viewer_ids).await {
         Ok(_) => println!("✓ Granted view permissions to 'gavin' and 'laurie'"),
         Err(e) => println!("✗ Error: {}", e),
     }
@@ -436,15 +422,15 @@ async fn check_user_permissions(
     user_id: &str,
 ) -> (bool, bool) {
     let can_edit = graph_client
-        .check_edit_permission(graph_id, user_id)
+        .get_graph_relationship_descriptors(graph_id, "editors", Some(50), None)
         .await
-        .map(|r| r.data)
+        .map(|editors| editors.data.iter().any(|editor| editor.id == user_id))
         .unwrap_or(false);
 
     let can_view = graph_client
-        .check_view_permission(graph_id, user_id)
+        .get_graph_relationship_descriptors(graph_id, "viewers", Some(50), None)
         .await
-        .map(|r| r.data)
+        .map(|viewers| viewers.data.iter().any(|viewer| viewer.id == user_id))
         .unwrap_or(false);
 
     (can_edit, can_view)
@@ -454,10 +440,17 @@ async fn get_graph_owner_info(graph_client: &GraphClient<'_>, graph_id: &str) {
     println!("\n9. GRAPH OWNER");
     println!("--------------");
 
-    match graph_client.get_graph_owner(graph_id).await {
-        Ok(owner) => {
-            println!("✓ Retrieved graph owner");
-            display_owner_information(&owner);
+    match graph_client
+        .get_graph_relationship::<GraphOwner>(graph_id, "owner", Some(1), None)
+        .await
+    {
+        Ok(owners) => {
+            if let Some(owner) = owners.data.first() {
+                println!("✓ Retrieved graph owner");
+                display_owner_information(owner);
+            } else {
+                println!("✗ No owner found");
+            }
         }
         Err(e) => {
             println!("✗ Error getting owner: {}", e);

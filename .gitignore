@@ -2,3 +2,7 @@
 .env
 docs/
 .codacy/
+samples/
+samples_2/
+vt_analysis*/
+*.txt

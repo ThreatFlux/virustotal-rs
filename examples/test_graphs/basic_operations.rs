@@ -109,7 +109,10 @@ pub fn build_update_request(graph_id: &str) -> virustotal_rs::UpdateGraphRequest
 pub async fn search_graphs(graph_client: &GraphClient<'_>) {
     print_step_header(7, "SEARCHING GRAPHS");
 
-    match graph_client.search_graphs("malware", Some(5), None).await {
+    match graph_client
+        .list_graphs(Some("tag:malware"), None, Some(5), None)
+        .await
+    {
         Ok(results) => {
             println!("   ✓ Search completed");
             println!("   - Found {} graphs", results.data.len());

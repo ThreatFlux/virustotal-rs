@@ -1,5 +1,7 @@
 // Async domain tests focused on domain-related API operations
-use crate::{setup_test_client, test_domain_relationship, create_collection_response, setup_mock_http};
+use crate::{
+    create_collection_response, setup_mock_http, setup_test_client, test_domain_relationship,
+};
 use serde_json::json;
 
 /// Test domain client basic operations
@@ -10,7 +12,7 @@ mod domain_client_tests {
     #[tokio::test]
     async fn test_domain_client_get() {
         let (mock_server, client) = setup_test_client!();
-        
+
         let domain_data = json!({
             "data": {
                 "type": "domain",
@@ -22,7 +24,13 @@ mod domain_client_tests {
             }
         });
 
-        setup_mock_http!(&mock_server, "GET", "/domains/example.com", 200, &domain_data);
+        setup_mock_http!(
+            &mock_server,
+            "GET",
+            "/domains/example.com",
+            200,
+            &domain_data
+        );
 
         let domain_client = client.domains();
         let result = domain_client.get("example.com").await;
@@ -35,7 +43,7 @@ mod domain_client_tests {
     #[tokio::test]
     async fn test_domain_client_get_with_relationships() {
         let (mock_server, client) = setup_test_client!();
-        
+
         let domain_data = json!({
             "data": {
                 "type": "domain",
@@ -49,7 +57,13 @@ mod domain_client_tests {
             }
         });
 
-        setup_mock_http!(&mock_server, "GET", "/domains/example.com", 200, &domain_data);
+        setup_mock_http!(
+            &mock_server,
+            "GET",
+            "/domains/example.com",
+            200,
+            &domain_data
+        );
 
         let domain_client = client.domains();
         let result = domain_client
@@ -74,7 +88,7 @@ mod domain_relationship_tests {
     #[tokio::test]
     async fn test_domain_get_parent() {
         let (mock_server, client) = setup_test_client!();
-        
+
         let parent_data = json!({
             "data": {
                 "type": "domain",
@@ -85,7 +99,13 @@ mod domain_relationship_tests {
             }
         });
 
-        setup_mock_http!(&mock_server, "GET", "/domains/example.com/parent", 200, &parent_data);
+        setup_mock_http!(
+            &mock_server,
+            "GET",
+            "/domains/example.com/parent",
+            200,
+            &parent_data
+        );
 
         let domain_client = client.domains();
         let result = domain_client.get_parent("example.com").await;

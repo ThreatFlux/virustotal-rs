@@ -37,13 +37,20 @@ impl GroupsClient {
     }
 
     /// Helper to build relationship endpoint with query parameters
-    fn build_relationship_endpoint(&self, id: &str, relationship: &str, limit: Option<u32>, cursor: Option<&str>, use_relationships_path: bool) -> String {
+    fn build_relationship_endpoint(
+        &self,
+        id: &str,
+        relationship: &str,
+        limit: Option<u32>,
+        cursor: Option<&str>,
+        use_relationships_path: bool,
+    ) -> String {
         let base_endpoint = if use_relationships_path {
             format!("groups/{}/relationships/{}", id, relationship)
         } else {
             format!("groups/{}/{}", id, relationship)
         };
-        
+
         let query_params = self.build_query_params(limit, cursor);
         format!("{}{}", base_endpoint, query_params)
     }
@@ -57,13 +64,21 @@ impl GroupsClient {
                 object_type: "user".to_string(),
             })
             .collect();
-        
+
         UserListRequest { data: users }
     }
 
     /// Helper to build user-specific relationship endpoint
-    fn build_user_relationship_endpoint(&self, group_id: &str, relationship: &str, user_id: &str) -> String {
-        format!("groups/{}/relationships/{}/{}", group_id, relationship, user_id)
+    fn build_user_relationship_endpoint(
+        &self,
+        group_id: &str,
+        relationship: &str,
+        user_id: &str,
+    ) -> String {
+        format!(
+            "groups/{}/relationships/{}/{}",
+            group_id, relationship, user_id
+        )
     }
 
     /// Get a group object by ID
