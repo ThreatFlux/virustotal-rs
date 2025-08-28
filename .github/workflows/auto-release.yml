@@ -118,7 +118,7 @@ jobs:
           echo "version_changed=true" >> $GITHUB_OUTPUT
           
           # Commit version change
-          git add Cargo.toml
+          git add Cargo.toml Cargo.lock
           git commit -m "chore(release): bump version to $NEW_VERSION
 
           Auto-generated release commit"
