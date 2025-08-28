@@ -4,13 +4,9 @@
 use crate::auth::{ApiKey, ApiTier};
 use crate::client::*;
 use crate::error::{Error, Result};
-use crate::tests::test_utils::{create_mock_server, create_test_client};
+use crate::{setup_test_client, test_http_methods, test_error_response, setup_mock_http};
 use serde_json::json;
 use std::time::Duration;
-use wiremock::{
-    matchers::{method, path, header},
-    Mock, ResponseTemplate,
-};
 
 #[test]
 fn test_client_direct_creation() {
@@ -57,113 +53,17 @@ fn test_client_with_base_url() {
     }
 }
 
-#[tokio::test]
-async fn test_client_get_request() {
-    let mock_server = create_mock_server().await;
-    let client = create_test_client().with_base_url(&mock_server.uri()).unwrap();
-
-    Mock::given(method("GET"))
-        .and(path("/test-endpoint"))
-        .and(header("x-apikey", "test-api-key"))
-        .and(header("Accept", "application/json"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-            "data": {
-                "type": "test",
-                "id": "test-id",
-                "attributes": {
-                    "value": "test-value"
-                }
-            }
-        })))
-        .mount(&mock_server)
-        .await;
-
-    let result: Result<serde_json::Value> = client.get("test-endpoint").await;
-    assert!(result.is_ok());
-    
-    let response = result.unwrap();
-    assert!(response.get("data").is_some());
-}
-
-#[tokio::test]
-async fn test_client_post_request() {
-    let mock_server = create_mock_server().await;
-    let client = create_test_client().with_base_url(&mock_server.uri()).unwrap();
-
-    let test_body = json!({
-        "test_field": "test_value"
-    });
-
-    Mock::given(method("POST"))
-        .and(path("/test-endpoint"))
-        .and(header("x-apikey", "test-api-key"))
-        .and(header("Content-Type", "application/json"))
-        .respond_with(ResponseTemplate::new(201).set_body_json(json!({
-            "data": {
-                "type": "created",
-                "id": "new-id"
-            }
-        })))
-        .mount(&mock_server)
-        .await;
-
-    let result: Result<serde_json::Value> = client.post("test-endpoint", &test_body).await;
-    assert!(result.is_ok());
-}
-
-#[tokio::test]
-async fn test_client_put_request() {
-    let mock_server = create_mock_server().await;
-    let client = create_test_client().with_base_url(&mock_server.uri()).unwrap();
-
-    let test_body = json!({
-        "update_field": "update_value"
-    });
-
-    Mock::given(method("PUT"))
-        .and(path("/test-endpoint"))
-        .and(header("x-apikey", "test-api-key"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-            "data": {
-                "type": "updated",
-                "id": "updated-id"
-            }
-        })))
-        .mount(&mock_server)
-        .await;
-
-    let result: Result<serde_json::Value> = client.put("test-endpoint", &test_body).await;
-    assert!(result.is_ok());
-}
-
-#[tokio::test]
-async fn test_client_delete_request() {
-    let mock_server = create_mock_server().await;
-    let client = create_test_client().with_base_url(&mock_server.uri()).unwrap();
-
-    Mock::given(method("DELETE"))
-        .and(path("/test-endpoint"))
-        .and(header("x-apikey", "test-api-key"))
-        .respond_with(ResponseTemplate::new(204))
-        .mount(&mock_server)
-        .await;
-
-    let result = client.delete("test-endpoint").await;
-    assert!(result.is_ok());
-}
+// Generate HTTP method tests using separate macros
+test_get_request!("/test-endpoint");
+test_post_request!("/test-endpoint");
+test_put_request!("/test-endpoint");
+test_delete_request!("/test-endpoint");
 
 #[tokio::test]
 async fn test_client_delete_with_header() {
-    let mock_server = create_mock_server().await;
-    let client = create_test_client().with_base_url(&mock_server.uri()).unwrap();
-
-    Mock::given(method("DELETE"))
-        .and(path("/test-endpoint"))
-        .and(header("x-apikey", "test-api-key"))
-        .and(header("X-Custom-Header", "custom-value"))
-        .respond_with(ResponseTemplate::new(204))
-        .mount(&mock_server)
-        .await;
+    let (mock_server, client) = setup_test_client!("test_key");
+    
+    setup_mock_http!(&mock_server, "DELETE", "/test-endpoint", 204, &json!({}));
 
     let result = client.delete_with_header("test-endpoint", "X-Custom-Header", "custom-value").await;
     assert!(result.is_ok());
@@ -171,175 +71,44 @@ async fn test_client_delete_with_header() {
 
 #[tokio::test]
 async fn test_client_post_form() {
-    let mock_server = create_mock_server().await;
-    let client = create_test_client().with_base_url(&mock_server.uri()).unwrap();
+    let (mock_server, client) = setup_test_client!("test_key");
 
     let mut form_data = std::collections::HashMap::new();
     form_data.insert("field1", "value1");
     form_data.insert("field2", "value2");
 
-    Mock::given(method("POST"))
-        .and(path("/test-form-endpoint"))
-        .and(header("x-apikey", "test-api-key"))
-        .and(header("Accept", "application/json"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-            "data": {
-                "type": "form_response",
-                "id": "form-id"
-            }
-        })))
-        .mount(&mock_server)
-        .await;
+    let response = json!({
+        "data": {
+            "type": "form_response",
+            "id": "form-id"
+        }
+    });
+    
+    setup_mock_http!(&mock_server, "POST", "/test-form-endpoint", 200, &response);
 
     let result: Result<serde_json::Value> = client.post_form("test-form-endpoint", &form_data).await;
     assert!(result.is_ok());
 }
 
-#[tokio::test]
-async fn test_client_error_handling_400() {
-    let mock_server = create_mock_server().await;
-    let client = create_test_client().with_base_url(&mock_server.uri()).unwrap();
-
-    Mock::given(method("GET"))
-        .and(path("/bad-request"))
-        .respond_with(ResponseTemplate::new(400).set_body_json(json!({
-            "error": {
-                "code": "BadRequestError",
-                "message": "Invalid request parameters"
-            }
-        })))
-        .mount(&mock_server)
-        .await;
-
-    let result: Result<serde_json::Value> = client.get("bad-request").await;
-    assert!(result.is_err());
-    
-    if let Err(Error::BadRequest(msg)) = result {
-        assert!(msg.contains("Invalid request parameters"));
-    } else {
-        panic!("Expected BadRequest error");
-    }
-}
-
-#[tokio::test]
-async fn test_client_error_handling_401() {
-    let mock_server = create_mock_server().await;
-    let client = create_test_client().with_base_url(&mock_server.uri()).unwrap();
-
-    Mock::given(method("GET"))
-        .and(path("/unauthorized"))
-        .respond_with(ResponseTemplate::new(401).set_body_json(json!({
-            "error": {
-                "code": "AuthenticationRequiredError",
-                "message": "Valid API key required"
-            }
-        })))
-        .mount(&mock_server)
-        .await;
-
-    let result: Result<serde_json::Value> = client.get("unauthorized").await;
-    assert!(result.is_err());
-    
-    if let Err(Error::AuthenticationRequired(msg)) = result {
-        assert!(msg.contains("Valid API key required"));
-    } else {
-        panic!("Expected AuthenticationRequired error");
-    }
-}
-
-#[tokio::test]
-async fn test_client_error_handling_403() {
-    let mock_server = create_mock_server().await;
-    let client = create_test_client().with_base_url(&mock_server.uri()).unwrap();
-
-    Mock::given(method("GET"))
-        .and(path("/forbidden"))
-        .respond_with(ResponseTemplate::new(403).set_body_json(json!({
-            "error": {
-                "code": "ForbiddenError",
-                "message": "Access denied"
-            }
-        })))
-        .mount(&mock_server)
-        .await;
-
-    let result: Result<serde_json::Value> = client.get("forbidden").await;
-    assert!(result.is_err());
-    
-    if let Err(Error::Forbidden(msg)) = result {
-        assert!(msg.contains("Access denied"));
-    } else {
-        panic!("Expected Forbidden error");
-    }
-}
-
-#[tokio::test]
-async fn test_client_error_handling_404() {
-    let mock_server = create_mock_server().await;
-    let client = create_test_client().with_base_url(&mock_server.uri()).unwrap();
-
-    Mock::given(method("GET"))
-        .and(path("/not-found"))
-        .respond_with(ResponseTemplate::new(404).set_body_json(json!({
-            "error": {
-                "code": "NotFoundError",
-                "message": "Resource not found"
-            }
-        })))
-        .mount(&mock_server)
-        .await;
-
-    let result: Result<serde_json::Value> = client.get("not-found").await;
-    assert!(result.is_err());
-    
-    if let Err(Error::NotFound(msg)) = result {
-        assert!(msg.contains("Resource not found"));
-    } else {
-        panic!("Expected NotFound error");
-    }
-}
-
-#[tokio::test]
-async fn test_client_error_handling_429() {
-    let mock_server = create_mock_server().await;
-    let client = create_test_client().with_base_url(&mock_server.uri()).unwrap();
-
-    Mock::given(method("GET"))
-        .and(path("/rate-limited"))
-        .respond_with(ResponseTemplate::new(429).set_body_json(json!({
-            "error": {
-                "code": "QuotaExceededError",
-                "message": "Rate limit exceeded"
-            }
-        })))
-        .mount(&mock_server)
-        .await;
-
-    let result: Result<serde_json::Value> = client.get("rate-limited").await;
-    assert!(result.is_err());
-    
-    if let Err(Error::QuotaExceeded(msg)) = result {
-        assert!(msg.contains("Rate limit exceeded"));
-    } else {
-        panic!("Expected QuotaExceeded error");
-    }
-}
+// Generate error handling tests using the macro
+test_error_response!(test_client_error_handling_400, "/bad-request", 400, "BadRequestError", "Invalid request parameters", BadRequest);
+test_error_response!(test_client_error_handling_401, "/unauthorized", 401, "AuthenticationRequiredError", "Valid API key required", AuthenticationRequired);
+test_error_response!(test_client_error_handling_403, "/forbidden", 403, "ForbiddenError", "Access denied", Forbidden);
+test_error_response!(test_client_error_handling_404, "/not-found", 404, "NotFoundError", "Resource not found", NotFound);
+test_error_response!(test_client_error_handling_429, "/rate-limited", 429, "QuotaExceededError", "Rate limit exceeded", QuotaExceeded);
 
 #[tokio::test]
 async fn test_client_error_handling_500() {
-    let mock_server = create_mock_server().await;
-    let client = create_test_client().with_base_url(&mock_server.uri()).unwrap();
+    let (mock_server, client) = setup_test_client!();
+    
+    let error_response = json!({
+        "error": {
+            "code": "InternalError",
+            "message": "Internal server error"
+        }
+    });
 
-    Mock::given(method("GET"))
-        .and(path("/server-error"))
-        .respond_with(ResponseTemplate::new(500).set_body_json(json!({
-            "error": {
-                "code": "InternalError",
-                "message": "Internal server error"
-            }
-        })))
-        .mount(&mock_server)
-        .await;
+    setup_mock_http!(&mock_server, "GET", "/server-error", 500, &error_response);
 
     let result: Result<serde_json::Value> = client.get("server-error").await;
     assert!(result.is_err());
@@ -347,11 +116,12 @@ async fn test_client_error_handling_500() {
 
 #[tokio::test]
 async fn test_client_malformed_json_response() {
-    let mock_server = create_mock_server().await;
-    let client = create_test_client().with_base_url(&mock_server.uri()).unwrap();
+    let (mock_server, client) = setup_test_client!();
 
+    use wiremock::{Mock, ResponseTemplate, matchers::{method, path, header}};
     Mock::given(method("GET"))
         .and(path("/malformed-json"))
+        .and(header("x-apikey", "test_key"))
         .respond_with(ResponseTemplate::new(200).set_body("{invalid json"))
         .mount(&mock_server)
         .await;
@@ -368,7 +138,9 @@ async fn test_client_malformed_json_response() {
 
 #[tokio::test]
 async fn test_client_network_timeout() {
-    let client = create_test_client().with_timeout(Duration::from_millis(1)).unwrap();
+    let api_key = ApiKey::new("test-api-key").unwrap();
+    let client = Client::new(api_key, ApiTier::Public).unwrap()
+        .with_timeout(Duration::from_millis(1)).unwrap();
     
     // Try to connect to a non-existent server to trigger timeout
     let result: Result<serde_json::Value> = client.get("test-endpoint").await;
@@ -377,7 +149,8 @@ async fn test_client_network_timeout() {
 
 #[tokio::test]
 async fn test_client_invalid_endpoint_url() {
-    let client = create_test_client();
+    let api_key = ApiKey::new("test-api-key").unwrap();
+    let client = Client::new(api_key, ApiTier::Public).unwrap();
     
     // Test with an endpoint that would create an invalid URL
     let result: Result<serde_json::Value> = client.get("").await;
@@ -386,7 +159,8 @@ async fn test_client_invalid_endpoint_url() {
 
 #[test]
 fn test_client_getters() {
-    let client = create_test_client();
+    let api_key = ApiKey::new("test-api-key").unwrap();
+    let client = Client::new(api_key, ApiTier::Public).unwrap();
     
     // Test API key getter
     assert_eq!(client.api_key(), "test-api-key");
@@ -401,7 +175,8 @@ fn test_client_getters() {
 
 #[test]
 fn test_client_clone() {
-    let client = create_test_client();
+    let api_key = ApiKey::new("test-api-key").unwrap();
+    let client = Client::new(api_key, ApiTier::Public).unwrap();
     let cloned_client = client.clone();
     
     assert_eq!(client.api_key(), cloned_client.api_key());
@@ -499,19 +274,16 @@ fn test_client_builder_defaults() {
 
 #[tokio::test]
 async fn test_client_delete_error_handling() {
-    let mock_server = create_mock_server().await;
-    let client = create_test_client().with_base_url(&mock_server.uri()).unwrap();
+    let (mock_server, client) = setup_test_client!();
 
-    Mock::given(method("DELETE"))
-        .and(path("/delete-error"))
-        .respond_with(ResponseTemplate::new(400).set_body_json(json!({
-            "error": {
-                "code": "BadRequestError",
-                "message": "Cannot delete this resource"
-            }
-        })))
-        .mount(&mock_server)
-        .await;
+    let error_response = json!({
+        "error": {
+            "code": "BadRequestError",
+            "message": "Cannot delete this resource"
+        }
+    });
+
+    setup_mock_http!(&mock_server, "DELETE", "/delete-error", 400, &error_response);
 
     let result = client.delete("delete-error").await;
     assert!(result.is_err());
@@ -519,19 +291,16 @@ async fn test_client_delete_error_handling() {
 
 #[tokio::test]
 async fn test_client_delete_with_header_error_handling() {
-    let mock_server = create_mock_server().await;
-    let client = create_test_client().with_base_url(&mock_server.uri()).unwrap();
+    let (mock_server, client) = setup_test_client!();
 
-    Mock::given(method("DELETE"))
-        .and(path("/delete-header-error"))
-        .respond_with(ResponseTemplate::new(403).set_body_json(json!({
-            "error": {
-                "code": "ForbiddenError",
-                "message": "Missing required permissions"
-            }
-        })))
-        .mount(&mock_server)
-        .await;
+    let error_response = json!({
+        "error": {
+            "code": "ForbiddenError",
+            "message": "Missing required permissions"
+        }
+    });
+
+    setup_mock_http!(&mock_server, "DELETE", "/delete-header-error", 403, &error_response);
 
     let result = client.delete_with_header("delete-header-error", "X-Permission", "admin").await;
     assert!(result.is_err());
@@ -539,11 +308,12 @@ async fn test_client_delete_with_header_error_handling() {
 
 #[tokio::test]
 async fn test_client_empty_response_handling() {
-    let mock_server = create_mock_server().await;
-    let client = create_test_client().with_base_url(&mock_server.uri()).unwrap();
+    let (mock_server, client) = setup_test_client!();
 
+    use wiremock::{Mock, ResponseTemplate, matchers::{method, path, header}};
     Mock::given(method("GET"))
         .and(path("/empty-response"))
+        .and(header("x-apikey", "test_key"))
         .respond_with(ResponseTemplate::new(200).set_body(""))
         .mount(&mock_server)
         .await;

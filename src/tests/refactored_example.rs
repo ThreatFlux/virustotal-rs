@@ -186,6 +186,8 @@ mod refactored_tests {
 
     // Helper functions for old_style_collection_test - demonstrating the verbose approach
     async fn setup_old_style_client() -> (wiremock::MockServer, crate::client::Client) {
+        // This is intentionally verbose for demonstration - in real refactoring, 
+        // you'd use setup_test_client!() macro
         use crate::auth::ApiTier;
         use crate::client::ClientBuilder;
         use std::time::Duration;

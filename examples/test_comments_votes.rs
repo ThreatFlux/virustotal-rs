@@ -73,29 +73,43 @@ async fn add_comments_and_votes(
     Ok(())
 }
 
+/// Helper function to handle comment operations with consistent error handling
+async fn handle_comment_operation<T>(
+    operation_name: &str,
+    operation: impl std::future::Future<Output = Result<T, virustotal_rs::Error>>,
+) -> Result<T, Box<dyn std::error::Error>> {
+    println!("\n📝 {operation_name}...");
+    match operation.await {
+        Ok(result) => {
+            println!("  ✅ Operation successful!");
+            Ok(result)
+        },
+        Err(e) => {
+            println!("  ⚠️  Could not complete operation: {}", e);
+            if e.to_string().contains("204") || e.to_string().contains("quota") {
+                println!("  Note: Rate limit reached (4 req/min for public API)");
+            }
+            Err(Box::new(e))
+        }
+    }
+}
+
 /// Adds comment and vote for the DLL file
 async fn add_file_comment_and_vote(
     client: &virustotal_rs::Client,
     dll_hash: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    println!("\n📝 Adding comment to 7z.dll...");
-    match client.files().add_comment(
-        dll_hash,
-        "APT 111 malware sample from DFIR CTF. DLL side-loading technique using legitimate 7z.dll. \
-         Collects system info (ipconfig, netstat, tasklist) and exfiltrates to office.msftupdated.com. \
-         #CTF #APT111 #DLLSideLoading"
-    ).await {
-        Ok(comment) => {
-            println!("  ✅ Comment added successfully!");
-            println!("  Comment ID: {}", comment.object.id);
-        },
-        Err(e) => {
-            println!("  ⚠️  Could not add comment: {}", e);
-            if e.to_string().contains("204") || e.to_string().contains("quota") {
-                println!("  Note: Rate limit reached (4 req/min for public API)");
-            }
-        }
-    }
+    let comment = handle_comment_operation(
+        "Adding comment to 7z.dll",
+        client.files().add_comment(
+            dll_hash,
+            "APT 111 malware sample from DFIR CTF. DLL side-loading technique using legitimate 7z.dll. \
+             Collects system info (ipconfig, netstat, tasklist) and exfiltrates to office.msftupdated.com. \
+             #CTF #APT111 #DLLSideLoading"
+        )
+    ).await?;
+    
+    println!("  Comment ID: {}", comment.object.id);
 
     // Small delay to avoid rate limiting
     sleep(Duration::from_secs(15)).await;

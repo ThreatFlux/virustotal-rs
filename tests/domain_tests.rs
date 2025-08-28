@@ -1,19 +1,16 @@
 use serde_json::json;
-use virustotal_rs::{ApiTier, ClientBuilder, VoteVerdict};
+use virustotal_rs::{ApiTier, ClientBuilder, VoteVerdict, setup_test_client, create_analysis_response, create_comment_response, setup_mock_http};
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 #[tokio::test]
 async fn test_domain_get() {
-    let mock_server = MockServer::start().await;
+    let (mock_server, client) = setup_test_client!();
 
     let domain_response = json!({
         "data": {
             "type": "domain",
             "id": "example.com",
-            "links": {
-                "self": "https://www.virustotal.com/api/v3/domains/example.com"
-            },
             "attributes": {
                 "registrar": "Example Registrar",
                 "creation_date": 1234567890,
@@ -33,19 +30,7 @@ async fn test_domain_get() {
         }
     });
 
-    Mock::given(method("GET"))
-        .and(path("/domains/example.com"))
-        .and(header("x-apikey", "test_key"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(&domain_response))
-        .mount(&mock_server)
-        .await;
-
-    let client = ClientBuilder::new()
-        .api_key("test_key")
-        .tier(ApiTier::Public)
-        .base_url(mock_server.uri())
-        .build()
-        .unwrap();
+    setup_mock_http!(&mock_server, "GET", "/domains/example.com", 200, &domain_response);
 
     let domain = client.domains().get("example.com").await.unwrap();
 
@@ -60,31 +45,11 @@ async fn test_domain_get() {
 
 #[tokio::test]
 async fn test_domain_analyse() {
-    let mock_server = MockServer::start().await;
+    let (mock_server, client) = setup_test_client!();
 
-    let analysis_response = json!({
-        "data": {
-            "type": "analysis",
-            "id": "d-abc123-1234567890",
-            "links": {
-                "self": "https://www.virustotal.com/api/v3/analyses/d-abc123-1234567890"
-            }
-        }
-    });
+    let analysis_response = create_analysis_response!("d-abc123-1234567890");
 
-    Mock::given(method("POST"))
-        .and(path("/domains/example.com/analyse"))
-        .and(header("x-apikey", "test_key"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(&analysis_response))
-        .mount(&mock_server)
-        .await;
-
-    let client = ClientBuilder::new()
-        .api_key("test_key")
-        .tier(ApiTier::Public)
-        .base_url(mock_server.uri())
-        .build()
-        .unwrap();
+    setup_mock_http!(&mock_server, "POST", "/domains/example.com/analyse", 200, &analysis_response);
 
     let result = client.domains().analyse("example.com").await.unwrap();
     assert_eq!(result.data.object_type, "analysis");

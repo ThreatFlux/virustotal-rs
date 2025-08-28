@@ -1,8 +1,6 @@
 // Async domain tests focused on domain-related API operations
-use crate::test_utils::test_utilities::*;
+use crate::{setup_test_client, test_domain_relationship, create_collection_response, setup_mock_http};
 use serde_json::json;
-use wiremock::matchers::{header, method, path};
-use wiremock::Mock;
 
 /// Test domain client basic operations
 #[cfg(test)]
@@ -11,42 +9,49 @@ mod domain_client_tests {
 
     #[tokio::test]
     async fn test_domain_client_get() {
-        let mock_client = MockApiClient::new().await.unwrap();
-        let domain_data = DomainResponseBuilder::clean_domain().build();
-        let response_data = ResponseFactory::success_response(domain_data);
+        let (mock_server, client) = setup_test_client!();
+        
+        let domain_data = json!({
+            "data": {
+                "type": "domain",
+                "id": "example.com",
+                "attributes": {
+                    "registrar": "Example Registrar",
+                    "reputation": 0
+                }
+            }
+        });
 
-        Mock::given(method("GET"))
-            .and(path("/domains/example.com"))
-            .and(header("x-apikey", constants::TEST_API_KEY))
-            .respond_with(create_json_response(200, &response_data))
-            .mount(mock_client.mock_server())
-            .await;
+        setup_mock_http!(&mock_server, "GET", "/domains/example.com", 200, &domain_data);
 
-        let domain_client = mock_client.client().domains();
+        let domain_client = client.domains();
         let result = domain_client.get("example.com").await;
 
         assert!(result.is_ok());
         let domain = result.unwrap();
-        assert_eq!(domain.object.id, constants::SAMPLE_DOMAIN);
+        assert_eq!(domain.object.id, "example.com");
     }
 
     #[tokio::test]
     async fn test_domain_client_get_with_relationships() {
-        let mock_client = MockApiClient::new().await.unwrap();
-        let mut domain_data = DomainResponseBuilder::clean_domain().build();
-        domain_data["relationships"] = json!({
-            "subdomains": {"data": []}
+        let (mock_server, client) = setup_test_client!();
+        
+        let domain_data = json!({
+            "data": {
+                "type": "domain",
+                "id": "example.com",
+                "attributes": {
+                    "registrar": "Example Registrar"
+                },
+                "relationships": {
+                    "subdomains": {"data": []}
+                }
+            }
         });
-        let response_data = ResponseFactory::success_response(domain_data);
 
-        Mock::given(method("GET"))
-            .and(path("/domains/example.com"))
-            .and(header("x-apikey", constants::TEST_API_KEY))
-            .respond_with(create_json_response(200, &response_data))
-            .mount(mock_client.mock_server())
-            .await;
+        setup_mock_http!(&mock_server, "GET", "/domains/example.com", 200, &domain_data);
 
-        let domain_client = mock_client.client().domains();
+        let domain_client = client.domains();
         let result = domain_client
             .get_with_relationships("example.com", &["subdomains"])
             .await;
@@ -60,93 +65,30 @@ mod domain_client_tests {
 mod domain_relationship_tests {
     use super::*;
 
-    #[tokio::test]
-    async fn test_domain_get_subdomains() {
-        let mock_client = MockApiClient::new().await.unwrap();
-        let response_data = ResponseFactory::collection_response(vec![], None);
-
-        Mock::given(method("GET"))
-            .and(path("/domains/example.com/subdomains"))
-            .and(header("x-apikey", constants::TEST_API_KEY))
-            .respond_with(create_json_response(200, &response_data))
-            .mount(mock_client.mock_server())
-            .await;
-
-        let domain_client = mock_client.client().domains();
-        let result = domain_client.get_subdomains("example.com").await;
-
-        assert!(result.is_ok());
-    }
-
-    #[tokio::test]
-    async fn test_domain_get_urls() {
-        let mock_client = MockApiClient::new().await.unwrap();
-        let response_data = ResponseFactory::collection_response(vec![], None);
-
-        Mock::given(method("GET"))
-            .and(path("/domains/example.com/urls"))
-            .and(header("x-apikey", constants::TEST_API_KEY))
-            .respond_with(create_json_response(200, &response_data))
-            .mount(mock_client.mock_server())
-            .await;
-
-        let domain_client = mock_client.client().domains();
-        let result = domain_client.get_urls("example.com").await;
-
-        assert!(result.is_ok());
-    }
-
-    #[tokio::test]
-    async fn test_domain_get_resolutions() {
-        let mock_client = MockApiClient::new().await.unwrap();
-        let response_data = ResponseFactory::collection_response(vec![], None);
-
-        Mock::given(method("GET"))
-            .and(path("/domains/example.com/resolutions"))
-            .and(header("x-apikey", constants::TEST_API_KEY))
-            .respond_with(create_json_response(200, &response_data))
-            .mount(mock_client.mock_server())
-            .await;
-
-        let domain_client = mock_client.client().domains();
-        let result = domain_client.get_resolutions("example.com").await;
-
-        assert!(result.is_ok());
-    }
+    // Use the new macro to generate all relationship tests
+    test_domain_relationship!(test_domain_get_subdomains, "subdomains");
+    test_domain_relationship!(test_domain_get_urls, "urls");
+    test_domain_relationship!(test_domain_get_resolutions, "resolutions");
+    test_domain_relationship!(test_domain_get_siblings, "siblings");
 
     #[tokio::test]
     async fn test_domain_get_parent() {
-        let mock_client = MockApiClient::new().await.unwrap();
-        let parent_data = DomainResponseBuilder::new("parent.com").build();
-        let response_data = ResponseFactory::success_response(parent_data);
+        let (mock_server, client) = setup_test_client!();
+        
+        let parent_data = json!({
+            "data": {
+                "type": "domain",
+                "id": "parent.com",
+                "attributes": {
+                    "registrar": "Parent Registrar"
+                }
+            }
+        });
 
-        Mock::given(method("GET"))
-            .and(path("/domains/example.com/parent"))
-            .and(header("x-apikey", constants::TEST_API_KEY))
-            .respond_with(create_json_response(200, &response_data))
-            .mount(mock_client.mock_server())
-            .await;
+        setup_mock_http!(&mock_server, "GET", "/domains/example.com/parent", 200, &parent_data);
 
-        let domain_client = mock_client.client().domains();
+        let domain_client = client.domains();
         let result = domain_client.get_parent("example.com").await;
-
-        assert!(result.is_ok());
-    }
-
-    #[tokio::test]
-    async fn test_domain_get_siblings() {
-        let mock_client = MockApiClient::new().await.unwrap();
-        let response_data = ResponseFactory::collection_response(vec![], None);
-
-        Mock::given(method("GET"))
-            .and(path("/domains/example.com/siblings"))
-            .and(header("x-apikey", constants::TEST_API_KEY))
-            .respond_with(create_json_response(200, &response_data))
-            .mount(mock_client.mock_server())
-            .await;
-
-        let domain_client = mock_client.client().domains();
-        let result = domain_client.get_siblings("example.com").await;
 
         assert!(result.is_ok());
     }
@@ -157,57 +99,8 @@ mod domain_relationship_tests {
 mod domain_file_relationship_tests {
     use super::*;
 
-    #[tokio::test]
-    async fn test_domain_get_communicating_files() {
-        let mock_client = MockApiClient::new().await.unwrap();
-        let response_data = ResponseFactory::collection_response(vec![], None);
-
-        Mock::given(method("GET"))
-            .and(path("/domains/example.com/communicating_files"))
-            .and(header("x-apikey", constants::TEST_API_KEY))
-            .respond_with(create_json_response(200, &response_data))
-            .mount(mock_client.mock_server())
-            .await;
-
-        let domain_client = mock_client.client().domains();
-        let result = domain_client.get_communicating_files("example.com").await;
-
-        assert!(result.is_ok());
-    }
-
-    #[tokio::test]
-    async fn test_domain_get_downloaded_files() {
-        let mock_client = MockApiClient::new().await.unwrap();
-        let response_data = ResponseFactory::collection_response(vec![], None);
-
-        Mock::given(method("GET"))
-            .and(path("/domains/example.com/downloaded_files"))
-            .and(header("x-apikey", constants::TEST_API_KEY))
-            .respond_with(create_json_response(200, &response_data))
-            .mount(mock_client.mock_server())
-            .await;
-
-        let domain_client = mock_client.client().domains();
-        let result = domain_client.get_downloaded_files("example.com").await;
-
-        assert!(result.is_ok());
-    }
-
-    #[tokio::test]
-    async fn test_domain_get_referrer_files() {
-        let mock_client = MockApiClient::new().await.unwrap();
-        let response_data = ResponseFactory::collection_response(vec![], None);
-
-        Mock::given(method("GET"))
-            .and(path("/domains/example.com/referrer_files"))
-            .and(header("x-apikey", constants::TEST_API_KEY))
-            .respond_with(create_json_response(200, &response_data))
-            .mount(mock_client.mock_server())
-            .await;
-
-        let domain_client = mock_client.client().domains();
-        let result = domain_client.get_referrer_files("example.com").await;
-
-        assert!(result.is_ok());
-    }
+    // Use the macro to generate all file relationship tests
+    test_domain_relationship!(test_domain_get_communicating_files, "communicating_files");
+    test_domain_relationship!(test_domain_get_downloaded_files, "downloaded_files");
+    test_domain_relationship!(test_domain_get_referrer_files, "referrer_files");
 }

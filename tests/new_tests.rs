@@ -1,35 +1,15 @@
 use serde_json::json;
-use virustotal_rs::{ApiTier, ClientBuilder};
+use virustotal_rs::{ApiTier, ClientBuilder, setup_test_client, create_analysis_response, create_comment_response, create_collection_response, setup_mock_http};
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 #[tokio::test]
 async fn test_ip_address_analyse() {
-    let mock_server = MockServer::start().await;
+    let (mock_server, client) = setup_test_client!();
 
-    let analysis_response = json!({
-        "data": {
-            "type": "analysis",
-            "id": "i-abc123-1234567890",
-            "links": {
-                "self": "https://www.virustotal.com/api/v3/analyses/i-abc123-1234567890"
-            }
-        }
-    });
+    let analysis_response = create_analysis_response!("i-abc123-1234567890");
 
-    Mock::given(method("POST"))
-        .and(path("/ip_addresses/8.8.8.8/analyse"))
-        .and(header("x-apikey", "test_key"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(&analysis_response))
-        .mount(&mock_server)
-        .await;
-
-    let client = ClientBuilder::new()
-        .api_key("test_key")
-        .tier(ApiTier::Public)
-        .base_url(mock_server.uri())
-        .build()
-        .unwrap();
+    setup_mock_http!(&mock_server, "POST", "/ip_addresses/8.8.8.8/analyse", 200, &analysis_response);
 
     let result = client.ip_addresses().analyse("8.8.8.8").await.unwrap();
     assert_eq!(result.data.object_type, "analysis");
@@ -38,37 +18,11 @@ async fn test_ip_address_analyse() {
 
 #[tokio::test]
 async fn test_ip_address_add_comment() {
-    let mock_server = MockServer::start().await;
+    let (mock_server, client) = setup_test_client!();
 
-    let comment_response = json!({
-        "data": {
-            "type": "comment",
-            "id": "c-123456",
-            "attributes": {
-                "text": "This IP looks suspicious",
-                "date": 1234567890,
-                "votes": {
-                    "positive": 5,
-                    "negative": 1,
-                    "abuse": 0
-                }
-            }
-        }
-    });
+    let comment_response = create_comment_response!("c-123456", "This IP looks suspicious");
 
-    Mock::given(method("POST"))
-        .and(path("/ip_addresses/1.2.3.4/comments"))
-        .and(header("x-apikey", "test_key"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(&comment_response))
-        .mount(&mock_server)
-        .await;
-
-    let client = ClientBuilder::new()
-        .api_key("test_key")
-        .tier(ApiTier::Public)
-        .base_url(mock_server.uri())
-        .build()
-        .unwrap();
+    setup_mock_http!(&mock_server, "POST", "/ip_addresses/1.2.3.4/comments", 200, &comment_response);
 
     let comment = client
         .ip_addresses()
@@ -82,44 +36,29 @@ async fn test_ip_address_add_comment() {
 
 #[tokio::test]
 async fn test_ip_address_get_comments_with_pagination() {
-    let mock_server = MockServer::start().await;
+    let (mock_server, client) = setup_test_client!();
 
-    let comments_response = json!({
-        "data": [
-            {
-                "type": "comment",
-                "id": "c-1",
-                "attributes": {
-                    "text": "First comment",
-                    "date": 1234567890
-                }
-            },
-            {
-                "type": "comment",
-                "id": "c-2",
-                "attributes": {
-                    "text": "Second comment",
-                    "date": 1234567891
-                }
-            }
-        ],
-        "meta": {
-            "cursor": "next_page"
+    let comment1 = json!({
+        "type": "comment",
+        "id": "c-1",
+        "attributes": {
+            "text": "First comment",
+            "date": 1234567890
+        }
+    });
+    
+    let comment2 = json!({
+        "type": "comment",
+        "id": "c-2",
+        "attributes": {
+            "text": "Second comment",
+            "date": 1234567891
         }
     });
 
-    Mock::given(method("GET"))
-        .and(path("/ip_addresses/8.8.8.8/comments"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(&comments_response))
-        .mount(&mock_server)
-        .await;
+    let comments_response = create_collection_response!(vec![comment1, comment2], Some("next_page"));
 
-    let client = ClientBuilder::new()
-        .api_key("test_key")
-        .tier(ApiTier::Public)
-        .base_url(mock_server.uri())
-        .build()
-        .unwrap();
+    setup_mock_http!(&mock_server, "GET", "/ip_addresses/8.8.8.8/comments", 200, &comments_response);
 
     let comments = client.ip_addresses().get_comments("8.8.8.8").await.unwrap();
 
@@ -127,55 +66,21 @@ async fn test_ip_address_get_comments_with_pagination() {
     assert_eq!(comments.data[0].object.attributes.text, "First comment");
 }
 
-/// Helper function to create test comment data
-fn create_comment_page(
-    comment_id: &str,
-    text: &str,
-    date: i64,
-    cursor: Option<&str>,
-) -> serde_json::Value {
-    let mut page = json!({
-        "data": [{
-            "type": "comment",
-            "id": comment_id,
-            "attributes": {
-                "text": text,
-                "date": date
-            }
-        }],
-        "meta": {}
-    });
-
-    if let Some(cursor_value) = cursor {
-        page["meta"]["cursor"] = json!(cursor_value);
-    }
-
-    page
-}
-
-/// Helper function to create test client
-async fn create_test_client_for_comments(mock_server: &MockServer) -> virustotal_rs::Client {
-    ClientBuilder::new()
-        .api_key("test_key")
-        .tier(ApiTier::Public)
-        .base_url(mock_server.uri())
-        .build()
-        .unwrap()
-}
+// Removed redundant helper functions - now using macros instead
 
 #[tokio::test]
 async fn test_comment_iterator() {
-    let mock_server = MockServer::start().await;
+    let (mock_server, client) = setup_test_client!();
 
-    let page1 = create_comment_page("c-1", "Comment 1", 1234567890, Some("page2"));
-    let page2 = create_comment_page("c-2", "Comment 2", 1234567891, None);
+    let comment1 = json!({"type": "comment", "id": "c-1", "attributes": {"text": "Comment 1", "date": 1234567890}});
+    let comment2 = json!({"type": "comment", "id": "c-2", "attributes": {"text": "Comment 2", "date": 1234567891}});
+    
+    let page1 = create_collection_response!(vec![comment1], Some("page2"));
+    let page2 = create_collection_response!(vec![comment2]);
 
-    Mock::given(method("GET"))
-        .and(path("/ip_addresses/8.8.8.8/comments"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(&page1))
-        .mount(&mock_server)
-        .await;
+    setup_mock_http!(&mock_server, "GET", "/ip_addresses/8.8.8.8/comments", 200, &page1);
 
+    use wiremock::{Mock, ResponseTemplate, matchers::{method, path, header}};
     Mock::given(method("GET"))
         .and(path("/ip_addresses/8.8.8.8/comments"))
         .respond_with(ResponseTemplate::new(200).set_body_json(&page2))

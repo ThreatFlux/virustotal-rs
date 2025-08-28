@@ -20,34 +20,36 @@ impl TestUtils {
     }
 
     /// Convenience helper that returns both a mock server and a connected test client.
-    /// This reduces the repeated boilerplate of creating a server and client separately
-    /// in each test.
     pub async fn create_mock_server_and_client() -> (MockServer, Client) {
+        Self::create_client_with_tier(ApiTier::Premium).await
+    }
+
+    /// Create a test client with specified tier
+    pub async fn create_client_with_tier(tier: ApiTier) -> (MockServer, Client) {
+        Self::create_client_with_key_and_tier("test_api_key", tier).await
+    }
+
+    /// Create a test client with custom API key and tier
+    pub async fn create_client_with_key_and_tier(api_key: &str, tier: ApiTier) -> (MockServer, Client) {
         let mock_server = Self::create_mock_server().await;
-        let client = Self::create_test_client(&mock_server)
-            .await
+        let client = ClientBuilder::new()
+            .api_key(api_key)
+            .tier(tier)
+            .base_url(mock_server.uri())
+            .timeout(Duration::from_secs(5))
+            .build()
             .expect("failed to create test client");
         (mock_server, client)
     }
 
-    /// Create a test client that connects to the mock server
+    /// Create a test client that connects to the mock server  
     pub async fn create_test_client(mock_server: &MockServer) -> Result<Client> {
-        ClientBuilder::new()
-            .api_key("test_api_key")
-            .tier(ApiTier::Premium)
-            .base_url(mock_server.uri())
-            .timeout(Duration::from_secs(5))
-            .build()
+        Self::create_test_client_with_tier(mock_server, ApiTier::Premium).await
     }
 
     /// Create a test client with public tier limits
     pub async fn create_public_test_client(mock_server: &MockServer) -> Result<Client> {
-        ClientBuilder::new()
-            .api_key("test_api_key")
-            .tier(ApiTier::Public)
-            .base_url(mock_server.uri())
-            .timeout(Duration::from_secs(5))
-            .build()
+        Self::create_test_client_with_tier(mock_server, ApiTier::Public).await
     }
 
     /// Create a test client with custom API key
@@ -55,9 +57,23 @@ impl TestUtils {
         mock_server: &MockServer,
         api_key: &str,
     ) -> Result<Client> {
+        Self::create_test_client_with_key_and_tier(mock_server, api_key, ApiTier::Premium).await
+    }
+
+    /// Internal helper to create client with tier
+    async fn create_test_client_with_tier(mock_server: &MockServer, tier: ApiTier) -> Result<Client> {
+        Self::create_test_client_with_key_and_tier(mock_server, "test_api_key", tier).await
+    }
+
+    /// Internal helper to create client with key and tier  
+    async fn create_test_client_with_key_and_tier(
+        mock_server: &MockServer, 
+        api_key: &str, 
+        tier: ApiTier
+    ) -> Result<Client> {
         ClientBuilder::new()
             .api_key(api_key)
-            .tier(ApiTier::Premium)
+            .tier(tier)
             .base_url(mock_server.uri())
             .timeout(Duration::from_secs(5))
             .build()

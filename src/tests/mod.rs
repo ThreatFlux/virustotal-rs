@@ -5,6 +5,8 @@
 pub mod mock_data;
 #[cfg(test)]
 pub mod test_utils;
+#[cfg(test)]
+pub mod test_macros;
 
 // Unit tests
 #[cfg(test)]
