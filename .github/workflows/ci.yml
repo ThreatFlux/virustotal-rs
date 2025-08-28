@@ -118,7 +118,9 @@ jobs:
         components: llvm-tools-preview
 
     - name: Install cargo-llvm-cov
-      uses: taiki-e/install-action@bb5b6ec0fe226d4254f80ec39794c3a8c1b6525f # cargo-llvm-cov
+      uses: taiki-e/install-action@v2
+      with:
+        tool: cargo-llvm-cov
 
     - name: Cache cargo registry
       uses: actions/cache@v4
@@ -195,7 +197,9 @@ jobs:
       uses: dtolnay/rust-toolchain@5d458579430fc14a04a08a1e7d3694f545e91ce6 # stable
 
     - name: Install cargo-hack
-      uses: taiki-e/install-action@bb5b6ec0fe226d4254f80ec39794c3a8c1b6525f # cargo-hack
+      uses: taiki-e/install-action@v2
+      with:
+        tool: cargo-hack
 
     - name: Cache cargo registry
       uses: actions/cache@v4
