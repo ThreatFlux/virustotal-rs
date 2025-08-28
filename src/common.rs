@@ -162,6 +162,37 @@ pub trait RelationshipOperations {
 
 pub struct BaseResourceClient;
 
+impl BaseResourceClient {
+    /// Helper to build URLs for resource endpoints
+    fn build_resource_url(resource_type: &str, resource_id: &str, endpoint: &str) -> String {
+        format!("{}/{}/{}", resource_type, resource_id, endpoint)
+    }
+
+    /// Helper to build URLs with query parameters
+    fn build_resource_url_with_params(
+        resource_type: &str, 
+        resource_id: &str, 
+        endpoint: &str, 
+        params: &str
+    ) -> String {
+        format!("{}/{}/{}?{}", resource_type, resource_id, endpoint, params)
+    }
+
+    /// Helper to build relationship URLs
+    fn build_relationship_url(
+        resource_type: &str, 
+        resource_id: &str, 
+        relationship: &str, 
+        with_relationships_prefix: bool
+    ) -> String {
+        if with_relationships_prefix {
+            format!("{}/{}/relationships/{}", resource_type, resource_id, relationship)
+        } else {
+            format!("{}/{}/{}", resource_type, resource_id, relationship)
+        }
+    }
+}
+
 #[async_trait::async_trait]
 impl CommentOperations for BaseResourceClient {
     async fn get_comments_impl(
@@ -170,7 +201,7 @@ impl CommentOperations for BaseResourceClient {
         resource_type: &str,
         resource_id: &str,
     ) -> crate::Result<crate::Collection<crate::Comment>> {
-        let url = format!("{}/{}/comments", resource_type, resource_id);
+        let url = Self::build_resource_url(resource_type, resource_id, "comments");
         client.get(&url).await
     }
 
@@ -181,7 +212,9 @@ impl CommentOperations for BaseResourceClient {
         resource_id: &str,
         limit: u32,
     ) -> crate::Result<crate::Collection<crate::Comment>> {
-        let url = format!("{}/{}/comments?limit={}", resource_type, resource_id, limit);
+        let url = Self::build_resource_url_with_params(
+            resource_type, resource_id, "comments", &format!("limit={}", limit)
+        );
         client.get(&url).await
     }
 
@@ -195,7 +228,7 @@ impl CommentOperations for BaseResourceClient {
         use crate::comments::CreateCommentRequest;
         use crate::objects::ObjectResponse;
 
-        let url = format!("{}/{}/comments", resource_type, resource_id);
+        let url = Self::build_resource_url(resource_type, resource_id, "comments");
         let request = CreateCommentRequest::new(text);
         let response: ObjectResponse<crate::comments::CommentAttributes> =
             client.post(&url, &request).await?;
@@ -213,7 +246,7 @@ impl VoteOperations for BaseResourceClient {
         resource_type: &str,
         resource_id: &str,
     ) -> crate::Result<crate::votes::VoteCollection> {
-        let url = format!("{}/{}/votes", resource_type, resource_id);
+        let url = Self::build_resource_url(resource_type, resource_id, "votes");
         client.get(&url).await
     }
 
@@ -227,7 +260,7 @@ impl VoteOperations for BaseResourceClient {
         use crate::objects::ObjectResponse;
         use crate::votes::VoteRequest;
 
-        let url = format!("{}/{}/votes", resource_type, resource_id);
+        let url = Self::build_resource_url(resource_type, resource_id, "votes");
         let request = VoteRequest::new(verdict);
         let response: ObjectResponse<crate::votes::VoteAttributes> =
             client.post(&url, &request).await?;
@@ -245,7 +278,7 @@ impl AnalysisOperations for BaseResourceClient {
         resource_type: &str,
         resource_id: &str,
     ) -> crate::Result<crate::AnalysisResponse> {
-        let url = format!("{}/{}/analyse", resource_type, resource_id);
+        let url = Self::build_resource_url(resource_type, resource_id, "analyse");
         client.post(&url, &serde_json::json!({})).await
     }
 
@@ -277,7 +310,7 @@ impl RelationshipOperations for BaseResourceClient {
     where
         T: for<'de> Deserialize<'de> + Send,
     {
-        let url = format!("{}/{}/{}", resource_type, resource_id, relationship);
+        let url = Self::build_relationship_url(resource_type, resource_id, relationship, false);
         client.get(&url).await
     }
 
@@ -292,9 +325,8 @@ impl RelationshipOperations for BaseResourceClient {
     where
         T: for<'de> Deserialize<'de> + Send,
     {
-        let url = format!(
-            "{}/{}/{}?limit={}",
-            resource_type, resource_id, relationship, limit
+        let url = Self::build_resource_url_with_params(
+            resource_type, resource_id, relationship, &format!("limit={}", limit)
         );
         client.get(&url).await
     }
@@ -306,10 +338,7 @@ impl RelationshipOperations for BaseResourceClient {
         resource_id: &str,
         relationship: &str,
     ) -> crate::Result<crate::Collection<crate::objects::ObjectDescriptor>> {
-        let url = format!(
-            "{}/{}/relationships/{}",
-            resource_type, resource_id, relationship
-        );
+        let url = Self::build_relationship_url(resource_type, resource_id, relationship, true);
         client.get(&url).await
     }
 
@@ -321,10 +350,8 @@ impl RelationshipOperations for BaseResourceClient {
         relationship: &str,
         limit: u32,
     ) -> crate::Result<crate::Collection<crate::objects::ObjectDescriptor>> {
-        let url = format!(
-            "{}/{}/relationships/{}?limit={}",
-            resource_type, resource_id, relationship, limit
-        );
+        let base_url = Self::build_relationship_url(resource_type, resource_id, relationship, true);
+        let url = format!("{}?limit={}", base_url, limit);
         client.get(&url).await
     }
 }
@@ -343,8 +370,7 @@ macro_rules! impl_common_client_methods {
             ) -> $crate::Result<$crate::Collection<$crate::Comment>> {
                 use $crate::common::{BaseResourceClient, CommentOperations};
                 let base = BaseResourceClient;
-                base.get_comments_impl(self.client, $resource_type, id)
-                    .await
+                base.get_comments_impl(self.client, $resource_type, id).await
             }
 
             pub async fn get_comments_with_limit(
@@ -354,8 +380,7 @@ macro_rules! impl_common_client_methods {
             ) -> $crate::Result<$crate::Collection<$crate::Comment>> {
                 use $crate::common::{BaseResourceClient, CommentOperations};
                 let base = BaseResourceClient;
-                base.get_comments_with_limit_impl(self.client, $resource_type, id, limit)
-                    .await
+                base.get_comments_with_limit_impl(self.client, $resource_type, id, limit).await
             }
 
             pub async fn add_comment(
@@ -365,8 +390,7 @@ macro_rules! impl_common_client_methods {
             ) -> $crate::Result<$crate::Comment> {
                 use $crate::common::{BaseResourceClient, CommentOperations};
                 let base = BaseResourceClient;
-                base.add_comment_impl(self.client, $resource_type, id, text)
-                    .await
+                base.add_comment_impl(self.client, $resource_type, id, text).await
             }
 
             pub async fn get_votes(
@@ -385,8 +409,7 @@ macro_rules! impl_common_client_methods {
             ) -> $crate::Result<$crate::Vote> {
                 use $crate::common::{BaseResourceClient, VoteOperations};
                 let base = BaseResourceClient;
-                base.add_vote_impl(self.client, $resource_type, id, verdict)
-                    .await
+                base.add_vote_impl(self.client, $resource_type, id, verdict).await
             }
 
             pub async fn analyse(&self, id: &str) -> $crate::Result<$crate::AnalysisResponse> {
@@ -414,8 +437,7 @@ macro_rules! impl_common_client_methods {
             {
                 use $crate::common::{BaseResourceClient, RelationshipOperations};
                 let base = BaseResourceClient;
-                base.get_relationship_impl(self.client, $resource_type, id, relationship)
-                    .await
+                base.get_relationship_impl(self.client, $resource_type, id, relationship).await
             }
 
             pub async fn get_relationship_with_limit<T>(
@@ -435,8 +457,7 @@ macro_rules! impl_common_client_methods {
                     id,
                     relationship,
                     limit,
-                )
-                .await
+                ).await
             }
 
             pub async fn get_relationship_descriptors(
@@ -451,8 +472,7 @@ macro_rules! impl_common_client_methods {
                     $resource_type,
                     id,
                     relationship,
-                )
-                .await
+                ).await
             }
 
             pub async fn get_relationship_descriptors_with_limit(
@@ -469,8 +489,7 @@ macro_rules! impl_common_client_methods {
                     id,
                     relationship,
                     limit,
-                )
-                .await
+                ).await
             }
         }
     };

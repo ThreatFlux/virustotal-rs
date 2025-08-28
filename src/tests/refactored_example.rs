@@ -162,17 +162,21 @@ mod refactored_tests {
         assert!(result.is_err());
     }
 
-    // BEFORE: Complex collection testing
-    // NOTE: This test intentionally demonstrates verbose, repetitive "old style" code
-    // with lots of boilerplate for educational comparison with the "new style" version below.
-    // The verbosity is intentional to show the contrast.
+    // BEFORE: Complex collection testing with verbose boilerplate
     #[tokio::test]
     async fn old_style_collection_test() {
-        let (mock_server, client) = setup_old_style_client().await;
+        // Use existing test utilities to reduce boilerplate while still demonstrating "old style"
+        let mock_client = MockApiClient::new().await.unwrap();
         let collection_response = create_manual_collection_response();
-        mount_old_style_collection_mock(&mock_server, collection_response).await;
 
-        let result: crate::Result<serde_json::Value> = client.get("files").await;
+        Mock::given(method("GET"))
+            .and(path("/files"))
+            .and(header("x-apikey", constants::TEST_API_KEY))
+            .respond_with(create_json_response(200, &collection_response))
+            .mount(mock_client.mock_server())
+            .await;
+
+        let result: crate::Result<serde_json::Value> = mock_client.client().get("files").await;
         assert!(result.is_ok());
 
         let response_data = result.unwrap();
@@ -184,29 +188,8 @@ mod refactored_tests {
             .contains("next123"));
     }
 
-    // Helper functions for old_style_collection_test - demonstrating the verbose approach
-    async fn setup_old_style_client() -> (wiremock::MockServer, crate::client::Client) {
-        // This is intentionally verbose for demonstration - in real refactoring, 
-        // you'd use setup_test_client!() macro
-        use crate::auth::ApiTier;
-        use crate::client::ClientBuilder;
-        use std::time::Duration;
-        use wiremock::MockServer;
-
-        let mock_server = MockServer::start().await;
-        let client = ClientBuilder::new()
-            .api_key("test_api_key")
-            .tier(ApiTier::Premium)
-            .base_url(mock_server.uri())
-            .timeout(Duration::from_secs(5))
-            .build()
-            .unwrap();
-
-        (mock_server, client)
-    }
-
+    // Simplified helper function for manual collection response
     fn create_manual_collection_response() -> serde_json::Value {
-        // Manual collection construction - lots of repetition (intentionally verbose for demo)
         let file1 = json!({
             "type": "file",
             "id": "hash1",
@@ -232,24 +215,6 @@ mod refactored_tests {
             "meta": { "count": 2 },
             "links": { "next": "https://api.example.com/files?cursor=next123" }
         })
-    }
-
-    async fn mount_old_style_collection_mock(
-        mock_server: &wiremock::MockServer,
-        collection_response: serde_json::Value,
-    ) {
-        use wiremock::ResponseTemplate;
-
-        let response = ResponseTemplate::new(200)
-            .append_header("Content-Type", "application/json")
-            .set_body_json(&collection_response);
-
-        Mock::given(method("GET"))
-            .and(path("/files"))
-            .and(header("x-apikey", "test_api_key"))
-            .respond_with(response)
-            .mount(mock_server)
-            .await;
     }
 
     // AFTER: Elegant collection testing
@@ -291,49 +256,14 @@ mod refactored_tests {
             .contains("next123"));
     }
 
-    // Test helper functions for different analysis scenarios
-    async fn setup_clean_file_mock(mock_client: &MockApiClient) {
-        let clean_file = FileResponseBuilder::clean_file().build();
-        let clean_response = ResponseFactory::success_response(clean_file);
+    // Consolidated test helper function for different analysis scenarios
+    async fn setup_file_mock(mock_client: &MockApiClient, endpoint: &str, file_data: serde_json::Value) {
+        let response = ResponseFactory::success_response(file_data);
 
         Mock::given(method("GET"))
-            .and(path("/files/clean"))
+            .and(path(endpoint))
             .and(header("x-apikey", constants::TEST_API_KEY))
-            .respond_with(create_json_response(200, &clean_response))
-            .mount(mock_client.mock_server())
-            .await;
-    }
-
-    async fn setup_malicious_file_mock(mock_client: &MockApiClient) {
-        let malicious_file = FileResponseBuilder::malicious_file().build();
-        let malicious_response = ResponseFactory::success_response(malicious_file);
-
-        Mock::given(method("GET"))
-            .and(path("/files/malicious"))
-            .and(header("x-apikey", constants::TEST_API_KEY))
-            .respond_with(create_json_response(200, &malicious_response))
-            .mount(mock_client.mock_server())
-            .await;
-    }
-
-    async fn setup_custom_analysis_mock(mock_client: &MockApiClient) {
-        let custom_stats = AnalysisStatsBuilder::new()
-            .with_harmless(60)
-            .with_malicious(3)
-            .with_suspicious(1)
-            .with_undetected(2)
-            .build();
-
-        let custom_file = FileResponseBuilder::new("custom-hash")
-            .with_stats(custom_stats)
-            .build();
-
-        let custom_response = ResponseFactory::success_response(custom_file);
-
-        Mock::given(method("GET"))
-            .and(path("/files/custom"))
-            .and(header("x-apikey", constants::TEST_API_KEY))
-            .respond_with(create_json_response(200, &custom_response))
+            .respond_with(create_json_response(200, &response))
             .mount(mock_client.mock_server())
             .await;
     }
@@ -342,48 +272,56 @@ mod refactored_tests {
     #[tokio::test]
     async fn test_clean_file_analysis() {
         let mock_client = MockApiClient::new().await.unwrap();
-        setup_clean_file_mock(&mock_client).await;
+        let file_data = FileResponseBuilder::clean_file().build();
+        setup_file_mock(&mock_client, "/files/clean", file_data).await;
 
-        let result: crate::Result<serde_json::Value> =
-            mock_client.client().get("files/clean").await;
-        let clean_stats: crate::common::AnalysisStats = serde_json::from_value(
+        let result: crate::Result<serde_json::Value> = mock_client.client().get("files/clean").await;
+        let stats: crate::common::AnalysisStats = serde_json::from_value(
             result.unwrap()["data"]["attributes"]["last_analysis_stats"].clone(),
-        )
-        .unwrap();
-        assert_analysis_clean!(clean_stats);
+        ).unwrap();
+        assert_analysis_clean!(stats);
     }
 
     // Malicious file analysis test
     #[tokio::test]
     async fn test_malicious_file_analysis() {
         let mock_client = MockApiClient::new().await.unwrap();
-        setup_malicious_file_mock(&mock_client).await;
+        let file_data = FileResponseBuilder::malicious_file().build();
+        setup_file_mock(&mock_client, "/files/malicious", file_data).await;
 
-        let result: crate::Result<serde_json::Value> =
-            mock_client.client().get("files/malicious").await;
-        let malicious_stats: crate::common::AnalysisStats = serde_json::from_value(
+        let result: crate::Result<serde_json::Value> = mock_client.client().get("files/malicious").await;
+        let stats: crate::common::AnalysisStats = serde_json::from_value(
             result.unwrap()["data"]["attributes"]["last_analysis_stats"].clone(),
-        )
-        .unwrap();
-        assert_analysis_malicious!(malicious_stats);
+        ).unwrap();
+        assert_analysis_malicious!(stats);
     }
 
     // Custom analysis with specific numbers test
     #[tokio::test]
     async fn test_custom_analysis_scenario() {
         let mock_client = MockApiClient::new().await.unwrap();
-        setup_custom_analysis_mock(&mock_client).await;
+        
+        let custom_stats = AnalysisStatsBuilder::new()
+            .with_harmless(60)
+            .with_malicious(3)
+            .with_suspicious(1)
+            .with_undetected(2)
+            .build();
+        
+        let file_data = FileResponseBuilder::new("custom-hash")
+            .with_stats(custom_stats)
+            .build();
+        
+        setup_file_mock(&mock_client, "/files/custom", file_data).await;
 
-        let result: crate::Result<serde_json::Value> =
-            mock_client.client().get("files/custom").await;
-        let returned_stats: crate::common::AnalysisStats = serde_json::from_value(
+        let result: crate::Result<serde_json::Value> = mock_client.client().get("files/custom").await;
+        let stats: crate::common::AnalysisStats = serde_json::from_value(
             result.unwrap()["data"]["attributes"]["last_analysis_stats"].clone(),
-        )
-        .unwrap();
+        ).unwrap();
 
-        assert_eq!(returned_stats.harmless, 60);
-        assert_eq!(returned_stats.malicious, 3);
-        assert_eq!(returned_stats.suspicious, 1);
-        assert_analysis_malicious!(returned_stats);
+        assert_eq!(stats.harmless, 60);
+        assert_eq!(stats.malicious, 3);
+        assert_eq!(stats.suspicious, 1);
+        assert_analysis_malicious!(stats);
     }
 }

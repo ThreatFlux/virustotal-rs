@@ -14,6 +14,58 @@ impl GroupsClient {
         Self { client }
     }
 
+    /// Helper to build group endpoint URL
+    fn build_group_endpoint(&self, id: &str) -> String {
+        format!("groups/{}", id)
+    }
+
+    /// Helper to build query parameters
+    fn build_query_params(&self, limit: Option<u32>, cursor: Option<&str>) -> String {
+        let mut params = Vec::new();
+        if let Some(l) = limit {
+            params.push(format!("limit={}", l));
+        }
+        if let Some(c) = cursor {
+            params.push(format!("cursor={}", c));
+        }
+
+        if !params.is_empty() {
+            format!("?{}", params.join("&"))
+        } else {
+            String::new()
+        }
+    }
+
+    /// Helper to build relationship endpoint with query parameters
+    fn build_relationship_endpoint(&self, id: &str, relationship: &str, limit: Option<u32>, cursor: Option<&str>, use_relationships_path: bool) -> String {
+        let base_endpoint = if use_relationships_path {
+            format!("groups/{}/relationships/{}", id, relationship)
+        } else {
+            format!("groups/{}/{}", id, relationship)
+        };
+        
+        let query_params = self.build_query_params(limit, cursor);
+        format!("{}{}", base_endpoint, query_params)
+    }
+
+    /// Helper to create user list for add operations
+    fn create_user_list(&self, user_emails: Vec<&str>) -> UserListRequest {
+        let users: Vec<UserDescriptor> = user_emails
+            .into_iter()
+            .map(|email| UserDescriptor {
+                id: email.to_string(),
+                object_type: "user".to_string(),
+            })
+            .collect();
+        
+        UserListRequest { data: users }
+    }
+
+    /// Helper to build user-specific relationship endpoint
+    fn build_user_relationship_endpoint(&self, group_id: &str, relationship: &str, user_id: &str) -> String {
+        format!("groups/{}/relationships/{}/{}", group_id, relationship, user_id)
+    }
+
     /// Get a group object by ID
     ///
     /// Retrieves information about a group.
@@ -31,7 +83,7 @@ impl GroupsClient {
     /// # }
     /// ```
     pub async fn get_group(&self, id: &str) -> Result<GroupResponse> {
-        let endpoint = format!("groups/{}", id);
+        let endpoint = self.build_group_endpoint(id);
         self.client.get(&endpoint).await
     }
 
@@ -65,7 +117,7 @@ impl GroupsClient {
         id: &str,
         updates: &GroupUpdateRequest,
     ) -> Result<GroupResponse> {
-        let endpoint = format!("groups/{}", id);
+        let endpoint = self.build_group_endpoint(id);
         self.client.patch(&endpoint, updates).await
     }
 
@@ -86,7 +138,7 @@ impl GroupsClient {
     /// # }
     /// ```
     pub async fn get_administrators(&self, id: &str) -> Result<AdminsResponse> {
-        let endpoint = format!("groups/{}/relationships/administrators", id);
+        let endpoint = self.build_relationship_endpoint(id, "administrators", None, None, true);
         self.client.get(&endpoint).await
     }
 
@@ -110,18 +162,8 @@ impl GroupsClient {
     /// # }
     /// ```
     pub async fn add_administrators(&self, id: &str, user_emails: Vec<&str>) -> Result<()> {
-        let endpoint = format!("groups/{}/relationships/administrators", id);
-
-        let users: Vec<UserDescriptor> = user_emails
-            .into_iter()
-            .map(|email| UserDescriptor {
-                id: email.to_string(),
-                object_type: "user".to_string(),
-            })
-            .collect();
-
-        let request = UserListRequest { data: users };
-
+        let endpoint = self.build_relationship_endpoint(id, "administrators", None, None, true);
+        let request = self.create_user_list(user_emails);
         self.client.post(&endpoint, &request).await
     }
 
@@ -141,7 +183,7 @@ impl GroupsClient {
     /// # }
     /// ```
     pub async fn is_administrator(&self, id: &str, user_id: &str) -> Result<bool> {
-        let endpoint = format!("groups/{}/relationships/administrators/{}", id, user_id);
+        let endpoint = self.build_user_relationship_endpoint(id, "administrators", user_id);
         match self.client.get::<serde_json::Value>(&endpoint).await {
             Ok(_) => Ok(true),
             Err(_) => Ok(false),
@@ -164,7 +206,7 @@ impl GroupsClient {
     /// # }
     /// ```
     pub async fn remove_administrator(&self, id: &str, user_id: &str) -> Result<()> {
-        let endpoint = format!("groups/{}/relationships/administrators/{}", id, user_id);
+        let endpoint = self.build_user_relationship_endpoint(id, "administrators", user_id);
         self.client.delete(&endpoint).await
     }
 
@@ -185,7 +227,7 @@ impl GroupsClient {
     /// # }
     /// ```
     pub async fn get_users(&self, id: &str) -> Result<UsersResponse> {
-        let endpoint = format!("groups/{}/relationships/users", id);
+        let endpoint = self.build_relationship_endpoint(id, "users", None, None, true);
         self.client.get(&endpoint).await
     }
 
@@ -205,7 +247,7 @@ impl GroupsClient {
     /// # }
     /// ```
     pub async fn is_member(&self, id: &str, user_id: &str) -> Result<bool> {
-        let endpoint = format!("groups/{}/relationships/users/{}", id, user_id);
+        let endpoint = self.build_user_relationship_endpoint(id, "users", user_id);
         match self.client.get::<MembershipCheck>(&endpoint).await {
             Ok(response) => Ok(response.data),
             Err(_) => Ok(false),
@@ -228,7 +270,7 @@ impl GroupsClient {
     /// # }
     /// ```
     pub async fn remove_user(&self, id: &str, user_id: &str) -> Result<()> {
-        let endpoint = format!("groups/{}/relationships/users/{}", id, user_id);
+        let endpoint = self.build_user_relationship_endpoint(id, "users", user_id);
         self.client.delete(&endpoint).await
     }
 
@@ -252,18 +294,8 @@ impl GroupsClient {
     /// # }
     /// ```
     pub async fn add_users(&self, id: &str, user_emails: Vec<&str>) -> Result<()> {
-        let endpoint = format!("groups/{}/relationships/users", id);
-
-        let users: Vec<UserDescriptor> = user_emails
-            .into_iter()
-            .map(|email| UserDescriptor {
-                id: email.to_string(),
-                object_type: "user".to_string(),
-            })
-            .collect();
-
-        let request = UserListRequest { data: users };
-
+        let endpoint = self.build_relationship_endpoint(id, "users", None, None, true);
+        let request = self.create_user_list(user_emails);
         self.client.post(&endpoint, &request).await
     }
 
@@ -293,21 +325,7 @@ impl GroupsClient {
         limit: Option<u32>,
         cursor: Option<&str>,
     ) -> Result<Collection<T>> {
-        let mut endpoint = format!("groups/{}/{}", id, relationship);
-
-        let mut params = Vec::new();
-        if let Some(l) = limit {
-            params.push(format!("limit={}", l));
-        }
-        if let Some(c) = cursor {
-            params.push(format!("cursor={}", c));
-        }
-
-        if !params.is_empty() {
-            endpoint.push('?');
-            endpoint.push_str(&params.join("&"));
-        }
-
+        let endpoint = self.build_relationship_endpoint(id, relationship, limit, cursor, false);
         self.client.get(&endpoint).await
     }
 
@@ -328,21 +346,7 @@ impl GroupsClient {
         limit: Option<u32>,
         cursor: Option<&str>,
     ) -> Result<Collection<T>> {
-        let mut endpoint = format!("groups/{}/relationships/{}", id, relationship);
-
-        let mut params = Vec::new();
-        if let Some(l) = limit {
-            params.push(format!("limit={}", l));
-        }
-        if let Some(c) = cursor {
-            params.push(format!("cursor={}", c));
-        }
-
-        if !params.is_empty() {
-            endpoint.push('?');
-            endpoint.push_str(&params.join("&"));
-        }
-
+        let endpoint = self.build_relationship_endpoint(id, relationship, limit, cursor, true);
         self.client.get(&endpoint).await
     }
 

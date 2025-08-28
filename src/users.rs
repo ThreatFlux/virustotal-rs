@@ -14,6 +14,40 @@ impl UsersClient {
         Self { client }
     }
 
+    /// Helper to build user endpoint URL
+    fn build_user_endpoint(&self, id: &str) -> String {
+        format!("users/{}", id)
+    }
+
+    /// Helper to build query parameters
+    fn build_query_params(&self, limit: Option<u32>, cursor: Option<&str>) -> String {
+        let mut params = Vec::new();
+        if let Some(l) = limit {
+            params.push(format!("limit={}", l));
+        }
+        if let Some(c) = cursor {
+            params.push(format!("cursor={}", c));
+        }
+
+        if !params.is_empty() {
+            format!("?{}", params.join("&"))
+        } else {
+            String::new()
+        }
+    }
+
+    /// Helper to build relationship endpoint with query parameters
+    fn build_relationship_endpoint(&self, id: &str, relationship: &str, limit: Option<u32>, cursor: Option<&str>, use_relationships_path: bool) -> String {
+        let base_endpoint = if use_relationships_path {
+            format!("users/{}/relationships/{}", id, relationship)
+        } else {
+            format!("users/{}/{}", id, relationship)
+        };
+        
+        let query_params = self.build_query_params(limit, cursor);
+        format!("{}{}", base_endpoint, query_params)
+    }
+
     /// Get a user object by ID or API key
     ///
     /// Retrieves information about a user, including privileges and quotas.
@@ -36,7 +70,7 @@ impl UsersClient {
     /// # }
     /// ```
     pub async fn get_user(&self, id: &str) -> Result<UserResponse> {
-        let endpoint = format!("users/{}", id);
+        let endpoint = self.build_user_endpoint(id);
         self.client.get(&endpoint).await
     }
 
@@ -66,7 +100,7 @@ impl UsersClient {
     /// # }
     /// ```
     pub async fn update_user(&self, id: &str, updates: &UserUpdateRequest) -> Result<UserResponse> {
-        let endpoint = format!("users/{}", id);
+        let endpoint = self.build_user_endpoint(id);
         self.client.patch(&endpoint, updates).await
     }
 
@@ -89,7 +123,7 @@ impl UsersClient {
     /// # }
     /// ```
     pub async fn delete_user(&self, id: &str, password: &str) -> Result<()> {
-        let endpoint = format!("users/{}", id);
+        let endpoint = self.build_user_endpoint(id);
         self.client
             .delete_with_header(&endpoint, "x-user-password", password)
             .await
@@ -122,21 +156,7 @@ impl UsersClient {
         limit: Option<u32>,
         cursor: Option<&str>,
     ) -> Result<Collection<T>> {
-        let mut endpoint = format!("users/{}/{}", id, relationship);
-
-        let mut params = Vec::new();
-        if let Some(l) = limit {
-            params.push(format!("limit={}", l));
-        }
-        if let Some(c) = cursor {
-            params.push(format!("cursor={}", c));
-        }
-
-        if !params.is_empty() {
-            endpoint.push('?');
-            endpoint.push_str(&params.join("&"));
-        }
-
+        let endpoint = self.build_relationship_endpoint(id, relationship, limit, cursor, false);
         self.client.get(&endpoint).await
     }
 
@@ -157,21 +177,7 @@ impl UsersClient {
         limit: Option<u32>,
         cursor: Option<&str>,
     ) -> Result<Collection<T>> {
-        let mut endpoint = format!("users/{}/relationships/{}", id, relationship);
-
-        let mut params = Vec::new();
-        if let Some(l) = limit {
-            params.push(format!("limit={}", l));
-        }
-        if let Some(c) = cursor {
-            params.push(format!("cursor={}", c));
-        }
-
-        if !params.is_empty() {
-            endpoint.push('?');
-            endpoint.push_str(&params.join("&"));
-        }
-
+        let endpoint = self.build_relationship_endpoint(id, relationship, limit, cursor, true);
         self.client.get(&endpoint).await
     }
 

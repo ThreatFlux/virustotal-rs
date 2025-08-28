@@ -82,10 +82,36 @@ impl TestUtils {
     /// Setup a mock with common `VirusTotal` response headers
     #[allow(dead_code)]
     pub fn setup_mock_with_headers() -> ResponseTemplate {
-        ResponseTemplate::new(200)
+        Self::create_response_template(200)
+    }
+
+    /// Create a response template with standard headers
+    pub fn create_response_template(status: u16) -> ResponseTemplate {
+        ResponseTemplate::new(status)
             .append_header("Content-Type", "application/json")
             .append_header("X-RateLimit-Remaining", "999")
             .append_header("X-RateLimit-Reset", "3600")
+    }
+
+    /// Common setup for test scenarios
+    pub async fn setup_test_scenario() -> (MockServer, Client) {
+        let mock_server = Self::create_mock_server().await;
+        let client = Self::create_test_client(&mock_server).await.unwrap();
+        (mock_server, client)
+    }
+
+    /// Execute HTTP request by method with common error handling
+    pub async fn execute_http_request(
+        client: &Client,
+        method: &str,
+        endpoint_path: &str,
+    ) -> Result<serde_json::Value> {
+        match method {
+            "GET" => client.get(endpoint_path).await,
+            "POST" => client.post(endpoint_path, &serde_json::json!({})).await,
+            "PUT" => client.put(endpoint_path, &serde_json::json!({})).await,
+            _ => panic!("Unsupported method: {}", method),
+        }
     }
 }
 

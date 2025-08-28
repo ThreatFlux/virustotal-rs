@@ -2,6 +2,7 @@ use serde_json::json;
 use virustotal_rs::{ApiTier, ClientBuilder};
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
+use std::time::Duration;
 
 /// Helper function to create sample IP response
 fn create_sample_ip_response() -> serde_json::Value {
@@ -35,32 +36,71 @@ fn create_sample_ip_response() -> serde_json::Value {
     })
 }
 
+/// Test configuration constants
+const TEST_API_KEY: &str = "test_key";
+const TEST_IP: &str = "8.8.8.8";
+
 /// Helper function to create test client
 async fn create_test_client(mock_server: &MockServer) -> virustotal_rs::Client {
+    create_test_client_with_tier(mock_server, ApiTier::Public).await
+}
+
+/// Helper function to create test client with custom tier
+async fn create_test_client_with_tier(mock_server: &MockServer, tier: ApiTier) -> virustotal_rs::Client {
     ClientBuilder::new()
-        .api_key("test_key")
-        .tier(ApiTier::Public)
+        .api_key(TEST_API_KEY)
+        .tier(tier)
         .base_url(mock_server.uri())
+        .timeout(Duration::from_secs(10))
         .build()
         .unwrap()
 }
 
+/// Helper to setup basic mock server and client
+async fn setup_test_environment() -> (MockServer, virustotal_rs::Client) {
+    let mock_server = MockServer::start().await;
+    let client = create_test_client(&mock_server).await;
+    (mock_server, client)
+}
+
+/// Helper to create mock with standard response
+fn create_mock_response(status: u16, body: &serde_json::Value) -> ResponseTemplate {
+    ResponseTemplate::new(status)
+        .set_body_json(body)
+        .append_header("Content-Type", "application/json")
+}
+
+/// Helper to mount a GET mock for a specific path
+async fn mount_get_mock(mock_server: &MockServer, path: &str, response: serde_json::Value) {
+    Mock::given(method("GET"))
+        .and(path(path))
+        .and(header("x-apikey", TEST_API_KEY))
+        .respond_with(create_mock_response(200, &response))
+        .mount(mock_server)
+        .await;
+}
+
+/// Helper to mount a POST mock for a specific path
+async fn mount_post_mock(mock_server: &MockServer, path: &str, response: serde_json::Value) {
+    Mock::given(method("POST"))
+        .and(path(path))
+        .and(header("x-apikey", TEST_API_KEY))
+        .respond_with(create_mock_response(200, &response))
+        .mount(mock_server)
+        .await;
+}
+
 #[tokio::test]
 async fn test_ip_address_get() {
-    let mock_server = MockServer::start().await;
+    let (mock_server, client) = setup_test_environment().await;
     let ip_response = create_sample_ip_response();
+    let endpoint = format!("/ip_addresses/{}", TEST_IP);
 
-    Mock::given(method("GET"))
-        .and(path("/ip_addresses/8.8.8.8"))
-        .and(header("x-apikey", "test_key"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(&ip_response))
-        .mount(&mock_server)
-        .await;
+    mount_get_mock(&mock_server, &endpoint, ip_response).await;
 
-    let client = create_test_client(&mock_server).await;
-    let ip = client.ip_addresses().get("8.8.8.8").await.unwrap();
+    let ip = client.ip_addresses().get(TEST_IP).await.unwrap();
 
-    assert_eq!(ip.object.id, "8.8.8.8");
+    assert_eq!(ip.object.id, TEST_IP);
     assert_eq!(ip.object.object_type, "ip_address");
     assert_eq!(ip.object.attributes.asn, Some(15169));
     assert_eq!(
@@ -70,16 +110,14 @@ async fn test_ip_address_get() {
     assert_eq!(ip.object.attributes.country, Some("US".to_string()));
 }
 
-#[tokio::test]
-async fn test_ip_address_with_relationships() {
-    let mock_server = MockServer::start().await;
-
-    let ip_response = json!({
+/// Helper to create IP response with relationships
+fn create_ip_response_with_relationships() -> serde_json::Value {
+    json!({
         "data": {
             "type": "ip_address",
-            "id": "8.8.8.8",
+            "id": TEST_IP,
             "links": {
-                "self": "https://www.virustotal.com/api/v3/ip_addresses/8.8.8.8"
+                "self": format!("https://www.virustotal.com/api/v3/ip_addresses/{}", TEST_IP)
             },
             "attributes": {
                 "asn": 15169,
@@ -90,134 +128,111 @@ async fn test_ip_address_with_relationships() {
                     "data": [
                         {
                             "type": "resolution",
-                            "id": "8.8.8.8-dns.google"
+                            "id": format!("{}-dns.google", TEST_IP)
                         }
                     ],
                     "links": {
-                        "self": "https://www.virustotal.com/api/v3/ip_addresses/8.8.8.8/relationships/resolutions"
+                        "self": format!("https://www.virustotal.com/api/v3/ip_addresses/{}/relationships/resolutions", TEST_IP)
                     }
                 }
             }
         }
-    });
+    })
+}
 
-    Mock::given(method("GET"))
-        .and(path("/ip_addresses/8.8.8.8"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(&ip_response))
-        .mount(&mock_server)
-        .await;
+#[tokio::test]
+async fn test_ip_address_with_relationships() {
+    let (mock_server, client) = setup_test_environment().await;
+    let ip_response = create_ip_response_with_relationships();
+    let endpoint = format!("/ip_addresses/{}", TEST_IP);
 
-    let client = ClientBuilder::new()
-        .api_key("test_key")
-        .tier(ApiTier::Public)
-        .base_url(mock_server.uri())
-        .build()
-        .unwrap();
+    mount_get_mock(&mock_server, &endpoint, ip_response).await;
 
     let ip = client
         .ip_addresses()
-        .get_with_relationships("8.8.8.8", &["resolutions"])
+        .get_with_relationships(TEST_IP, &["resolutions"])
         .await
         .unwrap();
 
     assert!(ip.object.relationships.is_some());
 }
 
-#[tokio::test]
-async fn test_collection_pagination() {
-    let mock_server = MockServer::start().await;
-
-    let page1_response = json!({
-        "data": [
-            {"type": "url", "id": "url1"},
-            {"type": "url", "id": "url2"}
-        ],
-        "meta": {
-            "cursor": "next_cursor"
-        },
-        "links": {
-            "self": "https://www.virustotal.com/api/v3/ip_addresses/8.8.8.8/urls",
-            "next": "https://www.virustotal.com/api/v3/ip_addresses/8.8.8.8/urls?cursor=next_cursor"
-        }
-    });
-
-    let page2_response = json!({
-        "data": [
-            {"type": "url", "id": "url3"}
-        ],
+/// Helper to create paginated collection response
+fn create_paginated_response(items: Vec<serde_json::Value>, cursor: Option<&str>) -> serde_json::Value {
+    let mut response = json!({
+        "data": items,
         "meta": {},
         "links": {
-            "self": "https://www.virustotal.com/api/v3/ip_addresses/8.8.8.8/urls?cursor=next_cursor"
+            "self": format!("https://www.virustotal.com/api/v3/ip_addresses/{}/urls", TEST_IP)
         }
     });
+    
+    if let Some(cursor_value) = cursor {
+        response["meta"]["cursor"] = json!(cursor_value);
+        response["links"]["next"] = json!(format!(
+            "https://www.virustotal.com/api/v3/ip_addresses/{}/urls?cursor={}", 
+            TEST_IP, cursor_value
+        ));
+    }
+    
+    response
+}
 
-    Mock::given(method("GET"))
-        .and(path("/ip_addresses/8.8.8.8/urls"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(&page1_response))
-        .mount(&mock_server)
-        .await;
+#[tokio::test]
+async fn test_collection_pagination() {
+    let (mock_server, client) = setup_test_environment().await;
+    let endpoint = format!("/ip_addresses/{}/urls", TEST_IP);
 
-    Mock::given(method("GET"))
-        .and(path("/ip_addresses/8.8.8.8/urls"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(&page2_response))
-        .mount(&mock_server)
-        .await;
+    let page1_items = vec![
+        json!({"type": "url", "id": "url1"}),
+        json!({"type": "url", "id": "url2"})
+    ];
+    let page1_response = create_paginated_response(page1_items, Some("next_cursor"));
 
-    let client = ClientBuilder::new()
-        .api_key("test_key")
-        .tier(ApiTier::Public)
-        .base_url(mock_server.uri())
-        .build()
-        .unwrap();
+    let page2_items = vec![json!({"type": "url", "id": "url3"})];
+    let page2_response = create_paginated_response(page2_items, None);
 
-    let collection = client.ip_addresses().get_urls("8.8.8.8").await.unwrap();
+    // Mount both responses (wiremock will handle the sequence)
+    mount_get_mock(&mock_server, &endpoint, page1_response).await;
+    mount_get_mock(&mock_server, &endpoint, page2_response).await;
+
+    let collection = client.ip_addresses().get_urls(TEST_IP).await.unwrap();
 
     assert_eq!(collection.data.len(), 2);
 }
 
-#[tokio::test]
-async fn test_add_vote() {
-    let mock_server = MockServer::start().await;
-
-    let vote_response = json!({
+/// Helper to create vote response
+fn create_vote_response(verdict: &str) -> serde_json::Value {
+    json!({
         "data": {
             "type": "vote",
             "id": "v-test",
             "attributes": {
-                "verdict": "harmless"
+                "verdict": verdict
             }
         }
-    });
+    })
+}
 
-    Mock::given(method("POST"))
-        .and(path("/ip_addresses/8.8.8.8/votes"))
-        .and(header("x-apikey", "test_key"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(&vote_response))
-        .mount(&mock_server)
-        .await;
+#[tokio::test]
+async fn test_add_vote() {
+    let (mock_server, client) = setup_test_environment().await;
+    let vote_response = create_vote_response("harmless");
+    let endpoint = format!("/ip_addresses/{}/votes", TEST_IP);
 
-    let client = ClientBuilder::new()
-        .api_key("test_key")
-        .tier(ApiTier::Public)
-        .base_url(mock_server.uri())
-        .build()
-        .unwrap();
+    mount_post_mock(&mock_server, &endpoint, vote_response).await;
 
     let result = client
         .ip_addresses()
-        .add_vote("8.8.8.8", virustotal_rs::VoteVerdict::Harmless)
+        .add_vote(TEST_IP, virustotal_rs::VoteVerdict::Harmless)
         .await;
 
     assert!(result.is_ok());
 }
 
-#[tokio::test]
-async fn test_collection_iterator() {
-    use virustotal_rs::CollectionIterator;
-
-    let mock_server = MockServer::start().await;
-
-    let response = json!({
+/// Helper to create collection iterator response
+fn create_iterator_response() -> serde_json::Value {
+    json!({
         "data": [
             {"type": "file", "id": "file1"},
             {"type": "file", "id": "file2"}
@@ -225,20 +240,17 @@ async fn test_collection_iterator() {
         "meta": {
             "cursor": "cursor123"
         }
-    });
+    })
+}
 
-    Mock::given(method("GET"))
-        .and(path("/test"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(&response))
-        .mount(&mock_server)
-        .await;
+#[tokio::test]
+async fn test_collection_iterator() {
+    use virustotal_rs::CollectionIterator;
 
-    let client = ClientBuilder::new()
-        .api_key("test_key")
-        .tier(ApiTier::Public)
-        .base_url(mock_server.uri())
-        .build()
-        .unwrap();
+    let (mock_server, client) = setup_test_environment().await;
+    let response = create_iterator_response();
+
+    mount_get_mock(&mock_server, "/test", response).await;
 
     let mut iterator = CollectionIterator::<serde_json::Value>::new(&client, "test").with_limit(10);
 
