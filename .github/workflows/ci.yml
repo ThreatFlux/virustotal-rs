@@ -26,6 +26,22 @@ jobs:
     runs-on: ${{ matrix.os }}
     
     steps:
+    - name: Free disk space
+      if: runner.os == 'Linux'
+      run: |
+        echo "Disk space before cleanup:"
+        df -h
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /opt/ghc
+        sudo rm -rf "/usr/local/share/boost"
+        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+        sudo rm -rf /usr/local/lib/android
+        sudo rm -rf /usr/local/share/chromium
+        sudo rm -rf /usr/share/swift
+        sudo apt-get clean
+        echo "Disk space after cleanup:"
+        df -h
+        
     - name: Checkout code
       uses: actions/checkout@v5
 
@@ -39,9 +55,12 @@ jobs:
       uses: actions/cache@v4
       with:
         path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          target/debug/deps
+          target/debug/build
         key: ${{ runner.os }}-cargo-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
         restore-keys: |
           ${{ runner.os }}-cargo-${{ matrix.rust }}-
@@ -124,6 +143,21 @@ jobs:
     - name: Test documentation
       if: matrix.rust == 'stable' && matrix.os == 'ubuntu-latest'
       run: cargo test --doc --all-features
+      
+    - name: Clean up build artifacts
+      if: always() && runner.os == 'Linux'
+      run: |
+        echo "Cleaning up build artifacts to save disk space..."
+        # Remove large intermediate files
+        find target -name "*.rlib" -type f -delete || true
+        find target -name "*.rmeta" -type f -delete || true
+        find target/debug -name "*.d" -type f -delete || true
+        # Clean doc builds
+        rm -rf target/doc || true
+        # Clean test executables (keep deps for cache)
+        find target/debug -maxdepth 1 -type f -executable -delete || true
+        echo "Disk space after cleanup:"
+        df -h
 
   coverage:
     name: Code Coverage
