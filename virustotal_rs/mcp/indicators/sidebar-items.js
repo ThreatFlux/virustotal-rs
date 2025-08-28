@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["HashType","IndicatorType"],"fn":["detect_indicator_type"]};

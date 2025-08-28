@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Error","ErrorCategory","ErrorSeverity"],"struct":["ApiError","ApiErrorResponse"],"type":["Result"]};

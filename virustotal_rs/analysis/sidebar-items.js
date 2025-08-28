@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AnalysisStatus","Verdict"],"struct":["Analysis","AnalysisAttributes","AnalysisDescriptor","AnalysisResponse","EngineResult"]};

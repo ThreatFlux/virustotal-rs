@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["UrlDescriptor"],"struct":["DomainDescriptor","FileDescriptor","IpAddressDescriptor"]};

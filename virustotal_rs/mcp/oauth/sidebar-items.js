@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["OAuthError"],"struct":["AuthServerMetadata","CallbackParams","OAuthClaims","OAuthConfig","OAuthCredentials","OAuthSession","OAuthState"]};

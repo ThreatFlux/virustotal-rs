@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ObjectDescriptorOrError","Relationship"],"struct":["Collection","CollectionIterator","CollectionMeta","Links","Object","ObjectDescriptor","ObjectResponse","OneToManyRelationship","OneToOneRelationship","PatchData","PatchRequest","RelationshipError"],"trait":["ObjectOperations"]};

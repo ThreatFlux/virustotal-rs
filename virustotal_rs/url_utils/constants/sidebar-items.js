@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["VT_API_BASE"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["builder","client","descriptors","enums","requests","types"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["IteratorStats"],"trait":["Collectable","IteratorExt","Pageable","PaginatedIterator"]};

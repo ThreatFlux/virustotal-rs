@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["CreatePrivateZipData","CreatePrivateZipRequest","PrivateZipDownloadUrlResponse","PrivateZipFile","PrivateZipFileAttributes","PrivateZipFileData"]};

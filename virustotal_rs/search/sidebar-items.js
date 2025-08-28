@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["SearchOrder","SearchResult"],"struct":["CommentSearchAttributes","CommentSearchResult","CommentVotesInfo","DomainSearchResult","FileContextAttributes","FileSearchResult","IpAddressSearchResult","SearchClient","SnippetResponse","UrlSearchResult"]};

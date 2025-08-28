@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["CollectionItemsRequest","CollectionRelationships","CreateCollectionAttributes","CreateCollectionData","CreateCollectionRequest","RelationshipData","UpdateCollectionAttributes","UpdateCollectionData","UpdateCollectionRequest"]};

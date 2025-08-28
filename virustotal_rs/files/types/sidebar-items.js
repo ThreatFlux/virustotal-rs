@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["AlertContext","CrowdsourcedId","DownloadUrlResponse","File","FileAttributes","SandboxVerdict","SigmaAnalysis","ThreatCategory","ThreatClassification","ThreatName","TridInfo","UploadUrlResponse","YaraResult"]};

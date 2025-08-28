@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Corpus","JobStatus"],"struct":["CreateRetrohuntJobAttributes","CreateRetrohuntJobData","CreateRetrohuntJobRequest","MatchingFileContext","RetrohuntClient","RetrohuntJob","RetrohuntJobAttributes","RetrohuntMatchingFile","TimeRange"]};

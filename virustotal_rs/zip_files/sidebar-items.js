@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ZipFileStatus"],"struct":["CreateZipFileData","CreateZipFileRequest","DownloadUrlResponse","ZipFile","ZipFileAttributes","ZipFilesClient"]};

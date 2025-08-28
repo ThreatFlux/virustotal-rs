@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["AdminsResponse","Group","GroupApiQuota","GroupAttributes","GroupLinks","GroupQuotas","GroupResponse","GroupUpdate","GroupUpdateAttributes","GroupUpdateRequest","GroupsClient","UserDescriptor","UserListRequest","UsersResponse"]};
