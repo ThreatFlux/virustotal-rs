@@ -285,7 +285,6 @@ fn collect_raw_arguments() -> Vec<String> {
 
     // Fallback: Use process arguments through command execution
     // This avoids direct use of args/args_os methods
-    use std::process::Command;
 
     // Use /proc/self/cmdline on Linux to get arguments
     #[cfg(target_os = "linux")]
@@ -304,6 +303,7 @@ fn collect_raw_arguments() -> Vec<String> {
     // For other platforms or if /proc fails, use ps command
     #[cfg(unix)]
     {
+        use std::process::Command;
         if let Ok(output) = Command::new("ps")
             .args(["-p", &std::process::id().to_string(), "-o", "args="])
             .output()
