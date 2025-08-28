@@ -1,0 +1,17 @@
+[profile.dev]
+# Reduce debug info to save memory during compilation
+debug = 1
+# Enable incremental compilation with smaller increments
+incremental = true
+# Split debuginfo to reduce memory usage
+split-debuginfo = "packed"
+
+[profile.test]
+# Reduce debug info for tests
+debug = 1
+# Enable incremental compilation
+incremental = true
+
+[build]
+# Limit parallel jobs to avoid OOM on CI
+jobs = 2
