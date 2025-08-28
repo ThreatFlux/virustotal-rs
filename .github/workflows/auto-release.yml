@@ -121,9 +121,7 @@ jobs:
           git add Cargo.toml
           git commit -m "chore(release): bump version to $NEW_VERSION
 
-🤖 Generated with [Claude Code](https://claude.ai/code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+          Auto-generated release commit"
           
           # Create and push tag
           git tag -a "v$NEW_VERSION" -m "Release v$NEW_VERSION"
