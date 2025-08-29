@@ -282,6 +282,9 @@ jobs:
     needs: [version-bump, create-release]
     runs-on: ubuntu-latest
     if: needs.version-bump.outputs.version_changed == 'true'
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+      image-ref: ${{ steps.image-ref.outputs.image-ref }}
     permissions:
       contents: read
       packages: write
@@ -392,6 +395,7 @@ jobs:
         echo "VCS_REF=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
     - name: Build and push Docker image
+      id: build
       uses: docker/build-push-action@v5
       with:
         context: .
@@ -405,6 +409,11 @@ jobs:
           VCS_REF=${{ steps.build_args.outputs.VCS_REF }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
+
+    - name: Generate image reference
+      id: image-ref
+      run: |
+        echo "image-ref=${{ env.REGISTRY }}/threatflux/virustotal-rs-mcp@${{ steps.build.outputs.digest }}" >> $GITHUB_OUTPUT
 
   # Security scan Docker image
   docker-scan:
@@ -485,34 +494,31 @@ jobs:
       env:
         COSIGN_EXPERIMENTAL: 1
       run: |
-        # Sign GitHub Container Registry image
-        cosign sign --yes ${{ env.REGISTRY }}/threatflux/virustotal-rs-mcp:${{ needs.version-bump.outputs.new_version }}
-        cosign sign --yes ${{ env.REGISTRY }}/threatflux/virustotal-rs-mcp:latest
+        # Sign using digest (more secure)
+        echo "Signing image with digest: ${{ needs.build-docker.outputs.digest }}"
+        cosign sign --yes ${{ needs.build-docker.outputs.image-ref }}
         
-        # Sign Docker Hub image
+        # Also sign Docker Hub image by tag (fallback)
         cosign sign --yes threatflux/virustotal-rs-mcp:${{ needs.version-bump.outputs.new_version }}
-        cosign sign --yes threatflux/virustotal-rs-mcp:latest
 
     - name: Generate SBOM
       run: |
-        # Generate SBOM for the image
-        syft ${{ env.REGISTRY }}/threatflux/virustotal-rs-mcp:${{ needs.version-bump.outputs.new_version }} \
+        # Generate SBOM using digest reference
+        syft ${{ needs.build-docker.outputs.image-ref }} \
           -o spdx-json > sbom.spdx.json
         
-        syft ${{ env.REGISTRY }}/threatflux/virustotal-rs-mcp:${{ needs.version-bump.outputs.new_version }} \
+        syft ${{ needs.build-docker.outputs.image-ref }} \
           -o cyclonedx-json > sbom.cyclonedx.json
 
     - name: Attach SBOM to container
       env:
         COSIGN_EXPERIMENTAL: 1
       run: |
-        # Attach SBOM to GitHub Container Registry image
-        cosign attach sbom --sbom sbom.spdx.json \
-          ${{ env.REGISTRY }}/threatflux/virustotal-rs-mcp:${{ needs.version-bump.outputs.new_version }}
+        # Attach SBOM using digest reference
+        cosign attach sbom --sbom sbom.spdx.json ${{ needs.build-docker.outputs.image-ref }}
         
-        # Attach SBOM to Docker Hub image
-        cosign attach sbom --sbom sbom.spdx.json \
-          threatflux/virustotal-rs-mcp:${{ needs.version-bump.outputs.new_version }}
+        # Also attach to Docker Hub by tag (fallback)
+        cosign attach sbom --sbom sbom.spdx.json threatflux/virustotal-rs-mcp:${{ needs.version-bump.outputs.new_version }}
 
     - name: Upload SBOM artifacts
       uses: actions/upload-artifact@v4
