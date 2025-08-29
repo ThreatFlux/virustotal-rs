@@ -19,7 +19,7 @@ path = "src/bin/mcp_server.rs"
 required-features = ["mcp"]
 
 [dependencies]
-reqwest = { version = "0.12.23", features = ["json", "rustls-tls", "multipart"] }
+reqwest = { version = "0.12.23", features = ["json", "rustls-tls", "multipart"], default-features = false }
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.143"
 tokio = { version = "1.43.0", features = ["rt-multi-thread", "macros", "time", "fs"] }
@@ -52,7 +52,7 @@ tower-http = { version = "0.6", features = ["cors", "trace"], optional = true }
 axum-extra = { version = "0.10", features = ["typed-header"], optional = true }
 
 # OAuth 2.1 authentication dependencies (optional)
-oauth2 = { version = "4.4", optional = true }
+oauth2 = { version = "4.4", default-features = false, features = ["reqwest", "rustls-tls"], optional = true }
 rand = { version = "0.9", optional = true }
 
 [features]
