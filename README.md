@@ -4,7 +4,7 @@
 [![Documentation](https://docs.rs/virustotal-rs/badge.svg)](https://docs.rs/virustotal-rs)
 [![Build Status](https://github.com/threatflux/virustotal-rs/workflows/CI/badge.svg)](https://github.com/threatflux/virustotal-rs/actions)
 [![Security Audit](https://github.com/threatflux/virustotal-rs/workflows/Security/badge.svg)](https://github.com/threatflux/virustotal-rs/actions)
-[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 A comprehensive, async Rust SDK for the VirusTotal API v3 with advanced features including **Model Context Protocol (MCP) server** for AI/LLM integrations.
 
@@ -442,12 +442,7 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
 
 ## 📄 License
 
-This project is dual-licensed under either:
-
 - **MIT License** ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
-- **Apache License, Version 2.0** ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
-
-at your option.
 
 ## 🙏 Acknowledgments
 
