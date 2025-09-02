@@ -46,6 +46,9 @@ pub mod mcp;
 #[cfg(test)]
 mod tests;
 
+#[cfg(feature = "cli")]
+pub mod cli;
+
 #[cfg(test)]
 pub mod test_utils;
 
