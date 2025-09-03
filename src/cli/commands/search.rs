@@ -74,83 +74,14 @@ pub async fn execute(
     }
 
     let client = setup_client(api_key, tier)?;
+    let search_order = parse_search_order(&args.order);
 
     if verbose {
         println!("Searching for: {}", args.query);
         println!("Limit: {}, Order: {}", args.limit, args.order);
     }
 
-    let search_order = match args.order.to_lowercase().as_str() {
-        "first_submission" | "first" => SearchOrder::FirstSubmissionDate,
-        "last_submission" | "last" => SearchOrder::LastSubmissionDate,
-        _ => SearchOrder::Relevance,
-    };
-
-    let mut all_results = Vec::new();
-    let mut processed = 0;
-    let mut continuation_cursor = None;
-
-    loop {
-        let search_result = match client
-            .search()
-            .query(&args.query)
-            .limit(std::cmp::min(args.limit - processed, 300)) // VirusTotal max per request
-            .order(search_order.clone())
-            .cursor(continuation_cursor.as_deref())
-            .execute()
-            .await
-        {
-            Ok(result) => result,
-            Err(e) => {
-                let error_msg = handle_vt_error(&e);
-                return Err(anyhow::anyhow!("Search failed: {}", error_msg));
-            }
-        };
-
-        let results_count = search_result.data.len();
-        if results_count == 0 {
-            break;
-        }
-
-        // Apply filters and collect results
-        for file_result in search_result.data {
-            if should_include_result(&file_result, &args) {
-                all_results.push(file_result);
-                processed += 1;
-
-                if processed >= args.limit {
-                    break;
-                }
-            }
-        }
-
-        // Check if we have more results and should continue
-        continuation_cursor = search_result.meta.cursor.clone();
-
-        if processed >= args.limit || continuation_cursor.is_none() {
-            break;
-        }
-
-        // Interactive mode - ask user if they want to continue
-        if args.interactive && processed < args.limit {
-            print!(
-                "Found {} results so far. Continue searching? (y/N): ",
-                processed
-            );
-            io::stdout().flush()?;
-
-            let mut input = String::new();
-            io::stdin().read_line(&mut input)?;
-
-            if !matches!(input.trim().to_lowercase().as_str(), "y" | "yes") {
-                break;
-            }
-        }
-
-        if verbose {
-            println!("Processed {} results...", processed);
-        }
-    }
+    let all_results = execute_search(&client, &args, search_order, verbose).await?;
 
     if all_results.is_empty() {
         println!("No results found for query: {}", args.query);
@@ -158,116 +89,304 @@ pub async fn execute(
     }
 
     println!("Found {} results", all_results.len());
+    handle_output(&all_results, &args, !no_color, verbose).await?;
 
-    // Prepare output
-    let output_content = match args.format.as_str() {
-        "json" => format_json_output(&all_results)?,
-        "summary" => format_summary_output(&all_results, !no_color)?,
-        "table" => format_table_output(&all_results, &args, !no_color)?,
-        _ => return Err(anyhow::anyhow!("Unknown format: {}", args.format)),
-    };
+    Ok(())
+}
 
-    // Save to file if requested
-    if let Some(output_path) = &args.output {
-        tokio::fs::write(output_path, &output_content)
-            .await
-            .with_context(|| format!("Failed to write results to {}", output_path))?;
+async fn execute_search(
+    client: &Client,
+    args: &SearchArgs,
+    search_order: SearchOrder,
+    verbose: bool,
+) -> Result<Vec<crate::FileSearchResult>> {
+    let mut all_results = Vec::new();
+    let mut processed = 0;
+    let mut continuation_cursor = None;
+
+    loop {
+        let search_result = perform_search_request(
+            client,
+            &args.query,
+            std::cmp::min(args.limit - processed, 300),
+            &search_order,
+            continuation_cursor.as_deref(),
+        ).await?;
+
+        let results_count = search_result.data.len();
+        if results_count == 0 {
+            break;
+        }
+
+        processed += process_search_results(
+            &mut all_results,
+            search_result.data,
+            args,
+            processed,
+        );
+
+        continuation_cursor = search_result.meta.cursor.clone();
+
+        if processed >= args.limit || continuation_cursor.is_none() {
+            break;
+        }
+
+        if !should_continue_search(args, processed, verbose)? {
+            break;
+        }
 
         if verbose {
-            println!("Results saved to: {}", output_path);
+            println!("Processed {} results...", processed);
         }
-    } else {
-        // Print to stdout
-        if args.hashes_only {
-            for result in &all_results {
-                if let Some(sha256) = result.attributes.sha256.as_ref() {
-                    println!("{}", sha256);
-                } else if let Some(md5) = result.attributes.md5.as_ref() {
-                    println!("{}", md5);
-                } else if let Some(sha1) = result.attributes.sha1.as_ref() {
-                    println!("{}", sha1);
-                }
+    }
+
+    Ok(all_results)
+}
+
+async fn perform_search_request(
+    client: &Client,
+    query: &str,
+    limit: usize,
+    order: &SearchOrder,
+    cursor: Option<&str>,
+) -> Result<crate::SearchResponse> {
+    match client
+        .search()
+        .query(query)
+        .limit(limit)
+        .order(order.clone())
+        .cursor(cursor)
+        .execute()
+        .await
+    {
+        Ok(result) => Ok(result),
+        Err(e) => {
+            let error_msg = handle_vt_error(&e);
+            Err(anyhow::anyhow!("Search failed: {}", error_msg))
+        }
+    }
+}
+
+fn process_search_results(
+    all_results: &mut Vec<crate::FileSearchResult>,
+    search_data: Vec<crate::FileSearchResult>,
+    args: &SearchArgs,
+    processed: usize,
+) -> usize {
+    let mut count = 0;
+    
+    for file_result in search_data {
+        if should_include_result(&file_result, args) {
+            all_results.push(file_result);
+            count += 1;
+
+            if processed + count >= args.limit {
+                break;
             }
-        } else {
-            print!("{}", output_content);
         }
+    }
+    
+    count
+}
+
+fn should_continue_search(args: &SearchArgs, processed: usize, verbose: bool) -> Result<bool> {
+    if !args.interactive || processed >= args.limit {
+        return Ok(true);
+    }
+
+    print!(
+        "Found {} results so far. Continue searching? (y/N): ",
+        processed
+    );
+    io::stdout().flush()?;
+
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+
+    Ok(matches!(input.trim().to_lowercase().as_str(), "y" | "yes"))
+}
+
+fn parse_search_order(order: &str) -> SearchOrder {
+    match order.to_lowercase().as_str() {
+        "first_submission" | "first" => SearchOrder::FirstSubmissionDate,
+        "last_submission" | "last" => SearchOrder::LastSubmissionDate,
+        _ => SearchOrder::Relevance,
+    }
+}
+
+async fn handle_output(
+    results: &[crate::FileSearchResult],
+    args: &SearchArgs,
+    colored: bool,
+    verbose: bool,
+) -> Result<()> {
+    if args.hashes_only {
+        print_hashes_only(results);
+        return Ok(());
+    }
+
+    let output_content = format_output_content(results, args, colored)?;
+
+    if let Some(output_path) = &args.output {
+        save_output_to_file(&output_content, output_path, verbose).await?;
+    } else {
+        print!("{}", output_content);
     }
 
     Ok(())
 }
 
-fn should_include_result(result: &crate::FileSearchResult, args: &SearchArgs) -> bool {
-    // Apply filters
-    if let Some(attrs) = &result.attributes {
-        if let Some(stats) = attrs.get("last_analysis_stats") {
-            let malicious = stats.get("malicious").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
-            let suspicious = stats
-                .get("suspicious")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0) as u32;
-            let total_detected = malicious + suspicious;
-
-            // Detected only filter
-            if args.detected_only && total_detected == 0 {
-                return false;
-            }
-
-            // Min detections filter
-            if let Some(min_det) = args.min_detections {
-                if total_detected < min_det {
-                    return false;
-                }
-            }
-
-            // Max detections filter
-            if let Some(max_det) = args.max_detections {
-                if total_detected > max_det {
-                    return false;
-                }
-            }
+fn print_hashes_only(results: &[crate::FileSearchResult]) {
+    for result in results {
+        if let Some(sha256) = result.attributes.sha256.as_ref() {
+            println!("{}", sha256);
+        } else if let Some(md5) = result.attributes.md5.as_ref() {
+            println!("{}", md5);
+        } else if let Some(sha1) = result.attributes.sha1.as_ref() {
+            println!("{}", sha1);
         }
     }
+}
 
-    // Size range filter
-    if let Some(size_range) = &args.size_range {
-        if let Some(attrs) = &result.attributes {
-            if let Some(file_size) = attrs.get("size").and_then(|v| v.as_u64()) {
-                if !size_matches_range(file_size, size_range) {
-                    return false;
-                }
-            }
-        }
+fn format_output_content(
+    results: &[crate::FileSearchResult],
+    args: &SearchArgs,
+    colored: bool,
+) -> Result<String> {
+    match args.format.as_str() {
+        "json" => format_json_output(results),
+        "summary" => format_summary_output(results, colored),
+        "table" => format_table_output(results, args, colored),
+        _ => Err(anyhow::anyhow!("Unknown format: {}", args.format)),
+    }
+}
+
+async fn save_output_to_file(
+    content: &str,
+    output_path: &str,
+    verbose: bool,
+) -> Result<()> {
+    tokio::fs::write(output_path, content)
+        .await
+        .with_context(|| format!("Failed to write results to {}", output_path))?;
+
+    if verbose {
+        println!("Results saved to: {}", output_path);
+    }
+    
+    Ok(())
+}
+
+fn should_include_result(result: &crate::FileSearchResult, args: &SearchArgs) -> bool {
+    if !passes_detection_filters(result, args) {
+        return false;
+    }
+
+    if !passes_size_filters(result, args) {
+        return false;
     }
 
     true
 }
 
+fn passes_detection_filters(result: &crate::FileSearchResult, args: &SearchArgs) -> bool {
+    let Some(attrs) = &result.attributes else {
+        return true;
+    };
+
+    let Some(stats) = attrs.get("last_analysis_stats") else {
+        return true;
+    };
+
+    let total_detected = get_total_detections(stats);
+
+    if !passes_detected_only_filter(args, total_detected) {
+        return false;
+    }
+
+    if !passes_min_detections_filter(args, total_detected) {
+        return false;
+    }
+
+    if !passes_max_detections_filter(args, total_detected) {
+        return false;
+    }
+
+    true
+}
+
+fn get_total_detections(stats: &Value) -> u32 {
+    let malicious = stats.get("malicious").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+    let suspicious = stats.get("suspicious").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+    malicious + suspicious
+}
+
+fn passes_detected_only_filter(args: &SearchArgs, total_detected: u32) -> bool {
+    !args.detected_only || total_detected > 0
+}
+
+fn passes_min_detections_filter(args: &SearchArgs, total_detected: u32) -> bool {
+    args.min_detections.map_or(true, |min_det| total_detected >= min_det)
+}
+
+fn passes_max_detections_filter(args: &SearchArgs, total_detected: u32) -> bool {
+    args.max_detections.map_or(true, |max_det| total_detected <= max_det)
+}
+
+fn passes_size_filters(result: &crate::FileSearchResult, args: &SearchArgs) -> bool {
+    let Some(size_range) = &args.size_range else {
+        return true;
+    };
+
+    let Some(attrs) = &result.attributes else {
+        return true;
+    };
+
+    let Some(file_size) = attrs.get("size").and_then(|v| v.as_u64()) else {
+        return true;
+    };
+
+    size_matches_range(file_size, size_range)
+}
+
 fn size_matches_range(file_size: u64, range: &str) -> bool {
-    // Parse ranges like "1KB-10MB", ">1MB", "<500KB"
     if let Some(captures) = regex::Regex::new(r"^(\d+)([KMGT]?B?)-(\d+)([KMGT]?B?)$")
         .unwrap()
         .captures(range)
     {
-        let min_size = parse_size(&captures[1], &captures[2]).unwrap_or(0);
-        let max_size = parse_size(&captures[3], &captures[4]).unwrap_or(u64::MAX);
+        return matches_size_range_pattern(file_size, &captures);
+    }
+    
+    if range.starts_with('>') {
+        return matches_greater_than_pattern(file_size, &range[1..]);
+    }
+    
+    if range.starts_with('<') {
+        return matches_less_than_pattern(file_size, &range[1..]);
+    }
+    
+    true
+}
 
-        file_size >= min_size && file_size <= max_size
-    } else if range.starts_with('>') {
-        let min_str = &range[1..];
-        if let Some((num, unit)) = split_size_unit(min_str) {
-            let min_size = parse_size(num, unit).unwrap_or(0);
-            file_size > min_size
-        } else {
-            true
-        }
-    } else if range.starts_with('<') {
-        let max_str = &range[1..];
-        if let Some((num, unit)) = split_size_unit(max_str) {
-            let max_size = parse_size(num, unit).unwrap_or(u64::MAX);
-            file_size < max_size
-        } else {
-            true
-        }
+fn matches_size_range_pattern(file_size: u64, captures: &regex::Captures) -> bool {
+    let min_size = parse_size(&captures[1], &captures[2]).unwrap_or(0);
+    let max_size = parse_size(&captures[3], &captures[4]).unwrap_or(u64::MAX);
+    file_size >= min_size && file_size <= max_size
+}
+
+fn matches_greater_than_pattern(file_size: u64, min_str: &str) -> bool {
+    if let Some((num, unit)) = split_size_unit(min_str) {
+        let min_size = parse_size(num, unit).unwrap_or(0);
+        file_size > min_size
+    } else {
+        true
+    }
+}
+
+fn matches_less_than_pattern(file_size: u64, max_str: &str) -> bool {
+    if let Some((num, unit)) = split_size_unit(max_str) {
+        let max_size = parse_size(num, unit).unwrap_or(u64::MAX);
+        file_size < max_size
     } else {
         true
     }

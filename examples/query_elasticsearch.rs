@@ -27,42 +27,51 @@ struct Args {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
+    let client = initialize_client(&args.es_url).await?;
+    execute_query(&client, &args).await?;
+
+    Ok(())
+}
+
+async fn initialize_client(es_url: &str) -> Result<Elasticsearch, Box<dyn std::error::Error>> {
     // Initialize Elasticsearch client
-    let transport = Transport::single_node(&args.es_url)?;
+    let transport = Transport::single_node(es_url)?;
     let client = Elasticsearch::new(transport);
 
     // Test connection
     match client.ping().send().await {
         Ok(_) => {
-            println!("✓ Connected to Elasticsearch at {}", args.es_url);
+            println!("✓ Connected to Elasticsearch at {}", es_url);
+            Ok(client)
         }
         Err(e) => {
-            eprintln!(
-                "Failed to connect to Elasticsearch at {}: {}",
-                args.es_url, e
-            );
-            return Err(e.into());
+            eprintln!("Failed to connect to Elasticsearch at {}: {}", es_url, e);
+            Err(e.into())
         }
     }
+}
 
+async fn execute_query(
+    client: &Elasticsearch,
+    args: &Args,
+) -> Result<(), Box<dyn std::error::Error>> {
     match args.query.as_str() {
-        "summary" => query_summary(&client).await?,
-        "malicious" => query_malicious_files(&client).await?,
-        "engines" => query_engine_stats(&client).await?,
+        "summary" => query_summary(client).await?,
+        "malicious" => query_malicious_files(client).await?,
+        "engines" => query_engine_stats(client).await?,
         "hash" => {
-            if let Some(hash) = args.term {
-                query_by_hash(&client, &hash).await?;
+            if let Some(hash) = &args.term {
+                query_by_hash(client, hash).await?;
             } else {
                 eprintln!("Hash query requires --term parameter");
             }
         }
-        "yara" => query_yara_matches(&client).await?,
+        "yara" => query_yara_matches(client).await?,
         _ => {
             eprintln!("Unknown query type: {}", args.query);
             eprintln!("Available queries: summary, malicious, engines, hash, yara");
         }
     }
-
     Ok(())
 }
 

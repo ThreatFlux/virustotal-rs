@@ -175,35 +175,60 @@ async fn process_json_directory(
     verbose: bool,
 ) -> Result<Vec<ProcessedReport>> {
     let dir_path = Path::new(directory);
-    let mut reports = Vec::new();
     let mut entries = fs::read_dir(dir_path)
         .await
         .with_context(|| format!("Failed to read directory: {}", directory))?;
 
+    let mut reports = Vec::new();
     while let Some(entry) = entries.next_entry().await? {
         let path = entry.path();
-        if path.extension().map_or(false, |ext| ext == "json") {
-            if let Some(file_name) = path.file_stem().and_then(|n| n.to_str()) {
-                if verbose {
-                    println!("Processing {}", path.display());
-                }
-
-                match process_json_file(&path, file_name, args).await {
-                    Ok(report) => reports.push(report),
-                    Err(e) => {
-                        if args.skip_errors {
-                            eprintln!("Warning: Failed to process {}: {}", path.display(), e);
-                        } else {
-                            return Err(e)
-                                .with_context(|| format!("Failed to process {}", path.display()));
-                        }
-                    }
-                }
+        if is_json_file(&path) {
+            if let Some(processed_report) = process_directory_entry(&path, args, verbose).await? {
+                reports.push(processed_report);
             }
         }
     }
 
     Ok(reports)
+}
+
+fn is_json_file(path: &Path) -> bool {
+    path.extension().map_or(false, |ext| ext == "json")
+}
+
+async fn process_directory_entry(
+    path: &Path,
+    args: &IndexArgs,
+    verbose: bool,
+) -> Result<Option<ProcessedReport>> {
+    let file_name = match path.file_stem().and_then(|n| n.to_str()) {
+        Some(name) => name,
+        None => return Ok(None),
+    };
+
+    if verbose {
+        println!("Processing {}", path.display());
+    }
+
+    handle_json_file_processing(path, file_name, args).await
+}
+
+async fn handle_json_file_processing(
+    path: &Path,
+    file_name: &str,
+    args: &IndexArgs,
+) -> Result<Option<ProcessedReport>> {
+    match process_json_file(path, file_name, args).await {
+        Ok(report) => Ok(Some(report)),
+        Err(e) => {
+            if args.skip_errors {
+                eprintln!("Warning: Failed to process {}: {}", path.display(), e);
+                Ok(None)
+            } else {
+                Err(e).with_context(|| format!("Failed to process {}", path.display()))
+            }
+        }
+    }
 }
 
 async fn process_single_json_file(
@@ -249,10 +274,27 @@ async fn download_and_process_hashes(
     }
 
     println!("Found {} hashes to download and process", hashes.len());
-
-    // Create reports directory
     fs::create_dir_all(&args.reports_dir).await?;
 
+    let download_config = prepare_download_configuration(args, tier, verbose, hashes.len())?;
+    let results = execute_concurrent_downloads(hashes, client, args, download_config).await;
+    
+    finalize_download_results(results, args)
+}
+
+struct DownloadConfiguration {
+    concurrency: usize,
+    progress: Option<ProgressTracker>,
+    total: usize,
+    reports_dir: Arc<PathBuf>,
+}
+
+fn prepare_download_configuration(
+    args: &IndexArgs,
+    tier: &str,
+    verbose: bool,
+    hash_count: usize,
+) -> Result<DownloadConfiguration> {
     let api_tier = match tier.to_lowercase().as_str() {
         "premium" | "private" => ApiTier::Premium,
         _ => ApiTier::Public,
@@ -266,98 +308,173 @@ async fn download_and_process_hashes(
 
     let progress = if !verbose {
         Some(ProgressTracker::new(
-            hashes.len() as u64,
+            hash_count as u64,
             "Downloading reports",
         ))
     } else {
         None
     };
 
-    let processed = Arc::new(AtomicUsize::new(0));
-    let total = hashes.len();
-    let reports_dir = Arc::new(args.reports_dir.clone());
+    Ok(DownloadConfiguration {
+        concurrency,
+        progress,
+        total: hash_count,
+        reports_dir: Arc::new(args.reports_dir.clone()),
+    })
+}
 
-    // Process hashes concurrently
+async fn execute_concurrent_downloads(
+    hashes: Vec<String>,
+    client: Arc<Client>,
+    args: &IndexArgs,
+    config: DownloadConfiguration,
+) -> Vec<Result<Option<ProcessedReport>>> {
+    let processed = Arc::new(AtomicUsize::new(0));
+
     let results: Vec<_> = stream::iter(hashes.iter().enumerate())
         .map(|(_index, hash)| {
-            let client = Arc::clone(&client);
-            let reports_dir = Arc::clone(&reports_dir);
-            let processed = Arc::clone(&processed);
-            let hash = hash.clone();
-            let skip_errors = args.skip_errors;
-            let progress = progress.as_ref();
-
-            async move {
-                let current = processed.fetch_add(1, Ordering::SeqCst) + 1;
-
-                if verbose {
-                    println!(
-                        "[{}/{}] Downloading analysis for hash: {}",
-                        current, total, hash
-                    );
-                } else if let Some(progress) = progress {
-                    progress.inc(1);
-                }
-
-                match client.files().get(&hash).await {
-                    Ok(file_info) => {
-                        // Save report to disk
-                        let json_report = serde_json::to_string_pretty(&file_info)
-                            .unwrap_or_else(|_| "{}".to_string());
-                        let report_filename = format!("{}.json", hash);
-                        let report_path = reports_dir.join(&report_filename);
-
-                        if let Err(e) = fs::write(&report_path, &json_report).await {
-                            if !skip_errors {
-                                return Err(anyhow::anyhow!(
-                                    "Failed to save report for {}: {}",
-                                    hash,
-                                    e
-                                ));
-                            }
-                            eprintln!("Warning: Failed to save report for {}: {}", hash, e);
-                        }
-
-                        // Process the report
-                        let file_info_json = serde_json::to_value(&file_info)
-                            .map_err(|e| anyhow::anyhow!("Failed to serialize file info: {}", e))?;
-
-                        match process_vt_report(&hash, &file_info_json) {
-                            Ok(report) => Ok(Some(report)),
-                            Err(e) => {
-                                if skip_errors {
-                                    eprintln!("Warning: Failed to process {}: {}", hash, e);
-                                    Ok(None)
-                                } else {
-                                    Err(e)
-                                }
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        let error_msg = handle_vt_error(&e);
-                        if skip_errors {
-                            eprintln!("Warning: Failed to download {}: {}", hash, error_msg);
-                            Ok(None)
-                        } else {
-                            Err(anyhow::anyhow!(
-                                "Failed to download {}: {}",
-                                hash,
-                                error_msg
-                            ))
-                        }
-                    }
-                }
-            }
+            process_single_hash(
+                hash.clone(),
+                Arc::clone(&client),
+                Arc::clone(&config.reports_dir),
+                Arc::clone(&processed),
+                config.total,
+                args.skip_errors,
+                config.progress.as_ref(),
+            )
         })
-        .buffer_unordered(concurrency)
+        .buffer_unordered(config.concurrency)
         .collect()
         .await;
 
-    if let Some(progress) = progress {
+    if let Some(progress) = config.progress {
         progress.finish_with_message("Download completed");
     }
 
+    results
+}
+
+async fn process_single_hash(
+    hash: String,
+    client: Arc<Client>,
+    reports_dir: Arc<PathBuf>,
+    processed: Arc<AtomicUsize>,
+    total: usize,
+    skip_errors: bool,
+    progress: Option<&ProgressTracker>,
+) -> Result<Option<ProcessedReport>> {
+    let current = processed.fetch_add(1, Ordering::SeqCst) + 1;
+    update_progress_display(current, total, &hash, progress);
+
+    match client.files().get(&hash).await {
+        Ok(file_info) => {
+            handle_successful_download(file_info, &hash, &reports_dir, skip_errors).await
+        }
+        Err(e) => {
+            handle_download_error(e, &hash, skip_errors)
+        }
+    }
+}
+
+fn update_progress_display(
+    current: usize,
+    total: usize,
+    hash: &str,
+    progress: Option<&ProgressTracker>,
+) {
+    if let Some(progress) = progress {
+        progress.inc(1);
+    } else {
+        println!(
+            "[{}/{}] Downloading analysis for hash: {}",
+            current, total, hash
+        );
+    }
+}
+
+async fn handle_successful_download(
+    file_info: serde_json::Value,
+    hash: &str,
+    reports_dir: &Arc<PathBuf>,
+    skip_errors: bool,
+) -> Result<Option<ProcessedReport>> {
+    if let Err(e) = save_report_to_disk(&file_info, hash, reports_dir).await {
+        return handle_save_error(e, hash, skip_errors);
+    }
+
+    let file_info_json = serde_json::to_value(&file_info)
+        .map_err(|e| anyhow::anyhow!("Failed to serialize file info: {}", e))?;
+
+    process_downloaded_report(&file_info_json, hash, skip_errors)
+}
+
+async fn save_report_to_disk(
+    file_info: &serde_json::Value,
+    hash: &str,
+    reports_dir: &Arc<PathBuf>,
+) -> Result<()> {
+    let json_report = serde_json::to_string_pretty(file_info)
+        .unwrap_or_else(|_| "{}".to_string());
+    let report_filename = format!("{}.json", hash);
+    let report_path = reports_dir.join(&report_filename);
+
+    fs::write(&report_path, &json_report).await
+        .map_err(|e| anyhow::anyhow!("Failed to save report for {}: {}", hash, e))
+}
+
+fn handle_save_error(
+    error: anyhow::Error,
+    hash: &str,
+    skip_errors: bool,
+) -> Result<Option<ProcessedReport>> {
+    if skip_errors {
+        eprintln!("Warning: {}", error);
+        Ok(None)
+    } else {
+        Err(error)
+    }
+}
+
+fn process_downloaded_report(
+    file_info_json: &serde_json::Value,
+    hash: &str,
+    skip_errors: bool,
+) -> Result<Option<ProcessedReport>> {
+    match process_vt_report(hash, file_info_json) {
+        Ok(report) => Ok(Some(report)),
+        Err(e) => {
+            if skip_errors {
+                eprintln!("Warning: Failed to process {}: {}", hash, e);
+                Ok(None)
+            } else {
+                Err(e)
+            }
+        }
+    }
+}
+
+fn handle_download_error(
+    error: crate::Error,
+    hash: &str,
+    skip_errors: bool,
+) -> Result<Option<ProcessedReport>> {
+    let error_msg = handle_vt_error(&error);
+    if skip_errors {
+        eprintln!("Warning: Failed to download {}: {}", hash, error_msg);
+        Ok(None)
+    } else {
+        Err(anyhow::anyhow!(
+            "Failed to download {}: {}",
+            hash,
+            error_msg
+        ))
+    }
+}
+
+fn finalize_download_results(
+    results: Vec<Result<Option<ProcessedReport>>>,
+    args: &IndexArgs,
+) -> Result<Vec<ProcessedReport>> {
     let mut reports = Vec::new();
     for result in results {
         match result {
@@ -370,7 +487,6 @@ async fn download_and_process_hashes(
             }
         }
     }
-
     Ok(reports)
 }
 

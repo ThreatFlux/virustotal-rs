@@ -72,15 +72,54 @@ struct ProcessedReport {
     documents: Vec<IndexedDocument>,
 }
 
+#[derive(Debug)]
+struct DownloadParams {
+    reports_dir: Arc<PathBuf>,
+    processed: Arc<AtomicUsize>,
+    total: usize,
+    verbose: bool,
+    skip_errors: bool,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
-    if !args.index {
-        println!("Indexing is disabled. Use --index to enable Elasticsearch indexing.");
+    // Validate arguments and check if indexing is enabled
+    if !validate_arguments(&args) {
         return Ok(());
     }
 
+    // Initialize and test Elasticsearch client
+    let es_client = initialize_elasticsearch_client(&args).await?;
+
+    // Process reports from input source
+    let processed_reports = match process_reports_from_input(&args).await? {
+        Some(reports) => reports,
+        None => return Ok(()), // No reports to process, exit gracefully
+    };
+
+    // Coordinate the final indexing process
+    coordinate_indexing(&es_client, processed_reports, &args).await?;
+
+    println!("✓ Indexing completed successfully");
+    Ok(())
+}
+
+/// Validates command-line arguments and checks if indexing is enabled
+/// Returns true if should continue processing, false if should exit early
+fn validate_arguments(args: &Args) -> bool {
+    if !args.index {
+        println!("Indexing is disabled. Use --index to enable Elasticsearch indexing.");
+        return false;
+    }
+    true
+}
+
+/// Initializes Elasticsearch client and tests the connection
+async fn initialize_elasticsearch_client(
+    args: &Args,
+) -> Result<Elasticsearch, Box<dyn std::error::Error>> {
     // Initialize Elasticsearch client
     let transport = Transport::single_node(&args.es_url)?;
     let es_client = Elasticsearch::new(transport);
@@ -101,29 +140,43 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    Ok(es_client)
+}
+
+/// Processes reports from the input source (directory or hash file)
+/// Returns None if no reports found (early exit), Some(reports) if reports found
+async fn process_reports_from_input(
+    args: &Args,
+) -> Result<Option<Vec<ProcessedReport>>, Box<dyn std::error::Error>> {
     // Determine if input is a directory with JSON files or a text file with hashes
     let processed_reports = if args.input.is_dir() {
         // Process existing JSON files
-        process_json_directory(&args.input, &args).await?
+        process_json_directory(&args.input, args).await?
     } else {
         // Download reports from hashes and process them
-        download_and_process_hashes(&args).await?
+        download_and_process_hashes(args).await?
     };
 
     if processed_reports.is_empty() {
         println!("No reports to process.");
-        return Ok(());
+        return Ok(None);
     }
 
     println!("Found {} reports to index", processed_reports.len());
+    Ok(Some(processed_reports))
+}
 
+/// Coordinates the final indexing process by creating indexes and bulk indexing documents
+async fn coordinate_indexing(
+    es_client: &Elasticsearch,
+    processed_reports: Vec<ProcessedReport>,
+    args: &Args,
+) -> Result<(), Box<dyn std::error::Error>> {
     // Create Elasticsearch indexes
-    create_elasticsearch_indexes(&es_client, &args).await?;
+    create_elasticsearch_indexes(es_client, args).await?;
 
     // Index documents in batches
-    index_documents_bulk(&es_client, processed_reports, &args).await?;
-
-    println!("✓ Indexing completed successfully");
+    index_documents_bulk(es_client, processed_reports, args).await?;
 
     Ok(())
 }
@@ -164,9 +217,8 @@ async fn process_json_directory(
     Ok(reports)
 }
 
-async fn download_and_process_hashes(
-    args: &Args,
-) -> Result<Vec<ProcessedReport>, Box<dyn std::error::Error>> {
+/// Initialize VirusTotal API client with provided credentials and tier
+fn initialize_vt_client(args: &Args) -> Result<(Client, ApiTier), Box<dyn std::error::Error>> {
     let api_key_str = args
         .api_key
         .clone()
@@ -180,9 +232,14 @@ async fn download_and_process_hashes(
     };
 
     let client = Client::new(api_key, api_tier)?;
+    Ok((client, api_tier))
+}
 
-    // Read hashes from file
-    let content = fs::read_to_string(&args.input).await?;
+/// Read and parse hashes from input file, filtering out empty lines and comments
+async fn read_hashes_from_file(
+    input_path: &Path,
+) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let content = fs::read_to_string(input_path).await?;
     let hashes: Vec<String> = content
         .lines()
         .map(|line| line.trim())
@@ -190,6 +247,92 @@ async fn download_and_process_hashes(
         .map(String::from)
         .collect();
 
+    Ok(hashes)
+}
+
+/// Download and process a single hash, returning the processed report
+async fn download_and_process_single_hash(
+    hash: String,
+    client: Arc<Client>,
+    params: &DownloadParams,
+    args: &Args,
+) -> Result<Option<ProcessedReport>, Box<dyn std::error::Error>> {
+    let current = params.processed.fetch_add(1, Ordering::SeqCst) + 1;
+    let progress = format!("[{}/{}]", current, params.total);
+
+    if params.verbose {
+        println!("{} Downloading analysis for hash: {}", progress, hash);
+    } else {
+        println!("{} Processing {}...", progress, &hash[..16.min(hash.len())]);
+    }
+
+    match client.files().get(&hash).await {
+        Ok(file_info) => {
+            // Save report to disk
+            let json_report =
+                serde_json::to_string_pretty(&file_info).unwrap_or_else(|_| "{}".to_string());
+            let report_filename = format!("{}.json", hash);
+            let report_path = params.reports_dir.join(&report_filename);
+
+            if let Err(e) = fs::write(&report_path, &json_report).await {
+                eprintln!("Warning: Failed to save report for {}: {}", hash, e);
+            }
+
+            // Convert to JSON Value for processing
+            let file_info_json = serde_json::to_value(&file_info)?;
+
+            // Process the report
+            match process_vt_report(&hash, &file_info_json, args) {
+                Ok(report) => Ok(Some(report)),
+                Err(e) => {
+                    if params.skip_errors {
+                        eprintln!("Warning: Failed to process {}: {}", hash, e);
+                        Ok(None)
+                    } else {
+                        Err(e)
+                    }
+                }
+            }
+        }
+        Err(e) => {
+            if params.skip_errors {
+                eprintln!("Warning: Failed to download {}: {}", hash, e);
+                Ok(None)
+            } else {
+                Err(format!("Failed to download {}: {}", hash, e).into())
+            }
+        }
+    }
+}
+
+/// Collect and validate results from concurrent download operations
+fn collect_download_results(
+    results: Vec<Result<Option<ProcessedReport>, Box<dyn std::error::Error>>>,
+    skip_errors: bool,
+) -> Result<Vec<ProcessedReport>, Box<dyn std::error::Error>> {
+    let mut reports = Vec::new();
+    for result in results {
+        match result {
+            Ok(Some(report)) => reports.push(report),
+            Ok(None) => {} // Skipped due to error
+            Err(e) => {
+                if !skip_errors {
+                    return Err(e);
+                }
+            }
+        }
+    }
+    Ok(reports)
+}
+
+async fn download_and_process_hashes(
+    args: &Args,
+) -> Result<Vec<ProcessedReport>, Box<dyn std::error::Error>> {
+    // Initialize VirusTotal client
+    let (client, api_tier) = initialize_vt_client(args)?;
+
+    // Read hashes from file
+    let hashes = read_hashes_from_file(&args.input).await?;
     if hashes.is_empty() {
         return Ok(Vec::new());
     }
@@ -210,83 +353,30 @@ async fn download_and_process_hashes(
     let client = Arc::new(client);
     let reports_dir = Arc::new(args.reports_dir.clone());
 
+    let download_params = DownloadParams {
+        reports_dir: Arc::clone(&reports_dir),
+        processed: Arc::clone(&processed),
+        total,
+        verbose: args.verbose,
+        skip_errors: args.skip_errors,
+    };
+
     // Process hashes concurrently
     let results: Vec<_> = stream::iter(hashes.iter().enumerate())
         .map(|(_index, hash)| {
-            let client = Arc::clone(&client);
-            let reports_dir = Arc::clone(&reports_dir);
-            let processed = Arc::clone(&processed);
-            let hash = hash.clone();
-            let verbose = args.verbose;
-            let skip_errors = args.skip_errors;
-
-            async move {
-                let current = processed.fetch_add(1, Ordering::SeqCst) + 1;
-                let progress = format!("[{}/{}]", current, total);
-
-                if verbose {
-                    println!("{} Downloading analysis for hash: {}", progress, hash);
-                } else {
-                    println!("{} Processing {}...", progress, &hash[..16.min(hash.len())]);
-                }
-
-                match client.files().get(&hash).await {
-                    Ok(file_info) => {
-                        // Save report to disk
-                        let json_report = serde_json::to_string_pretty(&file_info)
-                            .unwrap_or_else(|_| "{}".to_string());
-                        let report_filename = format!("{}.json", hash);
-                        let report_path = reports_dir.join(&report_filename);
-
-                        if let Err(e) = fs::write(&report_path, &json_report).await {
-                            eprintln!("Warning: Failed to save report for {}: {}", hash, e);
-                        }
-
-                        // Convert to JSON Value for processing
-                        let file_info_json = serde_json::to_value(&file_info)?;
-
-                        // Process the report
-                        match process_vt_report(&hash, &file_info_json, args) {
-                            Ok(report) => Ok(Some(report)),
-                            Err(e) => {
-                                if skip_errors {
-                                    eprintln!("Warning: Failed to process {}: {}", hash, e);
-                                    Ok(None)
-                                } else {
-                                    Err(e)
-                                }
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        if skip_errors {
-                            eprintln!("Warning: Failed to download {}: {}", hash, e);
-                            Ok(None)
-                        } else {
-                            Err(format!("Failed to download {}: {}", hash, e).into())
-                        }
-                    }
-                }
-            }
+            download_and_process_single_hash(
+                hash.clone(),
+                Arc::clone(&client),
+                &download_params,
+                args,
+            )
         })
         .buffer_unordered(concurrency)
         .collect()
         .await;
 
-    let mut reports = Vec::new();
-    for result in results {
-        match result {
-            Ok(Some(report)) => reports.push(report),
-            Ok(None) => {} // Skipped due to error
-            Err(e) => {
-                if !args.skip_errors {
-                    return Err(e);
-                }
-            }
-        }
-    }
-
-    Ok(reports)
+    // Collect and validate results
+    collect_download_results(results, args.skip_errors)
 }
 
 fn process_vt_report(
@@ -1020,10 +1110,8 @@ async fn index_documents_bulk(
     Ok(())
 }
 
-fn get_main_index_mapping() -> Value {
-    let mut properties = serde_json::Map::new();
-
-    // Basic fields
+/// Helper function to add basic identifier and hash fields to properties
+fn add_basic_mapping_fields(properties: &mut serde_json::Map<String, Value>) {
     properties.insert("report_uuid".to_string(), json!({"type": "keyword"}));
     properties.insert("file_hash".to_string(), json!({"type": "keyword"}));
     properties.insert("file_id".to_string(), json!({"type": "keyword"}));
@@ -1036,8 +1124,10 @@ fn get_main_index_mapping() -> Value {
     properties.insert("ssdeep".to_string(), json!({"type": "keyword"}));
     properties.insert("permhash".to_string(), json!({"type": "keyword"}));
     properties.insert("symhash".to_string(), json!({"type": "keyword"}));
+}
 
-    // Text fields
+/// Helper function to add text fields for analysis descriptions
+fn add_text_mapping_fields(properties: &mut serde_json::Map<String, Value>) {
     properties.insert("magic".to_string(), json!({"type": "text"}));
     properties.insert("magika".to_string(), json!({"type": "text"}));
     properties.insert("bytehero_info".to_string(), json!({"type": "text"}));
@@ -1046,22 +1136,28 @@ fn get_main_index_mapping() -> Value {
         json!({"type": "text", "fields": {"keyword": {"type": "keyword"}}}),
     );
     properties.insert("type_description".to_string(), json!({"type": "text"}));
+}
 
-    // Numeric fields
+/// Helper function to add numeric fields for statistics and metrics
+fn add_numeric_mapping_fields(properties: &mut serde_json::Map<String, Value>) {
     properties.insert("size".to_string(), json!({"type": "long"}));
     properties.insert("times_submitted".to_string(), json!({"type": "integer"}));
     properties.insert("unique_sources".to_string(), json!({"type": "integer"}));
     properties.insert("reputation".to_string(), json!({"type": "integer"}));
+}
 
-    // Keyword fields
+/// Helper function to add keyword fields for categorization and tagging
+fn add_keyword_mapping_fields(properties: &mut serde_json::Map<String, Value>) {
     properties.insert("names".to_string(), json!({"type": "keyword"}));
     properties.insert("type_tag".to_string(), json!({"type": "keyword"}));
     properties.insert("type_extension".to_string(), json!({"type": "keyword"}));
     properties.insert("tags".to_string(), json!({"type": "keyword"}));
     properties.insert("type_tags".to_string(), json!({"type": "keyword"}));
     properties.insert("available_tools".to_string(), json!({"type": "keyword"}));
+}
 
-    // Date fields
+/// Helper function to add date fields for temporal analysis
+fn add_date_mapping_fields(properties: &mut serde_json::Map<String, Value>) {
     properties.insert("index_time".to_string(), json!({"type": "date"}));
     properties.insert(
         "first_submission_date".to_string(),
@@ -1091,11 +1187,15 @@ fn get_main_index_mapping() -> Value {
         "creation_date".to_string(),
         json!({"type": "date", "format": "epoch_second"}),
     );
+}
 
-    // Boolean fields
+/// Helper function to add boolean fields
+fn add_boolean_mapping_fields(properties: &mut serde_json::Map<String, Value>) {
     properties.insert("downloadable".to_string(), json!({"type": "boolean"}));
+}
 
-    // Nested objects for stats
+/// Helper function to add nested objects for analysis statistics
+fn add_stats_mapping_fields(properties: &mut serde_json::Map<String, Value>) {
     properties.insert(
         "last_analysis_stats".to_string(),
         json!({
@@ -1121,8 +1221,10 @@ fn get_main_index_mapping() -> Value {
             }
         }),
     );
+}
 
-    // Object fields for complex data
+/// Helper function to add object fields for complex nested data structures
+fn add_object_mapping_fields(properties: &mut serde_json::Map<String, Value>) {
     let object_fields = vec![
         "threat_severity",
         "trid",
@@ -1148,6 +1250,21 @@ fn get_main_index_mapping() -> Value {
     for field in object_fields {
         properties.insert(field.to_string(), json!({"type": "object"}));
     }
+}
+
+/// Creates the main Elasticsearch index mapping by combining all field types
+fn get_main_index_mapping() -> Value {
+    let mut properties = serde_json::Map::new();
+
+    // Add different categories of fields using helper functions
+    add_basic_mapping_fields(&mut properties);
+    add_text_mapping_fields(&mut properties);
+    add_numeric_mapping_fields(&mut properties);
+    add_keyword_mapping_fields(&mut properties);
+    add_date_mapping_fields(&mut properties);
+    add_boolean_mapping_fields(&mut properties);
+    add_stats_mapping_fields(&mut properties);
+    add_object_mapping_fields(&mut properties);
 
     json!({
         "mappings": {

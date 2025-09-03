@@ -14,6 +14,178 @@ use std::time::Duration;
 use tokio::fs;
 use tokio::time::sleep;
 
+// Helper structures for organizing download results
+#[derive(Debug, Clone)]
+struct DownloadCounters {
+    successful: Arc<AtomicUsize>,
+    failed: Arc<AtomicUsize>,
+    skipped: Arc<AtomicUsize>,
+    processed: Arc<AtomicUsize>,
+    total_size: Arc<AtomicUsize>,
+}
+
+impl DownloadCounters {
+    fn new() -> Self {
+        Self {
+            successful: Arc::new(AtomicUsize::new(0)),
+            failed: Arc::new(AtomicUsize::new(0)),
+            skipped: Arc::new(AtomicUsize::new(0)),
+            processed: Arc::new(AtomicUsize::new(0)),
+            total_size: Arc::new(AtomicUsize::new(0)),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct DownloadContext {
+    download_files: bool,
+    download_reports: bool,
+}
+
+struct ProcessDownloadsParams {
+    client: Arc<Client>,
+    output_dir: Arc<PathBuf>,
+    reports_dir: Arc<PathBuf>,
+    context: DownloadContext,
+    args: DownloadArgs,
+    counters: DownloadCounters,
+    total: usize,
+    verbose: bool,
+    concurrency: usize,
+}
+
+/// Parse input and extract hashes based on input type
+fn parse_input_hashes(input: &str, verbose: bool) -> Result<Vec<String>> {
+    let input_type = detect_input_type(input)?;
+    let hashes = match input_type {
+        InputType::SingleHash => {
+            validate_hash(input)?;
+            vec![input.to_string()]
+        }
+        InputType::TextFile => read_hashes_from_file(input)?,
+        InputType::JsonExport => {
+            if verbose {
+                println!("Detected JSON export file, extracting file hashes...");
+            }
+            read_hashes_from_json_export(input)?
+        }
+    };
+    Ok(hashes)
+}
+
+/// Create necessary output directories
+async fn setup_directories(args: &DownloadArgs, context: &DownloadContext) -> Result<()> {
+    if context.download_files {
+        fs::create_dir_all(&args.output).await.with_context(|| {
+            format!(
+                "Failed to create output directory: {}",
+                args.output.display()
+            )
+        })?;
+    }
+
+    if context.download_reports {
+        fs::create_dir_all(&args.reports_dir)
+            .await
+            .with_context(|| {
+                format!(
+                    "Failed to create reports directory: {}",
+                    args.reports_dir.display()
+                )
+            })?;
+    }
+
+    Ok(())
+}
+
+/// Print directory information if verbose
+fn print_directory_info(args: &DownloadArgs, context: &DownloadContext, verbose: bool) {
+    if verbose && context.download_reports {
+        if args.reports_only {
+            println!(
+                "Only downloading reports to: {}",
+                args.reports_dir.display()
+            );
+        } else {
+            println!("Reports will be saved to: {}", args.reports_dir.display());
+        }
+    }
+}
+
+/// Check if a file should be skipped in resume mode
+fn should_skip_file(
+    args: &DownloadArgs,
+    context: &DownloadContext,
+    hash: &str,
+    output_dir: &Path,
+    reports_dir: &Path,
+) -> bool {
+    if !args.resume {
+        return false;
+    }
+
+    let file_path = output_dir.join(format!("{}.bin", hash));
+    let report_path = reports_dir.join(format!("{}.json", hash));
+
+    let file_exists = context.download_files && file_path.exists();
+    let report_exists = context.download_reports && report_path.exists();
+
+    (context.download_files && !context.download_reports && file_exists)
+        || (!context.download_files && context.download_reports && report_exists)
+        || (context.download_files && context.download_reports && file_exists && report_exists)
+}
+
+/// Print download summary in specified format
+fn print_download_summary(
+    args: &DownloadArgs,
+    hashes_count: usize,
+    counters: &DownloadCounters,
+    context: &DownloadContext,
+) -> Result<()> {
+    let successful_count = counters.successful.load(Ordering::SeqCst);
+    let failed_count = counters.failed.load(Ordering::SeqCst);
+    let skipped_count = counters.skipped.load(Ordering::SeqCst);
+    let total_bytes = counters.total_size.load(Ordering::SeqCst);
+
+    match args.format.as_str() {
+        "json" => {
+            let summary = serde_json::json!({
+                "total": hashes_count,
+                "successful": successful_count,
+                "failed": failed_count,
+                "skipped": skipped_count,
+                "total_size": total_bytes,
+                "total_size_formatted": format_file_size(total_bytes as u64),
+                "output_directory": args.output,
+                "reports_directory": if context.download_reports { Some(&args.reports_dir) } else { None }
+            });
+            println!("{}", serde_json::to_string_pretty(&summary)?);
+        }
+        _ => {
+            println!("\n=== Download Summary ===");
+            println!("Total hashes:     {}", hashes_count);
+            println!("Successfully downloaded: {}", successful_count);
+            println!("Failed:          {}", failed_count);
+            if skipped_count > 0 {
+                println!("Skipped (resume): {}", skipped_count);
+            }
+            if total_bytes > 0 {
+                println!("Total size:      {}", format_file_size(total_bytes as u64));
+            }
+
+            if successful_count > 0 {
+                if context.download_files {
+                    println!("Files saved to:  {}", args.output.display());
+                }
+                if context.download_reports {
+                    println!("Reports saved to: {}", args.reports_dir.display());
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 #[derive(Args, Debug, Clone)]
 pub struct DownloadArgs {
     /// Path to file containing hashes or single hash. Supports:
@@ -89,21 +261,8 @@ pub async fn execute(
 ) -> Result<()> {
     let client = Arc::new(setup_client(api_key, tier)?);
 
-    // Detect input type and parse accordingly
-    let input_type = detect_input_type(&args.input)?;
-    let hashes = match input_type {
-        InputType::SingleHash => {
-            validate_hash(&args.input)?;
-            vec![args.input.clone()]
-        }
-        InputType::TextFile => read_hashes_from_file(&args.input)?,
-        InputType::JsonExport => {
-            if verbose {
-                println!("Detected JSON export file, extracting file hashes...");
-            }
-            read_hashes_from_json_export(&args.input)?
-        }
-    };
+    // Parse input and extract hashes
+    let hashes = parse_input_hashes(&args.input, verbose)?;
 
     if hashes.is_empty() {
         println!("No hashes to process");
@@ -121,40 +280,14 @@ pub async fn execute(
     }
 
     // Determine what to download
-    let download_files = !args.reports_only;
-    let download_reports = args.reports || args.reports_only;
+    let context = DownloadContext {
+        download_files: !args.reports_only,
+        download_reports: args.reports || args.reports_only,
+    };
 
     // Create output directories
-    if download_files {
-        fs::create_dir_all(&args.output).await.with_context(|| {
-            format!(
-                "Failed to create output directory: {}",
-                args.output.display()
-            )
-        })?;
-    }
-
-    if download_reports {
-        fs::create_dir_all(&args.reports_dir)
-            .await
-            .with_context(|| {
-                format!(
-                    "Failed to create reports directory: {}",
-                    args.reports_dir.display()
-                )
-            })?;
-
-        if verbose {
-            if args.reports_only {
-                println!(
-                    "Only downloading reports to: {}",
-                    args.reports_dir.display()
-                );
-            } else {
-                println!("Reports will be saved to: {}", args.reports_dir.display());
-            }
-        }
-    }
+    setup_directories(&args, &context).await?;
+    print_directory_info(&args, &context, verbose);
 
     // Auto-detect API tier and set optimal concurrency
     let (_api_tier, optimal_concurrency) =
@@ -173,30 +306,71 @@ pub async fn execute(
         None
     };
 
-    let successful = Arc::new(AtomicUsize::new(0));
-    let failed = Arc::new(AtomicUsize::new(0));
-    let skipped = Arc::new(AtomicUsize::new(0));
-    let processed = Arc::new(AtomicUsize::new(0));
-    let total_size = Arc::new(AtomicUsize::new(0));
-
+    let counters = DownloadCounters::new();
     let total = hashes.len();
     let output_dir = Arc::new(args.output.clone());
     let reports_dir = Arc::new(args.reports_dir.clone());
 
     // Process hashes with controlled concurrency
+    let params = ProcessDownloadsParams {
+        client,
+        output_dir,
+        reports_dir,
+        context: context.clone(),
+        args: args.clone(),
+        counters: counters.clone(),
+        total,
+        verbose,
+        concurrency,
+    };
+
+    let results = process_downloads(&hashes, params, progress.as_ref()).await?;
+
+    if let Some(progress) = progress {
+        progress.finish_with_message("Download completed");
+    }
+
+    // Check for errors if not skipping
+    if !args.skip_errors {
+        for result in results {
+            if let Err(e) = result {
+                eprintln!("\nStopping due to error: {}", e);
+                eprintln!("Use --skip-errors to continue on failures.");
+                return Err(e);
+            }
+        }
+    }
+
+    // Print summary
+    print_download_summary(&args, total, &counters, &context)?;
+
+    Ok(())
+}
+
+/// Process all downloads with concurrency control
+async fn process_downloads(
+    hashes: &[String],
+    params: ProcessDownloadsParams,
+    progress: Option<&ProgressTracker>,
+) -> Result<Vec<Result<(), anyhow::Error>>> {
+    let concurrency = params.concurrency;
     let results: Vec<_> = stream::iter(hashes.iter().enumerate())
         .map(|(_, hash)| {
-            let client = Arc::clone(&client);
-            let output_dir = Arc::clone(&output_dir);
-            let reports_dir = Arc::clone(&reports_dir);
-            let successful = Arc::clone(&successful);
-            let failed = Arc::clone(&failed);
-            let skipped = Arc::clone(&skipped);
-            let processed = Arc::clone(&processed);
-            let total_size = Arc::clone(&total_size);
-            let progress = progress.as_ref();
+            let client = Arc::clone(&params.client);
+            let output_dir = Arc::clone(&params.output_dir);
+            let reports_dir = Arc::clone(&params.reports_dir);
+            let successful = Arc::clone(&params.counters.successful);
+            let failed = Arc::clone(&params.counters.failed);
+            let skipped = Arc::clone(&params.counters.skipped);
+            let processed = Arc::clone(&params.counters.processed);
+            let total_size = Arc::clone(&params.counters.total_size);
             let hash = hash.clone();
-            let args_clone = args.clone();
+            let args_clone = params.args.clone();
+            let context_clone = params.context.clone();
+            let total = params.total;
+            let verbose = params.verbose;
+            let download_files = params.context.download_files;
+            let download_reports = params.context.download_reports;
 
             async move {
                 let current = processed.fetch_add(1, Ordering::SeqCst) + 1;
@@ -209,26 +383,21 @@ pub async fn execute(
                 }
 
                 // Check if we should skip this file (resume mode)
-                if args.resume {
-                    let file_path = output_dir.join(format!("{}.bin", hash));
-                    let report_path = reports_dir.join(format!("{}.json", hash));
-
-                    let file_exists = download_files && file_path.exists();
-                    let report_exists = download_reports && report_path.exists();
-
-                    if (download_files && !download_reports && file_exists)
-                        || (!download_files && download_reports && report_exists)
-                        || (download_files && download_reports && file_exists && report_exists)
-                    {
-                        skipped.fetch_add(1, Ordering::SeqCst);
-                        if verbose {
-                            println!("  → {} already exists, skipping", truncate_hash(&hash, 16));
-                        }
-                        if let Some(progress) = progress {
-                            progress.inc(1);
-                        }
-                        return Ok(());
+                if should_skip_file(
+                    &args_clone,
+                    &context_clone,
+                    &hash,
+                    &output_dir,
+                    &reports_dir,
+                ) {
+                    skipped.fetch_add(1, Ordering::SeqCst);
+                    if verbose {
+                        println!("  → {} already exists, skipping", truncate_hash(&hash, 16));
                     }
+                    if let Some(progress) = progress {
+                        progress.inc(1);
+                    }
+                    return Ok(());
                 }
 
                 match download_with_retry(
@@ -282,7 +451,7 @@ pub async fn execute(
                             progress.inc(1);
                         }
 
-                        if args.skip_errors {
+                        if args_clone.skip_errors {
                             Ok(())
                         } else {
                             Err(anyhow::anyhow!(
@@ -299,65 +468,57 @@ pub async fn execute(
         .collect()
         .await;
 
-    if let Some(progress) = progress {
-        progress.finish_with_message("Download completed");
-    }
+    Ok(results)
+}
 
-    // Check for errors if not skipping
-    if !args.skip_errors {
-        for result in results {
-            if let Err(e) = result {
-                eprintln!("\nStopping due to error: {}", e);
-                eprintln!("Use --skip-errors to continue on failures.");
-                return Err(e);
+/// Helper function to determine if an error should trigger a retry
+fn should_retry_error(error: &crate::Error) -> bool {
+    match error {
+        crate::Error::TooManyRequests => true,
+        crate::Error::Http(http_err) => {
+            if let Some(status) = http_err.status() {
+                matches!(status.as_u16(), 429 | 502 | 503 | 504)
+            } else {
+                // Network errors without status (timeouts, connection errors)
+                http_err.to_string().contains("timeout")
+                    || http_err.to_string().contains("connection")
+                    || http_err.to_string().contains("decode")
             }
         }
+        crate::Error::Json(_) => {
+            // Retry JSON parsing errors as they might be due to incomplete responses
+            true
+        }
+        crate::Error::Unknown(msg) => {
+            // Retry if it looks like a temporary issue
+            msg.contains("Empty response")
+                || msg.contains("HTML response")
+                || msg.contains("XML response")
+        }
+        crate::Error::TransientError => true,
+        crate::Error::DeadlineExceeded => true,
+        _ => false,
     }
+}
 
-    // Print summary
-    let successful_count = successful.load(Ordering::SeqCst);
-    let failed_count = failed.load(Ordering::SeqCst);
-    let skipped_count = skipped.load(Ordering::SeqCst);
-    let total_bytes = total_size.load(Ordering::SeqCst);
+/// Calculate retry delay based on error type and attempt number
+fn calculate_retry_delay(error: &crate::Error, attempt: u32) -> Duration {
+    const BASE_DELAY: Duration = Duration::from_secs(1);
 
-    match args.format.as_str() {
-        "json" => {
-            let summary = serde_json::json!({
-                "total": hashes.len(),
-                "successful": successful_count,
-                "failed": failed_count,
-                "skipped": skipped_count,
-                "total_size": total_bytes,
-                "total_size_formatted": format_file_size(total_bytes as u64),
-                "output_directory": args.output,
-                "reports_directory": if download_reports { Some(&args.reports_dir) } else { None }
-            });
-            println!("{}", serde_json::to_string_pretty(&summary)?);
+    match error {
+        crate::Error::TooManyRequests => {
+            // Longer delay for rate limits
+            Duration::from_secs(60 * (attempt + 1) as u64)
+        }
+        crate::Error::Http(http_err) if http_err.to_string().contains("timeout") => {
+            // Shorter delay for timeouts
+            BASE_DELAY * (attempt + 1)
         }
         _ => {
-            println!("\n=== Download Summary ===");
-            println!("Total hashes:     {}", hashes.len());
-            println!("Successfully downloaded: {}", successful_count);
-            println!("Failed:          {}", failed_count);
-            if skipped_count > 0 {
-                println!("Skipped (resume): {}", skipped_count);
-            }
-            if total_bytes > 0 {
-                println!("Total size:      {}", format_file_size(total_bytes as u64));
-            }
-
-            if successful_count > 0 {
-                if download_files {
-                    println!("Files saved to:  {}", args.output.display());
-                }
-                if download_reports {
-                    println!("Reports saved to: {}", args.reports_dir.display());
-                }
-            }
+            // Exponential backoff for other errors
+            BASE_DELAY * 2_u32.pow(attempt)
         }
     }
-
-    Ok(())
 }
 
 /// Download with retry logic for rate limit handling
@@ -371,7 +532,6 @@ async fn download_with_retry(
     args: &DownloadArgs,
 ) -> Result<(usize, bool), crate::Error> {
     const MAX_RETRIES: u32 = 3;
-    const BASE_DELAY: Duration = Duration::from_secs(1);
 
     for attempt in 0..MAX_RETRIES {
         match download_file_and_report(
@@ -387,52 +547,8 @@ async fn download_with_retry(
         {
             Ok(result) => return Ok(result),
             Err(e) => {
-                // Enhanced error categorization for retries
-                let should_retry = match &e {
-                    crate::Error::TooManyRequests => true,
-                    crate::Error::Http(http_err) => {
-                        if let Some(status) = http_err.status() {
-                            matches!(status.as_u16(), 429 | 502 | 503 | 504)
-                        } else {
-                            // Network errors without status (timeouts, connection errors)
-                            http_err.to_string().contains("timeout")
-                                || http_err.to_string().contains("connection")
-                                || http_err.to_string().contains("decode")
-                        }
-                    }
-                    crate::Error::Json(_) => {
-                        // Retry JSON parsing errors as they might be due to incomplete responses
-                        true
-                    }
-                    crate::Error::Unknown(msg) => {
-                        // Retry if it looks like a temporary issue
-                        msg.contains("Empty response")
-                            || msg.contains("HTML response")
-                            || msg.contains("XML response")
-                    }
-                    crate::Error::TransientError => true,
-                    crate::Error::DeadlineExceeded => true,
-                    _ => false,
-                };
-
-                if should_retry && attempt < MAX_RETRIES - 1 {
-                    // Enhanced backoff strategy
-                    let delay = match &e {
-                        crate::Error::TooManyRequests => {
-                            // Longer delay for rate limits
-                            Duration::from_secs(60 * (attempt + 1) as u64)
-                        }
-                        crate::Error::Http(http_err)
-                            if http_err.to_string().contains("timeout") =>
-                        {
-                            // Shorter delay for timeouts
-                            BASE_DELAY * (attempt + 1)
-                        }
-                        _ => {
-                            // Exponential backoff for other errors
-                            BASE_DELAY * 2_u32.pow(attempt)
-                        }
-                    };
+                if should_retry_error(&e) && attempt < MAX_RETRIES - 1 {
+                    let delay = calculate_retry_delay(&e, attempt);
 
                     eprintln!(
                         "  → Retry {}/{} for {} after {:?} ({})",
@@ -456,6 +572,111 @@ async fn download_with_retry(
     Err(crate::Error::Unknown("Max retries exceeded".to_string()))
 }
 
+/// Apply filters to file info to determine if file should be downloaded
+fn apply_file_filters(
+    file_info: &crate::files::File,
+    args: &DownloadArgs,
+) -> Result<(), crate::Error> {
+    let attributes = &file_info.object.attributes;
+
+    // Size filters
+    if let Some(size) = attributes.size {
+        if let Some(min_size) = args.min_size {
+            if size < min_size {
+                return Err(crate::Error::Unknown("File too small".to_string()));
+            }
+        }
+        if let Some(max_size) = args.max_size {
+            if size > max_size {
+                return Err(crate::Error::Unknown("File too large".to_string()));
+            }
+        }
+    }
+
+    // Detection count filter
+    if let Some(min_detections) = args.min_detections {
+        if let Some(stats) = &attributes.last_analysis_stats {
+            let detected = stats.malicious + stats.suspicious;
+            if detected < min_detections {
+                return Err(crate::Error::Unknown("Not enough detections".to_string()));
+            }
+        }
+    }
+
+    // File type filter
+    if let Some(ref filter_type) = args.file_type {
+        if let Some(ref type_description) = attributes.type_description {
+            if !type_description
+                .to_lowercase()
+                .contains(&filter_type.to_lowercase())
+            {
+                return Err(crate::Error::Unknown(
+                    "File type doesn't match filter".to_string(),
+                ));
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Download file content if requested and allowed
+async fn download_file_content(
+    client: &Client,
+    hash: &str,
+    output_dir: &Path,
+    file_info: Option<&crate::files::File>,
+) -> Result<usize, crate::Error> {
+    let is_downloadable = file_info
+        .and_then(|info| info.object.attributes.downloadable)
+        .unwrap_or(true);
+
+    if !is_downloadable {
+        return Err(crate::Error::Unknown("File not downloadable".to_string()));
+    }
+
+    match client.files().download(hash).await {
+        Ok(file_bytes) => {
+            let file_size = file_bytes.len();
+            let filename = format!("{}.bin", hash);
+            let output_path = output_dir.join(&filename);
+
+            tokio::fs::write(&output_path, file_bytes)
+                .await
+                .map_err(|e| crate::Error::Unknown(format!("Failed to write file: {}", e)))?;
+
+            Ok(file_size)
+        }
+        Err(e) => Err(e),
+    }
+}
+
+/// Save JSON report if requested
+async fn save_file_report(
+    client: &Client,
+    hash: &str,
+    reports_dir: &Path,
+    file_info: Option<crate::files::File>,
+) -> Result<bool, crate::Error> {
+    let info = if let Some(info) = file_info {
+        info
+    } else {
+        client.files().get(hash).await?
+    };
+
+    let json_report = serde_json::to_string_pretty(&info)
+        .map_err(|e| crate::Error::Unknown(format!("Failed to serialize report: {}", e)))?;
+
+    let report_filename = format!("{}.json", hash);
+    let report_path = reports_dir.join(&report_filename);
+
+    tokio::fs::write(&report_path, json_report)
+        .await
+        .map_err(|e| crate::Error::Unknown(format!("Failed to write report: {}", e)))?;
+
+    Ok(true)
+}
+
 async fn download_file_and_report(
     client: &Client,
     hash: &str,
@@ -477,96 +698,126 @@ async fn download_file_and_report(
 
     // Apply filters if file info is available
     if let Some(ref info) = file_info {
-        let attributes = &info.object.attributes;
-
-        // Size filters
-        if let Some(size) = attributes.size {
-            if let Some(min_size) = args.min_size {
-                if size < min_size {
-                    return Err(crate::Error::Unknown("File too small".to_string()));
-                }
-            }
-            if let Some(max_size) = args.max_size {
-                if size > max_size {
-                    return Err(crate::Error::Unknown("File too large".to_string()));
-                }
-            }
-        }
-
-        // Detection count filter
-        if let Some(min_detections) = args.min_detections {
-            if let Some(stats) = &attributes.last_analysis_stats {
-                let detected = stats.malicious + stats.suspicious;
-                if detected < min_detections {
-                    return Err(crate::Error::Unknown("Not enough detections".to_string()));
-                }
-            }
-        }
-
-        // File type filter
-        if let Some(ref filter_type) = args.file_type {
-            if let Some(ref type_description) = attributes.type_description {
-                if !type_description
-                    .to_lowercase()
-                    .contains(&filter_type.to_lowercase())
-                {
-                    return Err(crate::Error::Unknown(
-                        "File type doesn't match filter".to_string(),
-                    ));
-                }
-            }
-        }
+        apply_file_filters(info, args)?;
     }
 
     // Download file if requested
     if download_files {
-        let is_downloadable = file_info
-            .as_ref()
-            .and_then(|info| info.object.attributes.downloadable)
-            .unwrap_or(true);
-
-        if is_downloadable {
-            match client.files().download(hash).await {
-                Ok(file_bytes) => {
-                    file_size = file_bytes.len();
-                    let filename = format!("{}.bin", hash);
-                    let output_path = output_dir.join(&filename);
-
-                    tokio::fs::write(&output_path, file_bytes)
-                        .await
-                        .map_err(|e| {
-                            crate::Error::Unknown(format!("Failed to write file: {}", e))
-                        })?;
-                }
-                Err(e) => return Err(e),
-            }
-        } else {
-            return Err(crate::Error::Unknown("File not downloadable".to_string()));
-        }
+        file_size = download_file_content(client, hash, output_dir, file_info.as_ref()).await?;
     }
 
     // Save report if requested
     if download_reports {
-        let info = if let Some(info) = file_info {
-            info
-        } else {
-            client.files().get(hash).await?
-        };
-
-        let json_report = serde_json::to_string_pretty(&info)
-            .map_err(|e| crate::Error::Unknown(format!("Failed to serialize report: {}", e)))?;
-
-        let report_filename = format!("{}.json", hash);
-        let report_path = reports_dir.join(&report_filename);
-
-        tokio::fs::write(&report_path, json_report)
-            .await
-            .map_err(|e| crate::Error::Unknown(format!("Failed to write report: {}", e)))?;
-
-        report_saved = true;
+        report_saved = save_file_report(client, hash, reports_dir, file_info).await?;
     }
 
     Ok((file_size, report_saved))
+}
+
+/// Detect if user has premium privileges
+fn has_premium_privileges(user: &crate::users::User) -> bool {
+    user.attributes
+        .privileges
+        .as_ref()
+        .map(|p| {
+            p.download_file.unwrap_or(false)
+                || p.intelligence.unwrap_or(false)
+                || p.private_scanning.unwrap_or(false)
+        })
+        .unwrap_or(false)
+}
+
+/// Check if user has high API quotas (indicating premium)
+fn has_high_quota(user: &crate::users::User) -> bool {
+    user.attributes
+        .quotas
+        .as_ref()
+        .and_then(|q| q.api_requests_monthly.as_ref())
+        .map(|monthly| monthly.allowed > 15000) // Public tier is typically 15k/month
+        .unwrap_or(false)
+}
+
+/// Determine optimal concurrency based on API tier and quotas
+fn determine_optimal_concurrency(
+    api_tier: ApiTier,
+    manual_concurrency: Option<usize>,
+    user: Option<&crate::users::User>,
+) -> usize {
+    if let Some(manual) = manual_concurrency {
+        // User specified concurrency manually
+        return match api_tier {
+            ApiTier::Premium => manual.clamp(1, 200),
+            ApiTier::Public => 1,
+        };
+    }
+
+    // Auto-select based on tier and quotas
+    match api_tier {
+        ApiTier::Premium => {
+            if let Some(user) = user {
+                // For premium, use aggressive defaults but be smart about quotas
+                let monthly_allowed = user
+                    .attributes
+                    .quotas
+                    .as_ref()
+                    .and_then(|q| q.api_requests_monthly.as_ref())
+                    .map(|monthly| monthly.allowed)
+                    .unwrap_or(100000); // Default assumption
+
+                if monthly_allowed > 100000 {
+                    100 // High-tier premium: 100 concurrent
+                } else if monthly_allowed > 50000 {
+                    50 // Mid-tier premium: 50 concurrent
+                } else {
+                    20 // Entry-level premium: 20 concurrent
+                }
+            } else {
+                20 // Conservative default for premium
+            }
+        }
+        ApiTier::Public => 1, // Public is always sequential
+    }
+}
+
+/// Print tier detection results
+fn print_tier_info(
+    api_tier: ApiTier,
+    optimal_concurrency: usize,
+    user: Option<&crate::users::User>,
+    verbose: bool,
+) {
+    if !verbose {
+        return;
+    }
+
+    let tier_name = match api_tier {
+        ApiTier::Premium => "Premium",
+        ApiTier::Public => "Public",
+    };
+
+    if let Some(user) = user {
+        if let Some(quotas) = &user.attributes.quotas {
+            if let Some(monthly) = &quotas.api_requests_monthly {
+                println!(
+                    "✅ Detected {} tier account ({}/{} monthly quota)",
+                    tier_name, monthly.used, monthly.allowed
+                );
+            } else {
+                println!("✅ Detected {} tier account", tier_name);
+            }
+        } else {
+            println!("✅ Detected {} tier account", tier_name);
+        }
+    }
+
+    if optimal_concurrency > 1 {
+        println!(
+            "🚀 Using {} concurrent downloads for optimal performance",
+            optimal_concurrency
+        );
+    } else {
+        println!("🔄 Using sequential downloads (public tier)");
+    }
 }
 
 /// Auto-detect API tier and determine optimal concurrency
@@ -601,92 +852,20 @@ async fn detect_tier_and_concurrency(
             let user = &user_response.data;
 
             // Check for premium features to determine tier
-            let is_premium = user
-                .attributes
-                .privileges
-                .as_ref()
-                .map(|p| {
-                    p.download_file.unwrap_or(false)
-                        || p.intelligence.unwrap_or(false)
-                        || p.private_scanning.unwrap_or(false)
-                })
-                .unwrap_or(false);
+            let is_premium = has_premium_privileges(user);
+            let has_quota = has_high_quota(user);
 
-            // Check quotas to determine tier
-            let has_high_quota = user
-                .attributes
-                .quotas
-                .as_ref()
-                .and_then(|q| q.api_requests_monthly.as_ref())
-                .map(|monthly| monthly.allowed > 15000) // Public tier is typically 15k/month
-                .unwrap_or(false);
-
-            let api_tier = if is_premium || has_high_quota {
+            let api_tier = if is_premium || has_quota {
                 ApiTier::Premium
             } else {
                 ApiTier::Public
             };
 
             // Determine optimal concurrency
-            let optimal_concurrency = if let Some(manual) = manual_concurrency {
-                // User specified concurrency manually
-                match api_tier {
-                    ApiTier::Premium => manual.clamp(1, 200),
-                    ApiTier::Public => 1,
-                }
-            } else {
-                // Auto-select based on tier and quotas
-                match api_tier {
-                    ApiTier::Premium => {
-                        // For premium, use aggressive defaults but be smart about quotas
-                        let monthly_allowed = user
-                            .attributes
-                            .quotas
-                            .as_ref()
-                            .and_then(|q| q.api_requests_monthly.as_ref())
-                            .map(|monthly| monthly.allowed)
-                            .unwrap_or(100000); // Default assumption
+            let optimal_concurrency =
+                determine_optimal_concurrency(api_tier, manual_concurrency, Some(user));
 
-                        if monthly_allowed > 100000 {
-                            100 // High-tier premium: 100 concurrent
-                        } else if monthly_allowed > 50000 {
-                            50 // Mid-tier premium: 50 concurrent
-                        } else {
-                            20 // Entry-level premium: 20 concurrent
-                        }
-                    }
-                    ApiTier::Public => 1, // Public is always sequential
-                }
-            };
-
-            if verbose {
-                let tier_name = match api_tier {
-                    ApiTier::Premium => "Premium",
-                    ApiTier::Public => "Public",
-                };
-
-                if let Some(quotas) = &user.attributes.quotas {
-                    if let Some(monthly) = &quotas.api_requests_monthly {
-                        println!(
-                            "✅ Detected {} tier account ({}/{} monthly quota)",
-                            tier_name, monthly.used, monthly.allowed
-                        );
-                    } else {
-                        println!("✅ Detected {} tier account", tier_name);
-                    }
-                } else {
-                    println!("✅ Detected {} tier account", tier_name);
-                }
-
-                if optimal_concurrency > 1 {
-                    println!(
-                        "🚀 Using {} concurrent downloads for optimal performance",
-                        optimal_concurrency
-                    );
-                } else {
-                    println!("🔄 Using sequential downloads (public tier)");
-                }
-            }
+            print_tier_info(api_tier, optimal_concurrency, Some(user), verbose);
 
             Ok((api_tier, optimal_concurrency))
         }
@@ -701,11 +880,7 @@ async fn detect_tier_and_concurrency(
                 _ => ApiTier::Public,
             };
 
-            let concurrency = match (api_tier, manual_concurrency) {
-                (ApiTier::Premium, Some(c)) => c.clamp(1, 200),
-                (ApiTier::Premium, None) => 20, // Conservative default for premium
-                (ApiTier::Public, _) => 1,      // Public is always sequential
-            };
+            let concurrency = determine_optimal_concurrency(api_tier, manual_concurrency, None);
 
             Ok((api_tier, concurrency))
         }

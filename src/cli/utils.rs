@@ -150,49 +150,59 @@ pub fn read_hashes_from_json_export<P: AsRef<Path>>(path: P) -> Result<Vec<Strin
     Ok(hashes)
 }
 
+/// Check if the filename represents a single hash
+fn is_single_hash_filename(filename: &str) -> bool {
+    (filename.len() == 32 || filename.len() == 40 || filename.len() == 64)
+        && filename.chars().all(|c| c.is_ascii_hexdigit())
+}
+
+/// Detect input type based on file extension
+fn detect_type_by_extension(path: &Path) -> Option<InputType> {
+    let extension = path.extension()?.to_string_lossy().to_lowercase();
+    match extension.as_str() {
+        "json" => Some(InputType::JsonExport),
+        "txt" | "list" => Some(InputType::TextFile),
+        _ => None,
+    }
+}
+
+/// Detect input type by analyzing file content
+fn detect_type_by_content(path: &Path) -> Result<InputType> {
+    let content = fs::read_to_string(path)
+        .with_context(|| format!("Failed to read file for type detection: {}", path.display()))?;
+
+    let content_trimmed = content.trim();
+
+    // Check if it looks like JSON
+    if (content_trimmed.starts_with('{') || content_trimmed.starts_with('['))
+        && serde_json::from_str::<Value>(content_trimmed).is_ok()
+    {
+        return Ok(InputType::JsonExport);
+    }
+
+    // Default to text file for existing files
+    Ok(InputType::TextFile)
+}
+
 pub fn detect_input_type<P: AsRef<Path>>(path: P) -> Result<InputType> {
     let path_ref = path.as_ref();
 
     // Check if it's a single hash (32, 40, or 64 hex characters)
     if let Some(filename) = path_ref.file_name() {
         let filename_str = filename.to_string_lossy();
-        if (filename_str.len() == 32 || filename_str.len() == 40 || filename_str.len() == 64)
-            && filename_str.chars().all(|c| c.is_ascii_hexdigit())
-        {
+        if is_single_hash_filename(&filename_str) {
             return Ok(InputType::SingleHash);
         }
     }
 
     // Check file extension
-    if let Some(extension) = path_ref.extension() {
-        match extension.to_string_lossy().to_lowercase().as_str() {
-            "json" => return Ok(InputType::JsonExport),
-            "txt" | "list" => return Ok(InputType::TextFile),
-            _ => {}
-        }
+    if let Some(input_type) = detect_type_by_extension(path_ref) {
+        return Ok(input_type);
     }
 
     // If no extension or unknown extension, try to detect by content
     if path_ref.exists() {
-        let content = fs::read_to_string(path_ref).with_context(|| {
-            format!(
-                "Failed to read file for type detection: {}",
-                path_ref.display()
-            )
-        })?;
-
-        let content_trimmed = content.trim();
-
-        // Check if it looks like JSON
-        if content_trimmed.starts_with('{') || content_trimmed.starts_with('[') {
-            // Try to parse as JSON to confirm
-            if serde_json::from_str::<Value>(content_trimmed).is_ok() {
-                return Ok(InputType::JsonExport);
-            }
-        }
-
-        // Default to text file for existing files
-        return Ok(InputType::TextFile);
+        return detect_type_by_content(path_ref);
     }
 
     // Default to single hash if it doesn't exist (might be a hash string)
@@ -311,67 +321,82 @@ pub fn print_table_separator(widths: &[usize]) {
     println!();
 }
 
+/// Handle HTTP status code errors
+fn handle_http_status_error(status_code: u16) -> String {
+    match status_code {
+        401 => "Authentication failed - check your API key".to_string(),
+        403 => "Access forbidden - check your API tier permissions".to_string(),
+        404 => "Resource not found".to_string(),
+        429 => "Rate limit exceeded - please wait and try again".to_string(),
+        500..=599 => "Server error - please try again later".to_string(),
+        _ => format!("HTTP error: {}", status_code),
+    }
+}
+
+/// Handle network-level HTTP errors (no status code)
+fn handle_network_error(error_str: &str) -> String {
+    if error_str.contains("timeout") {
+        "Network timeout - try again later".to_string()
+    } else if error_str.contains("connection") {
+        "Network connection error - check your internet connection".to_string()
+    } else if error_str.contains("decode") {
+        format!(
+            "Network error: error decoding response body - {}",
+            error_str
+        )
+    } else {
+        format!("Network error: {}", error_str)
+    }
+}
+
+/// Handle JSON parsing errors
+fn handle_json_error(json_error_str: &str) -> String {
+    let truncated_error = json_error_str.chars().take(100).collect::<String>();
+
+    if json_error_str.contains("EOF while parsing") {
+        "Failed to parse response from VirusTotal (incomplete response)".to_string()
+    } else if json_error_str.contains("expected") {
+        format!(
+            "Failed to parse response from VirusTotal (unexpected format): {}",
+            truncated_error
+        )
+    } else {
+        format!(
+            "Failed to parse response from VirusTotal: {}",
+            truncated_error
+        )
+    }
+}
+
+/// Handle unknown/generic errors
+fn handle_unknown_error(msg: &str) -> String {
+    if msg.contains("HTML response") {
+        "VirusTotal returned HTML instead of JSON (possible rate limiting or maintenance)"
+            .to_string()
+    } else if msg.contains("Empty response") {
+        "VirusTotal returned empty response (possible rate limiting)".to_string()
+    } else {
+        format!("Unknown error: {}", msg)
+    }
+}
+
 pub fn handle_vt_error(error: &VtError) -> String {
     match error {
         VtError::Http(http_error) => {
             if let Some(status) = http_error.status() {
-                match status.as_u16() {
-                    401 => "Authentication failed - check your API key".to_string(),
-                    403 => "Access forbidden - check your API tier permissions".to_string(),
-                    404 => "Resource not found".to_string(),
-                    429 => "Rate limit exceeded - please wait and try again".to_string(),
-                    500..=599 => "Server error - please try again later".to_string(),
-                    _ => format!("HTTP error: {}", status),
-                }
+                handle_http_status_error(status.as_u16())
             } else {
-                // Enhanced network error handling
-                let error_str = http_error.to_string();
-                if error_str.contains("timeout") {
-                    "Network timeout - try again later".to_string()
-                } else if error_str.contains("connection") {
-                    "Network connection error - check your internet connection".to_string()
-                } else if error_str.contains("decode") {
-                    format!(
-                        "Network error: error decoding response body - {}",
-                        error_str
-                    )
-                } else {
-                    format!("Network error: {}", error_str)
-                }
+                handle_network_error(&http_error.to_string())
             }
         }
-        VtError::Json(json_err) => {
-            let json_error_str = json_err.to_string();
-            if json_error_str.contains("EOF while parsing") {
-                "Failed to parse response from VirusTotal (incomplete response)".to_string()
-            } else if json_error_str.contains("expected") {
-                format!(
-                    "Failed to parse response from VirusTotal (unexpected format): {}",
-                    json_error_str.chars().take(100).collect::<String>()
-                )
-            } else {
-                format!(
-                    "Failed to parse response from VirusTotal: {}",
-                    json_error_str.chars().take(100).collect::<String>()
-                )
-            }
-        }
+        VtError::Json(json_err) => handle_json_error(&json_err.to_string()),
         VtError::RateLimit(_) => "Rate limit exceeded".to_string(),
         VtError::TooManyRequests => "Rate limit exceeded - please wait and try again".to_string(),
         VtError::NotFound => "Resource not found".to_string(),
         VtError::AuthenticationRequired => "Authentication failed - check your API key".to_string(),
         VtError::Forbidden => "Access forbidden - check your API tier permissions".to_string(),
         VtError::DeadlineExceeded => "Request timed out".to_string(),
-        VtError::Unknown(msg) => {
-            if msg.contains("HTML response") {
-                "VirusTotal returned HTML instead of JSON (possible rate limiting or maintenance)"
-                    .to_string()
-            } else if msg.contains("Empty response") {
-                "VirusTotal returned empty response (possible rate limiting)".to_string()
-            } else {
-                format!("Unknown error: {}", msg)
-            }
-        }
+        VtError::Unknown(msg) => handle_unknown_error(msg),
         _ => error.to_string(),
     }
 }
@@ -386,15 +411,30 @@ pub fn confirm_action(message: &str) -> Result<bool> {
     Ok(matches!(input.trim().to_lowercase().as_str(), "y" | "yes"))
 }
 
-pub fn get_detection_ratio(stats: &Value) -> Option<(u32, u32)> {
-    let malicious = stats.get("malicious")?.as_u64()? as u32;
-    let suspicious = stats.get("suspicious")?.as_u64()? as u32;
-    let harmless = stats.get("harmless")?.as_u64()? as u32;
-    let undetected = stats.get("undetected")?.as_u64()? as u32;
+/// Extract a u32 value from a JSON field, returning None if missing or invalid
+fn extract_stat_value(stats: &Value, field: &str) -> Option<u32> {
+    stats.get(field)?.as_u64().map(|v| v as u32)
+}
 
+/// Calculate total and detected counts from individual stat values
+fn calculate_detection_counts(
+    malicious: u32,
+    suspicious: u32,
+    harmless: u32,
+    undetected: u32,
+) -> (u32, u32) {
     let total = malicious + suspicious + harmless + undetected;
     let detected = malicious + suspicious;
+    (detected, total)
+}
 
+pub fn get_detection_ratio(stats: &Value) -> Option<(u32, u32)> {
+    let malicious = extract_stat_value(stats, "malicious")?;
+    let suspicious = extract_stat_value(stats, "suspicious")?;
+    let harmless = extract_stat_value(stats, "harmless")?;
+    let undetected = extract_stat_value(stats, "undetected")?;
+
+    let (detected, total) = calculate_detection_counts(malicious, suspicious, harmless, undetected);
     Some((detected, total))
 }
 

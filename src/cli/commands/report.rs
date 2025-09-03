@@ -284,7 +284,16 @@ fn print_detailed_report(report: &Value, args: &ReportArgs, colored: bool) -> Re
 
     let attributes = report.get("attributes").unwrap_or(&Value::Null);
 
-    // Detailed detection results
+    // Show detailed sections
+    print_detailed_detection_results(attributes, args, colored)?;
+    print_sandbox_analysis(attributes, args, colored)?;
+    print_yara_rules(attributes, args, colored)?;
+    print_pe_information(attributes, args, colored)?;
+
+    Ok(())
+}
+
+fn print_detailed_detection_results(attributes: &Value, args: &ReportArgs, colored: bool) -> Result<()> {
     if should_show_section("detections", &args.sections) {
         println!(
             "\n{}",
@@ -318,26 +327,18 @@ fn print_detailed_report(report: &Value, args: &ReportArgs, colored: bool) -> Re
                         continue;
                     }
 
-                    let colored_category = match category {
-                        "malicious" => colorize_text(category, "red", colored),
-                        "suspicious" => colorize_text(category, "yellow", colored),
-                        "undetected" => colorize_text(category, "green", colored),
-                        _ => category.to_string(),
-                    };
-
-                    let truncated_result = if result_str.len() > 28 {
-                        format!("{}...", &result_str[..25])
-                    } else {
-                        result_str.to_string()
-                    };
+                    let colored_category = get_colored_category(category, colored);
+                    let truncated_result = truncate_result(result_str, 28);
 
                     print_table_row(&[engine, &colored_category, &truncated_result], &widths);
                 }
             }
         }
     }
+    Ok(())
+}
 
-    // Sandbox results
+fn print_sandbox_analysis(attributes: &Value, args: &ReportArgs, colored: bool) -> Result<()> {
     if should_show_section("sandbox", &args.sections) {
         if let Some(sandbox_verdicts) = attributes
             .get("sandbox_verdicts")
@@ -360,8 +361,10 @@ fn print_detailed_report(report: &Value, args: &ReportArgs, colored: bool) -> Re
             }
         }
     }
+    Ok(())
+}
 
-    // YARA rules
+fn print_yara_rules(attributes: &Value, args: &ReportArgs, colored: bool) -> Result<()> {
     if should_show_section("yara", &args.sections) {
         if let Some(yara_results) = attributes
             .get("crowdsourced_yara_results")
@@ -384,8 +387,10 @@ fn print_detailed_report(report: &Value, args: &ReportArgs, colored: bool) -> Re
             }
         }
     }
+    Ok(())
+}
 
-    // PE info
+fn print_pe_information(attributes: &Value, args: &ReportArgs, colored: bool) -> Result<()> {
     if should_show_section("pe", &args.sections) {
         if let Some(pe_info) = attributes.get("pe_info") {
             println!(
@@ -409,8 +414,24 @@ fn print_detailed_report(report: &Value, args: &ReportArgs, colored: bool) -> Re
             }
         }
     }
-
     Ok(())
+}
+
+fn get_colored_category(category: &str, colored: bool) -> String {
+    match category {
+        "malicious" => colorize_text(category, "red", colored),
+        "suspicious" => colorize_text(category, "yellow", colored),
+        "undetected" => colorize_text(category, "green", colored),
+        _ => category.to_string(),
+    }
+}
+
+fn truncate_result(result_str: &str, max_len: usize) -> String {
+    if result_str.len() > max_len {
+        format!("{}...", &result_str[..max_len - 3])
+    } else {
+        result_str.to_string()
+    }
 }
 
 fn print_table_report(report: &Value, args: &ReportArgs, colored: bool) -> Result<()> {

@@ -407,35 +407,68 @@ async fn scan_single_file(
 
     let file_size = metadata.len();
 
-    // Check if file is already known if skip_known is set
-    if args.skip_known && !args.force_rescan {
-        // Calculate file hash to check if it exists
-        if let Ok(file_content) = fs::read(file_path).await {
-            use sha2::{Digest, Sha256};
-            let mut hasher = Sha256::new();
-            hasher.update(&file_content);
-            let hash = format!("{:x}", hasher.finalize());
-
-            if let Ok(_existing_report) = client.files().get(&hash).await {
-                if verbose {
-                    println!(
-                        "  File already known to VirusTotal, skipping: {}",
-                        file_path.display()
-                    );
-                }
-                return Ok(ScanResult {
-                    file_path: file_path.to_path_buf(),
-                    file_size,
-                    analysis_id: None,
-                    scan_date: None,
-                    error: None,
-                    analysis_result: None,
-                });
-            }
-        }
+    // Check if file should be skipped
+    if let Some(skip_result) = check_should_skip_file(client, file_path, file_size, args, verbose).await? {
+        return Ok(skip_result);
     }
 
     // Submit file for scanning
+    submit_file_for_scan(client, file_path, file_size, verbose).await
+}
+
+async fn check_should_skip_file(
+    client: &Client,
+    file_path: &Path,
+    file_size: u64,
+    args: &ScanArgs,
+    verbose: bool,
+) -> Result<Option<ScanResult>> {
+    if !args.skip_known || args.force_rescan {
+        return Ok(None);
+    }
+
+    // Calculate file hash to check if it exists
+    let file_content = match fs::read(file_path).await {
+        Ok(content) => content,
+        Err(_) => return Ok(None),
+    };
+
+    let hash = calculate_file_hash(&file_content);
+    
+    match client.files().get(&hash).await {
+        Ok(_existing_report) => {
+            if verbose {
+                println!(
+                    "  File already known to VirusTotal, skipping: {}",
+                    file_path.display()
+                );
+            }
+            Ok(Some(ScanResult {
+                file_path: file_path.to_path_buf(),
+                file_size,
+                analysis_id: None,
+                scan_date: None,
+                error: None,
+                analysis_result: None,
+            }))
+        }
+        Err(_) => Ok(None),
+    }
+}
+
+fn calculate_file_hash(file_content: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(file_content);
+    format!("{:x}", hasher.finalize())
+}
+
+async fn submit_file_for_scan(
+    client: &Client,
+    file_path: &Path,
+    file_size: u64,
+    verbose: bool,
+) -> Result<ScanResult> {
     match client.files().upload(file_path).await {
         Ok(upload_response) => {
             if verbose {
@@ -451,27 +484,34 @@ async fn scan_single_file(
                 analysis_result: None,
             })
         }
-        Err(e) => {
-            let error_msg = handle_vt_error(&e);
-
-            if verbose {
-                eprintln!(
-                    "  ✗ Failed to submit {}: {}",
-                    file_path.display(),
-                    error_msg
-                );
-            }
-
-            Ok(ScanResult {
-                file_path: file_path.to_path_buf(),
-                file_size,
-                analysis_id: None,
-                scan_date: None,
-                error: Some(error_msg),
-                analysis_result: None,
-            })
-        }
+        Err(e) => create_error_scan_result(file_path, file_size, &e, verbose),
     }
+}
+
+fn create_error_scan_result(
+    file_path: &Path,
+    file_size: u64,
+    error: &crate::Error,
+    verbose: bool,
+) -> Result<ScanResult> {
+    let error_msg = handle_vt_error(error);
+
+    if verbose {
+        eprintln!(
+            "  ✗ Failed to submit {}: {}",
+            file_path.display(),
+            error_msg
+        );
+    }
+
+    Ok(ScanResult {
+        file_path: file_path.to_path_buf(),
+        file_size,
+        analysis_id: None,
+        scan_date: None,
+        error: Some(error_msg),
+        analysis_result: None,
+    })
 }
 
 async fn wait_for_analysis_results(
@@ -480,72 +520,141 @@ async fn wait_for_analysis_results(
     args: &ScanArgs,
     verbose: bool,
 ) -> Result<()> {
-    let timeout_duration = Duration::from_secs(args.timeout);
-    let poll_interval = Duration::from_secs(args.poll_interval);
-    let start_time = std::time::Instant::now();
+    let poll_config = PollConfiguration::new(args.timeout, args.poll_interval);
+    let pending_analyses = collect_pending_analyses(scan_results);
+    
+    if pending_analyses.is_empty() {
+        return Ok(());
+    }
 
-    let pending_analyses: Vec<usize> = scan_results
+    let progress = create_progress_tracker(&pending_analyses, verbose);
+    let mut completed = 0;
+
+    while should_continue_polling(completed, &pending_analyses, &poll_config) {
+        completed = poll_analysis_results(
+            client,
+            scan_results,
+            &pending_analyses,
+            completed,
+            &progress,
+            verbose,
+        ).await;
+
+        if completed < pending_analyses.len() {
+            sleep(poll_config.poll_interval).await;
+        }
+    }
+
+    finish_polling(&progress, completed, &pending_analyses);
+    Ok(())
+}
+
+struct PollConfiguration {
+    timeout_duration: Duration,
+    poll_interval: Duration,
+    start_time: std::time::Instant,
+}
+
+impl PollConfiguration {
+    fn new(timeout_secs: u64, poll_interval_secs: u64) -> Self {
+        Self {
+            timeout_duration: Duration::from_secs(timeout_secs),
+            poll_interval: Duration::from_secs(poll_interval_secs),
+            start_time: std::time::Instant::now(),
+        }
+    }
+}
+
+fn collect_pending_analyses(scan_results: &[ScanResult]) -> Vec<usize> {
+    scan_results
         .iter()
         .enumerate()
         .filter(|(_, r)| r.analysis_id.is_some() && r.analysis_result.is_none())
         .map(|(i, _)| i)
-        .collect();
+        .collect()
+}
 
-    let progress = if !verbose {
+fn create_progress_tracker(pending_analyses: &[usize], verbose: bool) -> Option<ProgressTracker> {
+    if !verbose {
         Some(ProgressTracker::new(
             pending_analyses.len() as u64,
             "Waiting for results",
         ))
     } else {
         None
-    };
+    }
+}
 
-    let mut completed = 0;
+fn should_continue_polling(
+    completed: usize,
+    pending_analyses: &[usize],
+    poll_config: &PollConfiguration,
+) -> bool {
+    completed < pending_analyses.len() 
+        && poll_config.start_time.elapsed() < poll_config.timeout_duration
+}
 
-    while completed < pending_analyses.len() && start_time.elapsed() < timeout_duration {
-        for &index in &pending_analyses {
-            if scan_results[index].analysis_result.is_some() {
-                continue; // Already completed
-            }
+async fn poll_analysis_results(
+    client: &Client,
+    scan_results: &mut [ScanResult],
+    pending_analyses: &[usize],
+    mut completed: usize,
+    progress: &Option<ProgressTracker>,
+    verbose: bool,
+) -> usize {
+    for &index in pending_analyses {
+        if scan_results[index].analysis_result.is_some() {
+            continue; // Already completed
+        }
 
-            if let Some(ref analysis_id) = scan_results[index].analysis_id {
-                match client.analyses().get(analysis_id).await {
-                    Ok(analysis_result) => {
-                        // Check if analysis is complete
-                        if analysis_result.is_completed() {
-                            scan_results[index].analysis_result = Some(analysis_result);
-                            completed += 1;
-
-                            if verbose {
-                                println!(
-                                    "  ✓ Analysis completed for {}",
-                                    scan_results[index].file_path.display()
-                                );
-                            }
-
-                            if let Some(ref progress) = progress {
-                                progress.inc(1);
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        if verbose {
-                            eprintln!(
-                                "  Warning: Failed to get analysis result for {}: {}",
-                                scan_results[index].file_path.display(),
-                                handle_vt_error(&e)
-                            );
-                        }
-                    }
+        if let Some(ref analysis_id) = scan_results[index].analysis_id {
+            if let Some(analysis_result) = try_get_analysis_result(client, analysis_id, &scan_results[index], verbose).await {
+                scan_results[index].analysis_result = Some(analysis_result);
+                completed += 1;
+                
+                if let Some(ref progress) = progress {
+                    progress.inc(1);
                 }
             }
         }
+    }
+    completed
+}
 
-        if completed < pending_analyses.len() {
-            sleep(poll_interval).await;
+async fn try_get_analysis_result(
+    client: &Client,
+    analysis_id: &str,
+    scan_result: &ScanResult,
+    verbose: bool,
+) -> Option<Analysis> {
+    match client.analyses().get(analysis_id).await {
+        Ok(analysis_result) => {
+            if analysis_result.is_completed() {
+                if verbose {
+                    println!(
+                        "  ✓ Analysis completed for {}",
+                        scan_result.file_path.display()
+                    );
+                }
+                Some(analysis_result)
+            } else {
+                None
+            }
+        }
+        Err(e) => {
+            if verbose {
+                eprintln!(
+                    "  Warning: Failed to get analysis result for {}: {}",
+                    scan_result.file_path.display(),
+                    handle_vt_error(&e)
+                );
+            }
+            None
         }
     }
+}
 
+fn finish_polling(progress: &Option<ProgressTracker>, completed: usize, pending_analyses: &[usize]) {
     if let Some(progress) = progress {
         progress.finish_with_message(&format!(
             "Completed {}/{} analyses",
@@ -560,8 +669,6 @@ async fn wait_for_analysis_results(
             pending_analyses.len() - completed
         );
     }
-
-    Ok(())
 }
 
 fn print_summary_results(results: &[ScanResult], colored: bool) -> Result<()> {
@@ -635,61 +742,67 @@ fn print_table_results(results: &[ScanResult], colored: bool) -> Result<()> {
     print_table_separator(&widths);
 
     for result in results {
-        let file_name = result
-            .file_path
-            .file_name()
-            .unwrap_or_default()
-            .to_string_lossy();
-
-        let truncated_name = if file_name.len() > 28 {
-            format!("{}...", &file_name[..25])
-        } else {
-            file_name.to_string()
-        };
-
-        let size_str = format_file_size(result.file_size);
-
-        let (status, detections) = if let Some(ref error) = result.error {
-            (colorize_text("Failed", "red", colored), error.clone())
-        } else if let Some(ref analysis_result) = result.analysis_result {
-            let status_str = if analysis_result.is_completed() {
-                "completed"
-            } else {
-                "in_progress"
-            };
-            let status_color = match status_str {
-                "completed" => "green",
-                "in_progress" | "queued" => "yellow",
-                _ => "red",
-            };
-            let status = colorize_text(status_str, status_color, colored);
-
-            let detections = if let Some(ref stats) = analysis_result.object.attributes.stats {
-                let detected = stats.malicious + stats.suspicious;
-
-                if detected > 0 {
-                    colorize_text(&format!("{} detected", detected), "red", colored)
-                } else {
-                    colorize_text("Clean", "green", colored)
-                }
-            } else {
-                "Analyzing...".to_string()
-            };
-
-            (status, detections)
-        } else if result.analysis_id.is_some() {
-            (
-                colorize_text("Submitted", "yellow", colored),
-                "Pending...".to_string(),
-            )
-        } else {
-            (colorize_text("Skipped", "dim", colored), "N/A".to_string())
-        };
-
-        print_table_row(&[&truncated_name, &size_str, &status, &detections], &widths);
+        let table_row = format_table_row_for_result(result, colored);
+        print_table_row(&table_row, &widths);
     }
 
     Ok(())
+}
+
+fn format_table_row_for_result(result: &ScanResult, colored: bool) -> [String; 4] {
+    let truncated_name = truncate_filename(&result.file_path);
+    let size_str = format_file_size(result.file_size);
+    let (status, detections) = determine_status_and_detections(result, colored);
+    
+    [truncated_name, size_str, status, detections]
+}
+
+fn truncate_filename(file_path: &std::path::PathBuf) -> String {
+    let file_name = file_path
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy();
+
+    if file_name.len() > 28 {
+        format!("{}...", &file_name[..25])
+    } else {
+        file_name.to_string()
+    }
+}
+
+fn determine_status_and_detections(result: &ScanResult, colored: bool) -> (String, String) {
+    if let Some(ref error) = result.error {
+        (colorize_text("Failed", "red", colored), error.clone())
+    } else if let Some(ref analysis_result) = result.analysis_result {
+        format_completed_analysis_status(analysis_result, colored)
+    } else if result.analysis_id.is_some() {
+        (colorize_text("Submitted", "yellow", colored), "Pending...".to_string())
+    } else {
+        (colorize_text("Skipped", "dim", colored), "N/A".to_string())
+    }
+}
+
+fn format_completed_analysis_status(analysis_result: &Analysis, colored: bool) -> (String, String) {
+    let status_str = if analysis_result.is_completed() { "completed" } else { "in_progress" };
+    let status_color = match status_str {
+        "completed" => "green",
+        "in_progress" | "queued" => "yellow",
+        _ => "red",
+    };
+    let status = colorize_text(status_str, status_color, colored);
+
+    let detections = if let Some(ref stats) = analysis_result.object.attributes.stats {
+        let detected = stats.malicious + stats.suspicious;
+        if detected > 0 {
+            colorize_text(&format!("{} detected", detected), "red", colored)
+        } else {
+            colorize_text("Clean", "green", colored)
+        }
+    } else {
+        "Analyzing...".to_string()
+    };
+
+    (status, detections)
 }
 
 fn format_results_as_text(results: &[ScanResult]) -> Result<String> {
