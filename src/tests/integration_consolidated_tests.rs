@@ -22,7 +22,11 @@ mod network_failure_tests {
     async fn test_timeout_error() {
         let mock_client = setup_mock_client().await;
         let mock_server = mock_client.mock_server();
-        let client = mock_client.client().clone().with_timeout(Duration::from_millis(1)).unwrap();
+        let client = mock_client
+            .client()
+            .clone()
+            .with_timeout(Duration::from_millis(1))
+            .unwrap();
 
         let response = MockResponseBuilder::new()
             .with_data(sample_file_data())
