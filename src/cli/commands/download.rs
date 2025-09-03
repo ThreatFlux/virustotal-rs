@@ -585,7 +585,7 @@ async fn detect_tier_and_concurrency(
             };
             let concurrency = match api_tier {
                 ApiTier::Premium => concurrency_val.clamp(1, 200), // Allow up to 200 for premium
-                ApiTier::Public => 1, // Public is always sequential
+                ApiTier::Public => 1,                              // Public is always sequential
             };
             return Ok((api_tier, concurrency));
         }
