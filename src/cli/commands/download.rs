@@ -112,6 +112,31 @@ fn print_directory_info(args: &DownloadArgs, context: &DownloadContext, verbose:
     }
 }
 
+/// Check if file exists and should be considered for skipping
+fn file_exists_for_download(context: &DownloadContext, file_path: &Path) -> bool {
+    context.download_files && file_path.exists()
+}
+
+/// Check if report exists and should be considered for skipping
+fn report_exists_for_download(context: &DownloadContext, report_path: &Path) -> bool {
+    context.download_reports && report_path.exists()
+}
+
+/// Check if file-only download should be skipped
+fn should_skip_files_only(context: &DownloadContext, file_exists: bool) -> bool {
+    context.download_files && !context.download_reports && file_exists
+}
+
+/// Check if reports-only download should be skipped
+fn should_skip_reports_only(context: &DownloadContext, report_exists: bool) -> bool {
+    !context.download_files && context.download_reports && report_exists
+}
+
+/// Check if both files and reports download should be skipped
+fn should_skip_both(context: &DownloadContext, file_exists: bool, report_exists: bool) -> bool {
+    context.download_files && context.download_reports && file_exists && report_exists
+}
+
 /// Check if a file should be skipped in resume mode
 fn should_skip_file(
     args: &DownloadArgs,
@@ -127,12 +152,67 @@ fn should_skip_file(
     let file_path = output_dir.join(format!("{}.bin", hash));
     let report_path = reports_dir.join(format!("{}.json", hash));
 
-    let file_exists = context.download_files && file_path.exists();
-    let report_exists = context.download_reports && report_path.exists();
+    let file_exists = file_exists_for_download(context, &file_path);
+    let report_exists = report_exists_for_download(context, &report_path);
 
-    (context.download_files && !context.download_reports && file_exists)
-        || (!context.download_files && context.download_reports && report_exists)
-        || (context.download_files && context.download_reports && file_exists && report_exists)
+    should_skip_files_only(context, file_exists)
+        || should_skip_reports_only(context, report_exists)
+        || should_skip_both(context, file_exists, report_exists)
+}
+
+/// Print download summary as JSON format
+fn print_json_summary(
+    args: &DownloadArgs,
+    hashes_count: usize,
+    successful_count: usize,
+    failed_count: usize,
+    skipped_count: usize,
+    total_bytes: usize,
+    context: &DownloadContext,
+) -> Result<()> {
+    let summary = serde_json::json!({
+        "total": hashes_count,
+        "successful": successful_count,
+        "failed": failed_count,
+        "skipped": skipped_count,
+        "total_size": total_bytes,
+        "total_size_formatted": format_file_size(total_bytes as u64),
+        "output_directory": args.output,
+        "reports_directory": if context.download_reports { Some(&args.reports_dir) } else { None }
+    });
+    println!("{}", serde_json::to_string_pretty(&summary)?);
+    Ok(())
+}
+
+/// Print download summary as table format
+fn print_table_summary(
+    args: &DownloadArgs,
+    hashes_count: usize,
+    successful_count: usize,
+    failed_count: usize,
+    skipped_count: usize,
+    total_bytes: usize,
+    context: &DownloadContext,
+) {
+    println!("\n=== Download Summary ===");
+    println!("Total hashes:     {}", hashes_count);
+    println!("Successfully downloaded: {}", successful_count);
+    println!("Failed:          {}", failed_count);
+    if skipped_count > 0 {
+        println!("Skipped (resume): {}", skipped_count);
+    }
+    if total_bytes > 0 {
+        println!("Total size:      {}", format_file_size(total_bytes as u64));
+    }
+
+    if successful_count > 0 {
+        if context.download_files {
+            println!("Files saved to:  {}", args.output.display());
+        }
+        if context.download_reports {
+            println!("Reports saved to: {}", args.reports_dir.display());
+        }
+    }
 }
 
 /// Print download summary in specified format
@@ -148,42 +228,28 @@ fn print_download_summary(
     let total_bytes = counters.total_size.load(Ordering::SeqCst);
 
     match args.format.as_str() {
-        "json" => {
-            let summary = serde_json::json!({
-                "total": hashes_count,
-                "successful": successful_count,
-                "failed": failed_count,
-                "skipped": skipped_count,
-                "total_size": total_bytes,
-                "total_size_formatted": format_file_size(total_bytes as u64),
-                "output_directory": args.output,
-                "reports_directory": if context.download_reports { Some(&args.reports_dir) } else { None }
-            });
-            println!("{}", serde_json::to_string_pretty(&summary)?);
-        }
+        "json" => print_json_summary(
+            args,
+            hashes_count,
+            successful_count,
+            failed_count,
+            skipped_count,
+            total_bytes,
+            context,
+        ),
         _ => {
-            println!("\n=== Download Summary ===");
-            println!("Total hashes:     {}", hashes_count);
-            println!("Successfully downloaded: {}", successful_count);
-            println!("Failed:          {}", failed_count);
-            if skipped_count > 0 {
-                println!("Skipped (resume): {}", skipped_count);
-            }
-            if total_bytes > 0 {
-                println!("Total size:      {}", format_file_size(total_bytes as u64));
-            }
-
-            if successful_count > 0 {
-                if context.download_files {
-                    println!("Files saved to:  {}", args.output.display());
-                }
-                if context.download_reports {
-                    println!("Reports saved to: {}", args.reports_dir.display());
-                }
-            }
+            print_table_summary(
+                args,
+                hashes_count,
+                successful_count,
+                failed_count,
+                skipped_count,
+                total_bytes,
+                context,
+            );
+            Ok(())
         }
     }
-    Ok(())
 }
 
 #[derive(Args, Debug, Clone)]
@@ -548,6 +614,17 @@ async fn process_single_download(
     }
 }
 
+/// Create async closure for processing a single hash download
+fn create_download_closure(
+    hash: String,
+    params: Arc<ProcessDownloadsParams>,
+    progress: Option<&ProgressTracker>,
+) -> impl std::future::Future<Output = Result<(), anyhow::Error>> + '_ {
+    async move {
+        process_single_download(hash, &params, progress).await
+    }
+}
+
 /// Process all downloads with concurrency control
 async fn process_downloads(
     hashes: &[String],
@@ -561,10 +638,7 @@ async fn process_downloads(
         .map(|hash| {
             let hash = hash.clone();
             let params = Arc::clone(&params);
-            
-            async move {
-                process_single_download(hash, &params, progress).await
-            }
+            create_download_closure(hash, params, progress)
         })
         .buffer_unordered(concurrency)
         .collect()
