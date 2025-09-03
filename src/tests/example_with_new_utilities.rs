@@ -22,7 +22,8 @@ mod example_tests {
         response_data: serde_json::Value,
     ) {
         // Using the new MockSetup helper reduces even more duplication
-        MockSetup::setup_get_endpoint(mock_client.mock_server(), endpoint, response_data, None).await;
+        MockSetup::setup_get_endpoint(mock_client.mock_server(), endpoint, response_data, None)
+            .await;
     }
 
     #[tokio::test]
@@ -270,7 +271,7 @@ mod example_tests {
     }
 
     // Example showing BEFORE and AFTER - this demonstrates the value of the utilities
-    #[tokio::test]  
+    #[tokio::test]
     async fn example_old_vs_new_style() {
         // NEW STYLE: Clean, readable, maintainable
         let mock_client = MockApiClient::new().await.unwrap();
@@ -293,10 +294,10 @@ mod example_tests {
 
         // Clear, expressive assertion
         assert_analysis_clean!(stats);
-        
+
         // Compare to old style which would have required:
         // 1. Manual MockServer::start().await
-        // 2. Manual ClientBuilder with multiple configuration steps  
+        // 2. Manual ClientBuilder with multiple configuration steps
         // 3. Manual JSON construction with hardcoded values
         // 4. Manual ResponseTemplate creation
         // 5. Verbose Mock::given setup
@@ -326,7 +327,7 @@ mod example_tests {
         let result: crate::Result<serde_json::Value> =
             mock_client.client().get("files/custom").await;
         assert!(result.is_ok());
-        
+
         let stats: crate::common::AnalysisStats = serde_json::from_value(
             result.unwrap()["data"]["attributes"]["last_analysis_stats"].clone(),
         )
@@ -349,21 +350,36 @@ mod example_tests {
 
         // Setup multiple endpoints at once
         let endpoints = vec![
-            ("/files/clean".to_string(), ResponseFactory::success_response(file1), None),
-            ("/files/malicious".to_string(), ResponseFactory::success_response(file2), None),
-            ("/domains/example.com".to_string(), ResponseFactory::success_response(domain), None),
+            (
+                "/files/clean".to_string(),
+                ResponseFactory::success_response(file1),
+                None,
+            ),
+            (
+                "/files/malicious".to_string(),
+                ResponseFactory::success_response(file2),
+                None,
+            ),
+            (
+                "/domains/example.com".to_string(),
+                ResponseFactory::success_response(domain),
+                None,
+            ),
         ];
 
         MockSetup::setup_multiple_endpoints(mock_client.mock_server(), endpoints).await;
 
         // Test all endpoints
-        let clean_result: crate::Result<serde_json::Value> = mock_client.client().get("files/clean").await;
+        let clean_result: crate::Result<serde_json::Value> =
+            mock_client.client().get("files/clean").await;
         assert!(clean_result.is_ok());
 
-        let malicious_result: crate::Result<serde_json::Value> = mock_client.client().get("files/malicious").await;
+        let malicious_result: crate::Result<serde_json::Value> =
+            mock_client.client().get("files/malicious").await;
         assert!(malicious_result.is_ok());
 
-        let domain_result: crate::Result<serde_json::Value> = mock_client.client().get("domains/example.com").await;
+        let domain_result: crate::Result<serde_json::Value> =
+            mock_client.client().get("domains/example.com").await;
         assert!(domain_result.is_ok());
     }
 }

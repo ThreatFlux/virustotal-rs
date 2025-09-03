@@ -1,7 +1,7 @@
 // Integration tests focused on error handling scenarios
 use crate::error::Error;
+use crate::test_utils::test_utilities::MockApiClient;
 use crate::tests::mock_data::{mock_get, sample_error_response, with_api_key, MockResponseBuilder};
-use crate::tests::test_utils::TestUtils;
 use serde_json::Value;
 
 /// HTTP error status code tests  
@@ -11,7 +11,9 @@ mod http_error_tests {
 
     #[tokio::test]
     async fn test_bad_request_error() {
-        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
+        let mock_client = MockApiClient::new().await.unwrap();
+        let mock_server = mock_client.mock_server();
+        let client = mock_client.client();
 
         let (status, error_response) = sample_error_response(400);
         let response = MockResponseBuilder::new()
@@ -19,9 +21,9 @@ mod http_error_tests {
             .build()
             .set_body_json(&error_response);
 
-        with_api_key(mock_get("/files/invalid"), "test_api_key")
+        with_api_key(mock_get("/files/invalid"), "test_api_key_123")
             .respond_with(response)
-            .mount(&mock_server)
+            .mount(mock_server)
             .await;
 
         let result: Result<Value, Error> = client.get("files/invalid").await;
@@ -34,7 +36,9 @@ mod http_error_tests {
 
     #[tokio::test]
     async fn test_unauthorized_error() {
-        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
+        let mock_client = MockApiClient::new().await.unwrap();
+        let mock_server = mock_client.mock_server();
+        let client = mock_client.client();
 
         let (status, error_response) = sample_error_response(401);
         let response = MockResponseBuilder::new()
@@ -42,9 +46,9 @@ mod http_error_tests {
             .build()
             .set_body_json(&error_response);
 
-        with_api_key(mock_get("/files/test"), "test_api_key")
+        with_api_key(mock_get("/files/test"), "test_api_key_123")
             .respond_with(response)
-            .mount(&mock_server)
+            .mount(mock_server)
             .await;
 
         let result: Result<Value, Error> = client.get("files/test").await;
@@ -57,7 +61,9 @@ mod http_error_tests {
 
     #[tokio::test]
     async fn test_forbidden_error() {
-        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
+        let mock_client = MockApiClient::new().await.unwrap();
+        let mock_server = mock_client.mock_server();
+        let client = mock_client.client();
 
         let (status, error_response) = sample_error_response(403);
         let response = MockResponseBuilder::new()
@@ -65,9 +71,9 @@ mod http_error_tests {
             .build()
             .set_body_json(&error_response);
 
-        with_api_key(mock_get("/files/test"), "test_api_key")
+        with_api_key(mock_get("/files/test"), "test_api_key_123")
             .respond_with(response)
-            .mount(&mock_server)
+            .mount(mock_server)
             .await;
 
         let result: Result<Value, Error> = client.get("files/test").await;
@@ -80,7 +86,9 @@ mod http_error_tests {
 
     #[tokio::test]
     async fn test_not_found_error() {
-        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
+        let mock_client = MockApiClient::new().await.unwrap();
+        let mock_server = mock_client.mock_server();
+        let client = mock_client.client();
 
         let (status, error_response) = sample_error_response(404);
         let response = MockResponseBuilder::new()
@@ -88,9 +96,9 @@ mod http_error_tests {
             .build()
             .set_body_json(&error_response);
 
-        with_api_key(mock_get("/files/nonexistent"), "test_api_key")
+        with_api_key(mock_get("/files/nonexistent"), "test_api_key_123")
             .respond_with(response)
-            .mount(&mock_server)
+            .mount(mock_server)
             .await;
 
         let result: Result<Value, Error> = client.get("files/nonexistent").await;
@@ -103,7 +111,9 @@ mod http_error_tests {
 
     #[tokio::test]
     async fn test_rate_limit_error() {
-        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
+        let mock_client = MockApiClient::new().await.unwrap();
+        let mock_server = mock_client.mock_server();
+        let client = mock_client.client();
 
         let (status, error_response) = sample_error_response(429);
         let response = MockResponseBuilder::new()
@@ -111,9 +121,9 @@ mod http_error_tests {
             .build()
             .set_body_json(&error_response);
 
-        with_api_key(mock_get("/files/test"), "test_api_key")
+        with_api_key(mock_get("/files/test"), "test_api_key_123")
             .respond_with(response)
-            .mount(&mock_server)
+            .mount(mock_server)
             .await;
 
         let result: Result<Value, Error> = client.get("files/test").await;
@@ -126,7 +136,9 @@ mod http_error_tests {
 
     #[tokio::test]
     async fn test_internal_server_error() {
-        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
+        let mock_client = MockApiClient::new().await.unwrap();
+        let mock_server = mock_client.mock_server();
+        let client = mock_client.client();
 
         let (status, error_response) = sample_error_response(500);
         let response = MockResponseBuilder::new()
@@ -134,9 +146,9 @@ mod http_error_tests {
             .build()
             .set_body_json(&error_response);
 
-        with_api_key(mock_get("/files/test"), "test_api_key")
+        with_api_key(mock_get("/files/test"), "test_api_key_123")
             .respond_with(response)
-            .mount(&mock_server)
+            .mount(mock_server)
             .await;
 
         let result: Result<Value, Error> = client.get("files/test").await;

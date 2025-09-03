@@ -1,9 +1,9 @@
 #[cfg(test)]
 use serde_json::{json, Value};
 #[cfg(test)]
-use wiremock::{ResponseTemplate, Mock};
-#[cfg(test)]
 use wiremock::matchers::{header, method, path};
+#[cfg(test)]
+use wiremock::{Mock, ResponseTemplate};
 
 #[cfg(test)]
 /// Response factory for creating various mock responses
@@ -113,7 +113,8 @@ impl MockSetup {
         error_code: &str,
         error_message: &str,
     ) {
-        let (_, error_response) = ResponseFactory::error_response(status_code, error_code, error_message);
+        let (_, error_response) =
+            ResponseFactory::error_response(status_code, error_code, error_message);
         Mock::given(method("GET"))
             .and(path(endpoint_path))
             .and(header("x-apikey", super::constants::TEST_API_KEY))

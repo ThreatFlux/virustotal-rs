@@ -1,11 +1,11 @@
 // Consolidated integration tests for network, files, domains, IPs, and rules
 use crate::error::Error;
+use crate::test_utils::test_utilities::MockApiClient;
 use crate::tests::mock_data::{
     mock_get, mock_post, sample_analysis_data, sample_collection_data, sample_comment_data,
     sample_domain_data, sample_file_data, sample_ip_data, sample_sigma_rule_data, sample_vote_data,
     sample_yara_ruleset_data, with_api_key, MockResponseBuilder,
 };
-use crate::tests::test_utils::TestUtils;
 use serde_json::Value;
 use std::time::Duration;
 
@@ -16,7 +16,9 @@ mod network_failure_tests {
 
     #[tokio::test]
     async fn test_timeout_error() {
-        let (mock_server, mut client) = TestUtils::create_mock_server_and_client().await;
+        let mock_client = MockApiClient::new().await.unwrap();
+        let mock_server = mock_client.mock_server();
+        let mut client = mock_client.client().clone();
         client = client.with_timeout(Duration::from_millis(1)).unwrap();
 
         let response = MockResponseBuilder::new()
@@ -24,9 +26,9 @@ mod network_failure_tests {
             .build()
             .set_delay(Duration::from_millis(100));
 
-        with_api_key(mock_get("/files/test"), "test_api_key")
+        with_api_key(mock_get("/files/test"), "test_api_key_123")
             .respond_with(response)
-            .mount(&mock_server)
+            .mount(mock_server)
             .await;
 
         let result: Result<Value, Error> = client.get("files/test").await;
@@ -39,15 +41,17 @@ mod network_failure_tests {
 
     #[tokio::test]
     async fn test_invalid_json_response() {
-        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
+        let mock_client = MockApiClient::new().await.unwrap();
+        let mock_server = mock_client.mock_server();
+        let client = mock_client.client();
 
         let response = MockResponseBuilder::new()
             .build()
             .set_body_string("invalid json");
 
-        with_api_key(mock_get("/files/test"), "test_api_key")
+        with_api_key(mock_get("/files/test"), "test_api_key_123")
             .respond_with(response)
-            .mount(&mock_server)
+            .mount(mock_server)
             .await;
 
         let result: Result<Value, Error> = client.get("files/test").await;
@@ -66,7 +70,9 @@ mod files_integration_tests {
 
     #[tokio::test]
     async fn test_file_get_by_hash() {
-        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
+        let mock_client = MockApiClient::new().await.unwrap();
+        let mock_server = mock_client.mock_server();
+        let client = mock_client.client();
         let file_client = client.files();
 
         let hash = "44d88612fea8a8f36de82e1278abb02f";
@@ -75,9 +81,9 @@ mod files_integration_tests {
             .with_data(sample_data.clone())
             .build();
 
-        with_api_key(mock_get(&format!("/files/{}", hash)), "test_api_key")
+        with_api_key(mock_get(&format!("/files/{}", hash)), "test_api_key_123")
             .respond_with(response)
-            .mount(&mock_server)
+            .mount(mock_server)
             .await;
 
         let result = file_client.get(hash).await;
@@ -88,7 +94,9 @@ mod files_integration_tests {
 
     #[tokio::test]
     async fn test_file_analyse() {
-        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
+        let mock_client = MockApiClient::new().await.unwrap();
+        let mock_server = mock_client.mock_server();
+        let client = mock_client.client();
         let file_client = client.files();
 
         let hash = "44d88612fea8a8f36de82e1278abb02f";
@@ -99,10 +107,10 @@ mod files_integration_tests {
 
         with_api_key(
             mock_post(&format!("/files/{}/analyse", hash)),
-            "test_api_key",
+            "test_api_key_123",
         )
         .respond_with(response)
-        .mount(&mock_server)
+        .mount(mock_server)
         .await;
 
         let result = file_client.analyse(hash).await;
@@ -114,7 +122,9 @@ mod files_integration_tests {
     #[tokio::test]
     #[ignore = "Mock test with inconsistent behavior"]
     async fn test_file_comments() {
-        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
+        let mock_client = MockApiClient::new().await.unwrap();
+        let mock_server = mock_client.mock_server();
+        let client = mock_client.client();
         let file_client = client.files();
 
         let hash = "44d88612fea8a8f36de82e1278abb02f";
@@ -125,10 +135,10 @@ mod files_integration_tests {
 
         with_api_key(
             mock_get(&format!("/files/{}/comments", hash)),
-            "test_api_key",
+            "test_api_key_123",
         )
         .respond_with(response)
-        .mount(&mock_server)
+        .mount(mock_server)
         .await;
 
         let result = file_client.get_comments(hash).await;
@@ -145,7 +155,9 @@ mod domains_integration_tests {
 
     #[tokio::test]
     async fn test_domain_get() {
-        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
+        let mock_client = MockApiClient::new().await.unwrap();
+        let mock_server = mock_client.mock_server();
+        let client = mock_client.client();
         let domain_client = client.domains();
 
         let domain = "example.com";
@@ -154,10 +166,13 @@ mod domains_integration_tests {
             .with_data(sample_data.clone())
             .build();
 
-        with_api_key(mock_get(&format!("/domains/{}", domain)), "test_api_key")
-            .respond_with(response)
-            .mount(&mock_server)
-            .await;
+        with_api_key(
+            mock_get(&format!("/domains/{}", domain)),
+            "test_api_key_123",
+        )
+        .respond_with(response)
+        .mount(mock_server)
+        .await;
 
         let result = domain_client.get(domain).await;
         assert!(result.is_ok());
@@ -167,7 +182,9 @@ mod domains_integration_tests {
 
     #[tokio::test]
     async fn test_domain_analyse() {
-        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
+        let mock_client = MockApiClient::new().await.unwrap();
+        let mock_server = mock_client.mock_server();
+        let client = mock_client.client();
         let domain_client = client.domains();
 
         let domain = "example.com";
@@ -178,10 +195,10 @@ mod domains_integration_tests {
 
         with_api_key(
             mock_post(&format!("/domains/{}/analyse", domain)),
-            "test_api_key",
+            "test_api_key_123",
         )
         .respond_with(response)
-        .mount(&mock_server)
+        .mount(mock_server)
         .await;
 
         let result = domain_client.analyse(domain).await;
@@ -193,7 +210,9 @@ mod domains_integration_tests {
     #[tokio::test]
     #[ignore = "Mock test with inconsistent behavior"]
     async fn test_domain_votes() {
-        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
+        let mock_client = MockApiClient::new().await.unwrap();
+        let mock_server = mock_client.mock_server();
+        let client = mock_client.client();
         let domain_client = client.domains();
 
         let domain = "example.com";
@@ -204,10 +223,10 @@ mod domains_integration_tests {
 
         with_api_key(
             mock_get(&format!("/domains/{}/votes", domain)),
-            "test_api_key",
+            "test_api_key_123",
         )
         .respond_with(response)
-        .mount(&mock_server)
+        .mount(mock_server)
         .await;
 
         let result = domain_client.get_votes(domain).await;
@@ -224,7 +243,9 @@ mod ip_integration_tests {
 
     #[tokio::test]
     async fn test_ip_get() {
-        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
+        let mock_client = MockApiClient::new().await.unwrap();
+        let mock_server = mock_client.mock_server();
+        let client = mock_client.client();
         let ip_client = client.ip_addresses();
 
         let ip = "8.8.8.8";
@@ -233,10 +254,13 @@ mod ip_integration_tests {
             .with_data(sample_data.clone())
             .build();
 
-        with_api_key(mock_get(&format!("/ip_addresses/{}", ip)), "test_api_key")
-            .respond_with(response)
-            .mount(&mock_server)
-            .await;
+        with_api_key(
+            mock_get(&format!("/ip_addresses/{}", ip)),
+            "test_api_key_123",
+        )
+        .respond_with(response)
+        .mount(mock_server)
+        .await;
 
         let result = ip_client.get(ip).await;
         assert!(result.is_ok());
@@ -246,7 +270,9 @@ mod ip_integration_tests {
 
     #[tokio::test]
     async fn test_ip_analyse() {
-        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
+        let mock_client = MockApiClient::new().await.unwrap();
+        let mock_server = mock_client.mock_server();
+        let client = mock_client.client();
         let ip_client = client.ip_addresses();
 
         let ip = "8.8.8.8";
@@ -257,10 +283,10 @@ mod ip_integration_tests {
 
         with_api_key(
             mock_post(&format!("/ip_addresses/{}/analyse", ip)),
-            "test_api_key",
+            "test_api_key_123",
         )
         .respond_with(response)
-        .mount(&mock_server)
+        .mount(mock_server)
         .await;
 
         let result = ip_client.analyse(ip).await;
@@ -272,7 +298,9 @@ mod ip_integration_tests {
     #[tokio::test]
     #[ignore = "Mock test with inconsistent behavior"]
     async fn test_ip_comments() {
-        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
+        let mock_client = MockApiClient::new().await.unwrap();
+        let mock_server = mock_client.mock_server();
+        let client = mock_client.client();
         let ip_client = client.ip_addresses();
 
         let ip = "8.8.8.8";
@@ -283,10 +311,10 @@ mod ip_integration_tests {
 
         with_api_key(
             mock_get(&format!("/ip_addresses/{}/comments", ip)),
-            "test_api_key",
+            "test_api_key_123",
         )
         .respond_with(response)
-        .mount(&mock_server)
+        .mount(mock_server)
         .await;
 
         let result = ip_client.get_comments(ip).await;
@@ -304,16 +332,18 @@ mod rules_integration_tests {
     #[tokio::test]
     #[ignore = "Mock test with inconsistent behavior"]
     async fn test_yara_rulesets_list() {
-        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
+        let mock_client = MockApiClient::new().await.unwrap();
+        let mock_server = mock_client.mock_server();
+        let client = mock_client.client();
 
         let sample_data = sample_collection_data(vec![sample_yara_ruleset_data()], None);
         let response = MockResponseBuilder::new()
             .with_data(sample_data.clone())
             .build();
 
-        with_api_key(mock_get("/yara_rulesets"), "test_api_key")
+        with_api_key(mock_get("/yara_rulesets"), "test_api_key_123")
             .respond_with(response)
-            .mount(&mock_server)
+            .mount(mock_server)
             .await;
 
         let result = client.get("yara_rulesets").await;
@@ -325,16 +355,18 @@ mod rules_integration_tests {
     #[tokio::test]
     #[ignore = "Mock test with inconsistent behavior"]
     async fn test_sigma_rules_list() {
-        let (mock_server, client) = TestUtils::create_mock_server_and_client().await;
+        let mock_client = MockApiClient::new().await.unwrap();
+        let mock_server = mock_client.mock_server();
+        let client = mock_client.client();
 
         let sample_data = sample_collection_data(vec![sample_sigma_rule_data()], None);
         let response = MockResponseBuilder::new()
             .with_data(sample_data.clone())
             .build();
 
-        with_api_key(mock_get("/sigma_rules"), "test_api_key")
+        with_api_key(mock_get("/sigma_rules"), "test_api_key_123")
             .respond_with(response)
-            .mount(&mock_server)
+            .mount(mock_server)
             .await;
 
         let result = client.get("sigma_rules").await;
