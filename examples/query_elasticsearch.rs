@@ -231,7 +231,7 @@ async fn query_by_hash(
 
     let main_report = fetch_main_report(client, hash).await?;
     let report_data = process_main_report(main_report)?;
-    
+
     if let Some((report_uuid, source)) = report_data {
         display_report_summary(&report_uuid, &source);
         query_and_display_malicious_detections(client, &report_uuid).await?;
@@ -285,7 +285,7 @@ fn process_main_report(body: Value) -> Result<Option<(String, Value)>, Box<dyn s
 
 fn display_report_summary(report_uuid: &str, source: &Value) {
     println!("Report UUID: {}", report_uuid);
-    
+
     if let Some(stats) = source.get("last_analysis_stats") {
         display_detection_stats(stats);
     }
@@ -299,7 +299,10 @@ fn display_detection_stats(stats: &Value) {
     );
     println!(
         "  Suspicious: {}",
-        stats.get("suspicious").and_then(|s| s.as_u64()).unwrap_or(0)
+        stats
+            .get("suspicious")
+            .and_then(|s| s.as_u64())
+            .unwrap_or(0)
     );
     println!(
         "  Harmless: {}",
@@ -307,7 +310,10 @@ fn display_detection_stats(stats: &Value) {
     );
     println!(
         "  Undetected: {}",
-        stats.get("undetected").and_then(|u| u.as_u64()).unwrap_or(0)
+        stats
+            .get("undetected")
+            .and_then(|u| u.as_u64())
+            .unwrap_or(0)
     );
 }
 
@@ -316,7 +322,7 @@ async fn query_and_display_malicious_detections(
     report_uuid: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let malicious_query = build_malicious_detections_query(report_uuid);
-    
+
     let mal_response = client
         .search(SearchParts::Index(&["vt_analysis_results"]))
         .body(malicious_query)
@@ -325,7 +331,7 @@ async fn query_and_display_malicious_detections(
 
     let mal_body: Value = mal_response.json().await?;
     display_malicious_detections(&mal_body);
-    
+
     Ok(())
 }
 

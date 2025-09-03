@@ -387,23 +387,34 @@ fn create_main_report_document(
     attributes: &Value,
 ) -> IndexedDocument {
     let mut main_report = Map::new();
-    
+
     // Add core identifiers
-    main_report.insert("report_uuid".to_string(), Value::String(report_uuid.to_string()));
-    main_report.insert("file_hash".to_string(), Value::String(file_hash.to_string()));
+    main_report.insert(
+        "report_uuid".to_string(),
+        Value::String(report_uuid.to_string()),
+    );
+    main_report.insert(
+        "file_hash".to_string(),
+        Value::String(file_hash.to_string()),
+    );
     main_report.insert(
         "file_id".to_string(),
-        json_data.get("id")
+        json_data
+            .get("id")
             .cloned()
             .unwrap_or(Value::String(file_hash.to_string())),
     );
     main_report.insert(
         "file_type".to_string(),
-        json_data.get("type")
+        json_data
+            .get("type")
             .cloned()
             .unwrap_or(Value::String("file".to_string())),
     );
-    main_report.insert("index_time".to_string(), Value::String(Utc::now().to_rfc3339()));
+    main_report.insert(
+        "index_time".to_string(),
+        Value::String(Utc::now().to_rfc3339()),
+    );
 
     // Process basic file attributes using helper
     process_basic_file_attributes(&mut main_report, attributes);
@@ -422,11 +433,25 @@ fn create_main_report_document(
 /// Processes basic file attributes (hashes, size, names, etc.)
 fn process_basic_file_attributes(main_report: &mut Map<String, Value>, attributes: &Value) {
     let basic_fields = vec![
-        "sha256", "sha1", "md5", "vhash", "tlsh", "ssdeep", "permhash", "symhash",
-        "size", "names", "meaningful_name", "type_description", "type_tag", 
-        "type_extension", "type_tags", "downloadable", "available_tools"
+        "sha256",
+        "sha1",
+        "md5",
+        "vhash",
+        "tlsh",
+        "ssdeep",
+        "permhash",
+        "symhash",
+        "size",
+        "names",
+        "meaningful_name",
+        "type_description",
+        "type_tag",
+        "type_extension",
+        "type_tags",
+        "downloadable",
+        "available_tools",
     ];
-    
+
     for field in basic_fields {
         if let Some(value) = attributes.get(field) {
             main_report.insert(field.to_string(), value.clone());
@@ -437,12 +462,25 @@ fn process_basic_file_attributes(main_report: &mut Map<String, Value>, attribute
 /// Processes file analysis attributes (magic, trid, exiftool, etc.)
 fn process_file_analysis_attributes(main_report: &mut Map<String, Value>, attributes: &Value) {
     let analysis_fields = vec![
-        "magic", "trid", "exiftool", "office_info", "pe_info", "androguard",
-        "bundle_info", "pdf_info", "network_infrastructure", "dot_net_assembly",
-        "macho_info", "powershell_info", "signature_info", "packers",
-        "detectiteasy", "magika", "bytehero_info"
+        "magic",
+        "trid",
+        "exiftool",
+        "office_info",
+        "pe_info",
+        "androguard",
+        "bundle_info",
+        "pdf_info",
+        "network_infrastructure",
+        "dot_net_assembly",
+        "macho_info",
+        "powershell_info",
+        "signature_info",
+        "packers",
+        "detectiteasy",
+        "magika",
+        "bytehero_info",
     ];
-    
+
     for field in analysis_fields {
         if let Some(value) = attributes.get(field) {
             main_report.insert(field.to_string(), value.clone());
@@ -453,11 +491,15 @@ fn process_file_analysis_attributes(main_report: &mut Map<String, Value>, attrib
 /// Processes temporal attributes (submission dates, analysis dates, etc.)
 fn process_temporal_attributes(main_report: &mut Map<String, Value>, attributes: &Value) {
     let temporal_fields = vec![
-        "first_submission_date", "last_submission_date", "last_analysis_date",
-        "last_modification_date", "first_seen_itw_date", "last_seen_itw_date",
-        "creation_date"
+        "first_submission_date",
+        "last_submission_date",
+        "last_analysis_date",
+        "last_modification_date",
+        "first_seen_itw_date",
+        "last_seen_itw_date",
+        "creation_date",
     ];
-    
+
     for field in temporal_fields {
         if let Some(value) = attributes.get(field) {
             main_report.insert(field.to_string(), value.clone());
@@ -466,12 +508,21 @@ fn process_temporal_attributes(main_report: &mut Map<String, Value>, attributes:
 }
 
 /// Processes threat intelligence attributes (reputation, votes, tags, etc.)
-fn process_threat_intelligence_attributes(main_report: &mut Map<String, Value>, attributes: &Value) {
+fn process_threat_intelligence_attributes(
+    main_report: &mut Map<String, Value>,
+    attributes: &Value,
+) {
     let intel_fields = vec![
-        "times_submitted", "unique_sources", "reputation", "tags", "total_votes",
-        "threat_severity", "last_analysis_stats", "popular_threat_classification"
+        "times_submitted",
+        "unique_sources",
+        "reputation",
+        "tags",
+        "total_votes",
+        "threat_severity",
+        "last_analysis_stats",
+        "popular_threat_classification",
     ];
-    
+
     for field in intel_fields {
         if let Some(value) = attributes.get(field) {
             main_report.insert(field.to_string(), value.clone());
@@ -480,11 +531,16 @@ fn process_threat_intelligence_attributes(main_report: &mut Map<String, Value>, 
 }
 
 /// Processes specialized analysis attributes (sigma, crowdsourced data, etc.)
-fn process_specialized_analysis_attributes(main_report: &mut Map<String, Value>, attributes: &Value) {
+fn process_specialized_analysis_attributes(
+    main_report: &mut Map<String, Value>,
+    attributes: &Value,
+) {
     let specialized_fields = vec![
-        "sigma_analysis_summary", "sigma_analysis_results", "crowdsourced_ids_results"
+        "sigma_analysis_summary",
+        "sigma_analysis_results",
+        "crowdsourced_ids_results",
     ];
-    
+
     for field in specialized_fields {
         if let Some(value) = attributes.get(field) {
             main_report.insert(field.to_string(), value.clone());
@@ -506,8 +562,11 @@ fn process_analysis_results(
         for (engine_name, engine_result) in analysis_results {
             if let Some(engine_data) = engine_result.as_object() {
                 let mut analysis_doc = create_base_document(report_uuid, file_hash);
-                analysis_doc.insert("engine_name".to_string(), Value::String(engine_name.clone()));
-                
+                analysis_doc.insert(
+                    "engine_name".to_string(),
+                    Value::String(engine_name.clone()),
+                );
+
                 for (key, value) in engine_data {
                     analysis_doc.insert(key.clone(), value.clone());
                 }
@@ -535,7 +594,10 @@ fn process_sandbox_verdicts(
     {
         for (sandbox_name, verdict) in sandbox_verdicts {
             let mut sandbox_doc = create_base_document(report_uuid, file_hash);
-            sandbox_doc.insert("sandbox_name".to_string(), Value::String(sandbox_name.clone()));
+            sandbox_doc.insert(
+                "sandbox_name".to_string(),
+                Value::String(sandbox_name.clone()),
+            );
             sandbox_doc.insert("verdict".to_string(), verdict.clone());
 
             documents.push(IndexedDocument {
@@ -561,8 +623,11 @@ fn process_sigma_analysis(
         for (index, sigma_result) in sigma_results.iter().enumerate() {
             if let Some(sigma_obj) = sigma_result.as_object() {
                 let mut behavior_doc = create_base_document(report_uuid, file_hash);
-                behavior_doc.insert("analysis_type".to_string(), Value::String("sigma".to_string()));
-                
+                behavior_doc.insert(
+                    "analysis_type".to_string(),
+                    Value::String("sigma".to_string()),
+                );
+
                 process_sigma_rule_info(&mut behavior_doc, sigma_obj);
                 process_sigma_behavioral_events(&mut behavior_doc, sigma_obj);
                 behavior_doc.insert("raw_sigma_result".to_string(), sigma_result.clone());
@@ -578,7 +643,10 @@ fn process_sigma_analysis(
 }
 
 /// Processes sigma rule information
-fn process_sigma_rule_info(behavior_doc: &mut Map<String, Value>, sigma_obj: &serde_json::Map<String, Value>) {
+fn process_sigma_rule_info(
+    behavior_doc: &mut Map<String, Value>,
+    sigma_obj: &serde_json::Map<String, Value>,
+) {
     let rule_fields = vec![
         ("rule_id", "rule_id"),
         ("rule_title", "rule_title"),
@@ -587,7 +655,7 @@ fn process_sigma_rule_info(behavior_doc: &mut Map<String, Value>, sigma_obj: &se
         ("rule_author", "rule_author"),
         ("rule_source", "rule_source"),
     ];
-    
+
     for (source_field, target_field) in rule_fields {
         if let Some(value) = sigma_obj.get(source_field) {
             behavior_doc.insert(target_field.to_string(), value.clone());
@@ -596,7 +664,10 @@ fn process_sigma_rule_info(behavior_doc: &mut Map<String, Value>, sigma_obj: &se
 }
 
 /// Processes sigma behavioral events for detailed analysis
-fn process_sigma_behavioral_events(behavior_doc: &mut Map<String, Value>, sigma_obj: &serde_json::Map<String, Value>) {
+fn process_sigma_behavioral_events(
+    behavior_doc: &mut Map<String, Value>,
+    sigma_obj: &serde_json::Map<String, Value>,
+) {
     if let Some(matches) = sigma_obj.get("rule_matches").and_then(|v| v.as_array()) {
         let mut behavioral_events = Vec::new();
 
@@ -608,13 +679,22 @@ fn process_sigma_behavioral_events(behavior_doc: &mut Map<String, Value>, sigma_
             }
         }
 
-        behavior_doc.insert("behavioral_events".to_string(), Value::Array(behavioral_events));
-        behavior_doc.insert("event_count".to_string(), Value::Number(matches.len().into()));
+        behavior_doc.insert(
+            "behavioral_events".to_string(),
+            Value::Array(behavioral_events),
+        );
+        behavior_doc.insert(
+            "event_count".to_string(),
+            Value::Number(matches.len().into()),
+        );
     }
 }
 
 /// Processes individual sigma event details (process, file, network, registry info)
-fn process_sigma_event_details(event: &mut Map<String, Value>, match_obj: &serde_json::Map<String, Value>) {
+fn process_sigma_event_details(
+    event: &mut Map<String, Value>,
+    match_obj: &serde_json::Map<String, Value>,
+) {
     process_sigma_process_info(event, match_obj);
     process_sigma_file_info(event, match_obj);
     process_sigma_network_info(event, match_obj);
@@ -623,10 +703,13 @@ fn process_sigma_event_details(event: &mut Map<String, Value>, match_obj: &serde
 }
 
 /// Processes process information from sigma events
-fn process_sigma_process_info(event: &mut Map<String, Value>, match_obj: &serde_json::Map<String, Value>) {
+fn process_sigma_process_info(
+    event: &mut Map<String, Value>,
+    match_obj: &serde_json::Map<String, Value>,
+) {
     if let Some(process_info) = match_obj.get("Process") {
         event.insert("process_info".to_string(), process_info.clone());
-        
+
         if let Some(process_obj) = process_info.as_object() {
             let process_fields = vec![
                 ("Image", "process_path"),
@@ -634,7 +717,7 @@ fn process_sigma_process_info(event: &mut Map<String, Value>, match_obj: &serde_
                 ("ProcessId", "process_id"),
                 ("ParentImage", "parent_process"),
             ];
-            
+
             for (source, target) in process_fields {
                 if let Some(value) = process_obj.get(source) {
                     event.insert(target.to_string(), value.clone());
@@ -645,10 +728,13 @@ fn process_sigma_process_info(event: &mut Map<String, Value>, match_obj: &serde_
 }
 
 /// Processes file information from sigma events
-fn process_sigma_file_info(event: &mut Map<String, Value>, match_obj: &serde_json::Map<String, Value>) {
+fn process_sigma_file_info(
+    event: &mut Map<String, Value>,
+    match_obj: &serde_json::Map<String, Value>,
+) {
     if let Some(file_info) = match_obj.get("File") {
         event.insert("file_info".to_string(), file_info.clone());
-        
+
         if let Some(file_obj) = file_info.as_object() {
             if let Some(target_filename) = file_obj.get("TargetFilename") {
                 event.insert("target_file".to_string(), target_filename.clone());
@@ -661,17 +747,20 @@ fn process_sigma_file_info(event: &mut Map<String, Value>, match_obj: &serde_jso
 }
 
 /// Processes network information from sigma events
-fn process_sigma_network_info(event: &mut Map<String, Value>, match_obj: &serde_json::Map<String, Value>) {
+fn process_sigma_network_info(
+    event: &mut Map<String, Value>,
+    match_obj: &serde_json::Map<String, Value>,
+) {
     if let Some(network_info) = match_obj.get("Network") {
         event.insert("network_info".to_string(), network_info.clone());
-        
+
         if let Some(network_obj) = network_info.as_object() {
             let network_fields = vec![
                 ("DestinationIp", "destination_ip"),
                 ("DestinationPort", "destination_port"),
                 ("Protocol", "protocol"),
             ];
-            
+
             for (source, target) in network_fields {
                 if let Some(value) = network_obj.get(source) {
                     event.insert(target.to_string(), value.clone());
@@ -682,10 +771,13 @@ fn process_sigma_network_info(event: &mut Map<String, Value>, match_obj: &serde_
 }
 
 /// Processes registry information from sigma events
-fn process_sigma_registry_info(event: &mut Map<String, Value>, match_obj: &serde_json::Map<String, Value>) {
+fn process_sigma_registry_info(
+    event: &mut Map<String, Value>,
+    match_obj: &serde_json::Map<String, Value>,
+) {
     if let Some(registry_info) = match_obj.get("Registry") {
         event.insert("registry_info".to_string(), registry_info.clone());
-        
+
         if let Some(registry_obj) = registry_info.as_object() {
             if let Some(target_object) = registry_obj.get("TargetObject") {
                 event.insert("registry_key".to_string(), target_object.clone());
@@ -698,13 +790,16 @@ fn process_sigma_registry_info(event: &mut Map<String, Value>, match_obj: &serde
 }
 
 /// Processes miscellaneous sigma event information
-fn process_sigma_misc_info(event: &mut Map<String, Value>, match_obj: &serde_json::Map<String, Value>) {
+fn process_sigma_misc_info(
+    event: &mut Map<String, Value>,
+    match_obj: &serde_json::Map<String, Value>,
+) {
     let misc_fields = vec![
         ("ImageLoaded", "loaded_image"),
         ("SignatureStatus", "signature_status"),
         ("Signed", "signed"),
     ];
-    
+
     for (source, target) in misc_fields {
         if let Some(value) = match_obj.get(source) {
             event.insert(target.to_string(), value.clone());
@@ -795,9 +890,18 @@ fn process_relationships(
 /// Creates a base document with common fields
 fn create_base_document(report_uuid: &str, file_hash: &str) -> Map<String, Value> {
     let mut doc = Map::new();
-    doc.insert("report_uuid".to_string(), Value::String(report_uuid.to_string()));
-    doc.insert("file_hash".to_string(), Value::String(file_hash.to_string()));
-    doc.insert("index_time".to_string(), Value::String(Utc::now().to_rfc3339()));
+    doc.insert(
+        "report_uuid".to_string(),
+        Value::String(report_uuid.to_string()),
+    );
+    doc.insert(
+        "file_hash".to_string(),
+        Value::String(file_hash.to_string()),
+    );
+    doc.insert(
+        "index_time".to_string(),
+        Value::String(Utc::now().to_rfc3339()),
+    );
     doc
 }
 
@@ -872,7 +976,7 @@ async fn create_index_if_not_exists(
     args: &Args,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let exists_response = check_index_exists(client, index_name).await;
-    
+
     match exists_response {
         Ok(response) => {
             if response.status_code().as_u16() == 404 {
@@ -882,12 +986,10 @@ async fn create_index_if_not_exists(
             }
         }
         Err(e) => {
-            return Err(
-                format!("Failed to check if index {} exists: {}", index_name, e).into(),
-            );
+            return Err(format!("Failed to check if index {} exists: {}", index_name, e).into());
         }
     }
-    
+
     Ok(())
 }
 
@@ -931,7 +1033,7 @@ async fn create_new_index(
         )
         .into());
     }
-    
+
     Ok(())
 }
 
@@ -942,16 +1044,13 @@ async fn index_documents_bulk(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let all_documents = flatten_report_documents(reports);
     let total_docs = all_documents.len();
-    
-    println!(
-        "Indexing {} documents from reports",
-        total_docs
-    );
+
+    println!("Indexing {} documents from reports", total_docs);
 
     let mut indexed = 0;
     for batch in all_documents.chunks(args.batch_size) {
         indexed += process_document_batch(client, batch, args).await?;
-        
+
         if args.verbose {
             println!("Indexed {}/{} documents", indexed, total_docs);
         }
@@ -982,9 +1081,11 @@ async fn process_document_batch(
     Ok(batch.len())
 }
 
-fn prepare_bulk_request_body(batch: &[IndexedDocument]) -> Result<String, Box<dyn std::error::Error>> {
+fn prepare_bulk_request_body(
+    batch: &[IndexedDocument],
+) -> Result<String, Box<dyn std::error::Error>> {
     let mut bulk_body = Vec::new();
-    
+
     for doc in batch {
         let action = serde_json::json!({
             "index": {
@@ -995,7 +1096,7 @@ fn prepare_bulk_request_body(batch: &[IndexedDocument]) -> Result<String, Box<dy
         bulk_body.push(serde_json::to_string(&action)?);
         bulk_body.push(serde_json::to_string(&doc.body)?);
     }
-    
+
     Ok(bulk_body.join("\n") + "\n")
 }
 
@@ -1012,7 +1113,7 @@ async fn execute_bulk_request(
     if !response.status_code().is_success() {
         return Err(format!("Bulk indexing failed: {}", response.status_code()).into());
     }
-    
+
     Ok(response)
 }
 
@@ -1021,7 +1122,7 @@ async fn handle_bulk_response(
     args: &Args,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let response_body: Value = response.json().await?;
-    
+
     if let Some(errors) = response_body.get("errors") {
         if errors.as_bool() == Some(true) {
             eprintln!("Some documents failed to index: {}", response_body);
@@ -1030,7 +1131,7 @@ async fn handle_bulk_response(
             }
         }
     }
-    
+
     Ok(())
 }
 

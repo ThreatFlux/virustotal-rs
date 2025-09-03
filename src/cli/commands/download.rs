@@ -325,19 +325,19 @@ async fn validate_and_parse_input(
     dry_run: bool,
 ) -> Result<Vec<String>> {
     let hashes = parse_input_hashes(&args.input, verbose)?;
-    
+
     if hashes.is_empty() {
         println!("No hashes to process");
         return Ok(vec![]);
     }
-    
+
     println!("Found {} hashes to process", hashes.len());
-    
+
     if dry_run {
         handle_dry_run(&hashes);
         return Ok(vec![]);
     }
-    
+
     Ok(hashes)
 }
 
@@ -366,11 +366,14 @@ async fn setup_concurrency_and_tier(
 ) -> Result<usize> {
     let (_api_tier, optimal_concurrency) =
         detect_tier_and_concurrency(client, tier, manual_concurrency, verbose).await?;
-    
+
     if verbose && optimal_concurrency > 1 {
-        println!("Using {} concurrent downloads (premium tier)", optimal_concurrency);
+        println!(
+            "Using {} concurrent downloads (premium tier)",
+            optimal_concurrency
+        );
     }
-    
+
     Ok(optimal_concurrency)
 }
 
@@ -388,7 +391,7 @@ fn handle_error_results(results: Vec<Result<(), anyhow::Error>>, skip_errors: bo
     if skip_errors {
         return Ok(());
     }
-    
+
     for result in results {
         if let Err(e) = result {
             eprintln!("\nStopping due to error: {}", e);
@@ -396,7 +399,7 @@ fn handle_error_results(results: Vec<Result<(), anyhow::Error>>, skip_errors: bo
             return Err(e);
         }
     }
-    
+
     Ok(())
 }
 
@@ -408,26 +411,26 @@ pub async fn execute(
     dry_run: bool,
 ) -> Result<()> {
     let client = Arc::new(setup_client(api_key, tier)?);
-    
+
     // Validate input and handle dry run
     let hashes = validate_and_parse_input(&args, verbose, dry_run).await?;
     if hashes.is_empty() {
         return Ok(());
     }
-    
+
     // Create download context
     let context = create_download_context(&args);
-    
+
     // Setup directories
     setup_directories(&args, &context).await?;
     print_directory_info(&args, &context, verbose);
-    
+
     // Setup concurrency
     let concurrency = setup_concurrency_and_tier(&client, tier, args.concurrency, verbose).await?;
-    
+
     // Setup progress tracking
     let progress = setup_progress_tracking(hashes.len(), verbose);
-    
+
     // Setup counters and parameters
     let counters = DownloadCounters::new();
     let total = hashes.len();
@@ -442,21 +445,21 @@ pub async fn execute(
         verbose,
         concurrency,
     };
-    
+
     // Execute downloads
     let results = process_downloads(&hashes, params, progress.as_ref()).await?;
-    
+
     // Finish progress tracking
     if let Some(progress) = progress {
         progress.finish_with_message("Download completed");
     }
-    
+
     // Handle errors
     handle_error_results(results, args.skip_errors)?;
-    
+
     // Print summary
     print_download_summary(&args, total, &counters, &context)?;
-    
+
     Ok(())
 }
 
@@ -474,7 +477,7 @@ fn handle_download_success(
     if file_size > 0 {
         total_size.fetch_add(file_size, Ordering::SeqCst);
     }
-    
+
     if verbose {
         let size_msg = if file_size > 0 {
             format!(" ({})", format_file_size(file_size as u64))
@@ -489,7 +492,7 @@ fn handle_download_success(
             report_msg
         );
     }
-    
+
     if let Some(progress) = progress {
         progress.inc(1);
     }
@@ -506,21 +509,25 @@ fn handle_download_failure(
 ) -> Result<(), anyhow::Error> {
     failed.fetch_add(1, Ordering::SeqCst);
     let error_msg = handle_vt_error(error);
-    
+
     if verbose {
         eprintln!("  ✗ {} failed: {}", truncate_hash(hash, 16), error_msg);
     } else {
         eprintln!("Failed {}: {}", truncate_hash(hash, 16), error_msg);
     }
-    
+
     if let Some(progress) = progress {
         progress.inc(1);
     }
-    
+
     if skip_errors {
         Ok(())
     } else {
-        Err(anyhow::anyhow!("Failed to download {}: {}", hash, error_msg))
+        Err(anyhow::anyhow!(
+            "Failed to download {}: {}",
+            hash,
+            error_msg
+        ))
     }
 }
 
@@ -549,7 +556,7 @@ fn print_progress_info(
     progress: Option<&ProgressTracker>,
 ) {
     let progress_msg = format!("[{}/{}]", current, total);
-    
+
     if verbose {
         println!("{} Processing hash: {}", progress_msg, hash);
     } else if let Some(progress) = progress {
@@ -564,9 +571,9 @@ async fn process_single_download(
     progress: Option<&ProgressTracker>,
 ) -> Result<(), anyhow::Error> {
     let current = params.counters.processed.fetch_add(1, Ordering::SeqCst) + 1;
-    
+
     print_progress_info(current, params.total, &hash, params.verbose, progress);
-    
+
     // Check if we should skip this file (resume mode)
     if should_skip_file(
         &params.args,
@@ -578,7 +585,7 @@ async fn process_single_download(
         handle_skipped_file(&hash, params.verbose, progress, &params.counters.skipped);
         return Ok(());
     }
-    
+
     // Try to download
     match download_with_retry(
         &params.client,
@@ -631,19 +638,17 @@ async fn process_downloads(
 ) -> Result<Vec<Result<(), anyhow::Error>>> {
     let concurrency = params.concurrency;
     let params = Arc::new(params);
-    
+
     let results: Vec<_> = stream::iter(hashes.iter())
         .map(|hash| {
             let hash = hash.clone();
             let params = Arc::clone(&params);
-            async move {
-                create_download_closure(hash, params, progress).await
-            }
+            async move { create_download_closure(hash, params, progress).await }
         })
         .buffer_unordered(concurrency)
         .collect()
         .await;
-    
+
     Ok(results)
 }
 
@@ -915,31 +920,16 @@ async fn download_file_and_report(
     args: &DownloadArgs,
 ) -> Result<(usize, bool), crate::Error> {
     // Get and validate file info
-    let file_info = get_and_validate_file_info(
-        client, 
-        hash, 
-        download_files, 
-        download_reports, 
-        args
-    ).await?;
+    let file_info =
+        get_and_validate_file_info(client, hash, download_files, download_reports, args).await?;
 
     // Download file if requested
-    let file_size = handle_file_download(
-        client,
-        hash,
-        output_dir,
-        download_files,
-        file_info.as_ref(),
-    ).await?;
+    let file_size =
+        handle_file_download(client, hash, output_dir, download_files, file_info.as_ref()).await?;
 
     // Save report if requested
-    let report_saved = handle_report_saving(
-        client,
-        hash,
-        reports_dir,
-        download_reports,
-        file_info,
-    ).await?;
+    let report_saved =
+        handle_report_saving(client, hash, reports_dir, download_reports, file_info).await?;
 
     Ok((file_size, report_saved))
 }
@@ -1134,16 +1124,21 @@ async fn detect_tier_and_concurrency(
     verbose: bool,
 ) -> Result<(ApiTier, usize)> {
     // First, check if user manually specified both tier and concurrency
-    if let Some((api_tier, concurrency)) = handle_manual_tier_and_concurrency(manual_tier, manual_concurrency) {
+    if let Some((api_tier, concurrency)) =
+        handle_manual_tier_and_concurrency(manual_tier, manual_concurrency)
+    {
         return Ok((api_tier, concurrency));
     }
 
     // Try to auto-detect tier by querying user info
-    if let Some((api_tier, concurrency)) = auto_detect_tier_from_user_api(client, manual_concurrency, verbose).await? {
+    if let Some((api_tier, concurrency)) =
+        auto_detect_tier_from_user_api(client, manual_concurrency, verbose).await?
+    {
         return Ok((api_tier, concurrency));
     }
 
     // Fallback to manual tier detection if user API call fails
-    let (api_tier, concurrency) = handle_fallback_tier_detection(manual_tier, manual_concurrency, verbose);
+    let (api_tier, concurrency) =
+        handle_fallback_tier_detection(manual_tier, manual_concurrency, verbose);
     Ok((api_tier, concurrency))
 }
