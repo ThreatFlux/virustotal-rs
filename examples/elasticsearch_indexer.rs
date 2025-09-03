@@ -379,6 +379,429 @@ async fn download_and_process_hashes(
     collect_download_results(results, args.skip_errors)
 }
 
+/// Creates the main report document with basic file information and metadata
+fn create_main_report_document(
+    report_uuid: &str,
+    file_hash: &str,
+    json_data: &Value,
+    attributes: &Value,
+) -> IndexedDocument {
+    let mut main_report = Map::new();
+    
+    // Add core identifiers
+    main_report.insert("report_uuid".to_string(), Value::String(report_uuid.to_string()));
+    main_report.insert("file_hash".to_string(), Value::String(file_hash.to_string()));
+    main_report.insert(
+        "file_id".to_string(),
+        json_data.get("id")
+            .cloned()
+            .unwrap_or(Value::String(file_hash.to_string())),
+    );
+    main_report.insert(
+        "file_type".to_string(),
+        json_data.get("type")
+            .cloned()
+            .unwrap_or(Value::String("file".to_string())),
+    );
+    main_report.insert("index_time".to_string(), Value::String(Utc::now().to_rfc3339()));
+
+    // Process basic file attributes using helper
+    process_basic_file_attributes(&mut main_report, attributes);
+    process_file_analysis_attributes(&mut main_report, attributes);
+    process_temporal_attributes(&mut main_report, attributes);
+    process_threat_intelligence_attributes(&mut main_report, attributes);
+    process_specialized_analysis_attributes(&mut main_report, attributes);
+
+    IndexedDocument {
+        index: "vt_reports".to_string(),
+        id: report_uuid.to_string(),
+        body: Value::Object(main_report),
+    }
+}
+
+/// Processes basic file attributes (hashes, size, names, etc.)
+fn process_basic_file_attributes(main_report: &mut Map<String, Value>, attributes: &Value) {
+    let basic_fields = vec![
+        "sha256", "sha1", "md5", "vhash", "tlsh", "ssdeep", "permhash", "symhash",
+        "size", "names", "meaningful_name", "type_description", "type_tag", 
+        "type_extension", "type_tags", "downloadable", "available_tools"
+    ];
+    
+    for field in basic_fields {
+        if let Some(value) = attributes.get(field) {
+            main_report.insert(field.to_string(), value.clone());
+        }
+    }
+}
+
+/// Processes file analysis attributes (magic, trid, exiftool, etc.)
+fn process_file_analysis_attributes(main_report: &mut Map<String, Value>, attributes: &Value) {
+    let analysis_fields = vec![
+        "magic", "trid", "exiftool", "office_info", "pe_info", "androguard",
+        "bundle_info", "pdf_info", "network_infrastructure", "dot_net_assembly",
+        "macho_info", "powershell_info", "signature_info", "packers",
+        "detectiteasy", "magika", "bytehero_info"
+    ];
+    
+    for field in analysis_fields {
+        if let Some(value) = attributes.get(field) {
+            main_report.insert(field.to_string(), value.clone());
+        }
+    }
+}
+
+/// Processes temporal attributes (submission dates, analysis dates, etc.)
+fn process_temporal_attributes(main_report: &mut Map<String, Value>, attributes: &Value) {
+    let temporal_fields = vec![
+        "first_submission_date", "last_submission_date", "last_analysis_date",
+        "last_modification_date", "first_seen_itw_date", "last_seen_itw_date",
+        "creation_date"
+    ];
+    
+    for field in temporal_fields {
+        if let Some(value) = attributes.get(field) {
+            main_report.insert(field.to_string(), value.clone());
+        }
+    }
+}
+
+/// Processes threat intelligence attributes (reputation, votes, tags, etc.)
+fn process_threat_intelligence_attributes(main_report: &mut Map<String, Value>, attributes: &Value) {
+    let intel_fields = vec![
+        "times_submitted", "unique_sources", "reputation", "tags", "total_votes",
+        "threat_severity", "last_analysis_stats", "popular_threat_classification"
+    ];
+    
+    for field in intel_fields {
+        if let Some(value) = attributes.get(field) {
+            main_report.insert(field.to_string(), value.clone());
+        }
+    }
+}
+
+/// Processes specialized analysis attributes (sigma, crowdsourced data, etc.)
+fn process_specialized_analysis_attributes(main_report: &mut Map<String, Value>, attributes: &Value) {
+    let specialized_fields = vec![
+        "sigma_analysis_summary", "sigma_analysis_results", "crowdsourced_ids_results"
+    ];
+    
+    for field in specialized_fields {
+        if let Some(value) = attributes.get(field) {
+            main_report.insert(field.to_string(), value.clone());
+        }
+    }
+}
+
+/// Processes antivirus analysis results into separate documents
+fn process_analysis_results(
+    documents: &mut Vec<IndexedDocument>,
+    report_uuid: &str,
+    file_hash: &str,
+    attributes: &Value,
+) {
+    if let Some(analysis_results) = attributes
+        .get("last_analysis_results")
+        .and_then(|v| v.as_object())
+    {
+        for (engine_name, engine_result) in analysis_results {
+            if let Some(engine_data) = engine_result.as_object() {
+                let mut analysis_doc = create_base_document(report_uuid, file_hash);
+                analysis_doc.insert("engine_name".to_string(), Value::String(engine_name.clone()));
+                
+                for (key, value) in engine_data {
+                    analysis_doc.insert(key.clone(), value.clone());
+                }
+
+                documents.push(IndexedDocument {
+                    index: "vt_analysis_results".to_string(),
+                    id: format!("{}_{}", report_uuid, engine_name),
+                    body: Value::Object(analysis_doc),
+                });
+            }
+        }
+    }
+}
+
+/// Processes sandbox verdicts into separate documents
+fn process_sandbox_verdicts(
+    documents: &mut Vec<IndexedDocument>,
+    report_uuid: &str,
+    file_hash: &str,
+    attributes: &Value,
+) {
+    if let Some(sandbox_verdicts) = attributes
+        .get("sandbox_verdicts")
+        .and_then(|v| v.as_object())
+    {
+        for (sandbox_name, verdict) in sandbox_verdicts {
+            let mut sandbox_doc = create_base_document(report_uuid, file_hash);
+            sandbox_doc.insert("sandbox_name".to_string(), Value::String(sandbox_name.clone()));
+            sandbox_doc.insert("verdict".to_string(), verdict.clone());
+
+            documents.push(IndexedDocument {
+                index: "vt_sandbox_verdicts".to_string(),
+                id: format!("{}_{}", report_uuid, sandbox_name),
+                body: Value::Object(sandbox_doc),
+            });
+        }
+    }
+}
+
+/// Processes sigma analysis results for behavioral data
+fn process_sigma_analysis(
+    documents: &mut Vec<IndexedDocument>,
+    report_uuid: &str,
+    file_hash: &str,
+    attributes: &Value,
+) {
+    if let Some(sigma_results) = attributes
+        .get("sigma_analysis_results")
+        .and_then(|v| v.as_array())
+    {
+        for (index, sigma_result) in sigma_results.iter().enumerate() {
+            if let Some(sigma_obj) = sigma_result.as_object() {
+                let mut behavior_doc = create_base_document(report_uuid, file_hash);
+                behavior_doc.insert("analysis_type".to_string(), Value::String("sigma".to_string()));
+                
+                process_sigma_rule_info(&mut behavior_doc, sigma_obj);
+                process_sigma_behavioral_events(&mut behavior_doc, sigma_obj);
+                behavior_doc.insert("raw_sigma_result".to_string(), sigma_result.clone());
+
+                documents.push(IndexedDocument {
+                    index: "vt_sandbox_behaviors".to_string(),
+                    id: format!("{}_sigma_{}", report_uuid, index),
+                    body: Value::Object(behavior_doc),
+                });
+            }
+        }
+    }
+}
+
+/// Processes sigma rule information
+fn process_sigma_rule_info(behavior_doc: &mut Map<String, Value>, sigma_obj: &serde_json::Map<String, Value>) {
+    let rule_fields = vec![
+        ("rule_id", "rule_id"),
+        ("rule_title", "rule_title"),
+        ("rule_description", "rule_description"),
+        ("rule_level", "severity"),
+        ("rule_author", "rule_author"),
+        ("rule_source", "rule_source"),
+    ];
+    
+    for (source_field, target_field) in rule_fields {
+        if let Some(value) = sigma_obj.get(source_field) {
+            behavior_doc.insert(target_field.to_string(), value.clone());
+        }
+    }
+}
+
+/// Processes sigma behavioral events for detailed analysis
+fn process_sigma_behavioral_events(behavior_doc: &mut Map<String, Value>, sigma_obj: &serde_json::Map<String, Value>) {
+    if let Some(matches) = sigma_obj.get("rule_matches").and_then(|v| v.as_array()) {
+        let mut behavioral_events = Vec::new();
+
+        for match_item in matches {
+            if let Some(match_obj) = match_item.as_object() {
+                let mut event = Map::new();
+                process_sigma_event_details(&mut event, match_obj);
+                behavioral_events.push(Value::Object(event));
+            }
+        }
+
+        behavior_doc.insert("behavioral_events".to_string(), Value::Array(behavioral_events));
+        behavior_doc.insert("event_count".to_string(), Value::Number(matches.len().into()));
+    }
+}
+
+/// Processes individual sigma event details (process, file, network, registry info)
+fn process_sigma_event_details(event: &mut Map<String, Value>, match_obj: &serde_json::Map<String, Value>) {
+    process_sigma_process_info(event, match_obj);
+    process_sigma_file_info(event, match_obj);
+    process_sigma_network_info(event, match_obj);
+    process_sigma_registry_info(event, match_obj);
+    process_sigma_misc_info(event, match_obj);
+}
+
+/// Processes process information from sigma events
+fn process_sigma_process_info(event: &mut Map<String, Value>, match_obj: &serde_json::Map<String, Value>) {
+    if let Some(process_info) = match_obj.get("Process") {
+        event.insert("process_info".to_string(), process_info.clone());
+        
+        if let Some(process_obj) = process_info.as_object() {
+            let process_fields = vec![
+                ("Image", "process_path"),
+                ("CommandLine", "command_line"),
+                ("ProcessId", "process_id"),
+                ("ParentImage", "parent_process"),
+            ];
+            
+            for (source, target) in process_fields {
+                if let Some(value) = process_obj.get(source) {
+                    event.insert(target.to_string(), value.clone());
+                }
+            }
+        }
+    }
+}
+
+/// Processes file information from sigma events
+fn process_sigma_file_info(event: &mut Map<String, Value>, match_obj: &serde_json::Map<String, Value>) {
+    if let Some(file_info) = match_obj.get("File") {
+        event.insert("file_info".to_string(), file_info.clone());
+        
+        if let Some(file_obj) = file_info.as_object() {
+            if let Some(target_filename) = file_obj.get("TargetFilename") {
+                event.insert("target_file".to_string(), target_filename.clone());
+            }
+            if let Some(creation_time) = file_obj.get("CreationUtcTime") {
+                event.insert("file_creation_time".to_string(), creation_time.clone());
+            }
+        }
+    }
+}
+
+/// Processes network information from sigma events
+fn process_sigma_network_info(event: &mut Map<String, Value>, match_obj: &serde_json::Map<String, Value>) {
+    if let Some(network_info) = match_obj.get("Network") {
+        event.insert("network_info".to_string(), network_info.clone());
+        
+        if let Some(network_obj) = network_info.as_object() {
+            let network_fields = vec![
+                ("DestinationIp", "destination_ip"),
+                ("DestinationPort", "destination_port"),
+                ("Protocol", "protocol"),
+            ];
+            
+            for (source, target) in network_fields {
+                if let Some(value) = network_obj.get(source) {
+                    event.insert(target.to_string(), value.clone());
+                }
+            }
+        }
+    }
+}
+
+/// Processes registry information from sigma events
+fn process_sigma_registry_info(event: &mut Map<String, Value>, match_obj: &serde_json::Map<String, Value>) {
+    if let Some(registry_info) = match_obj.get("Registry") {
+        event.insert("registry_info".to_string(), registry_info.clone());
+        
+        if let Some(registry_obj) = registry_info.as_object() {
+            if let Some(target_object) = registry_obj.get("TargetObject") {
+                event.insert("registry_key".to_string(), target_object.clone());
+            }
+            if let Some(details) = registry_obj.get("Details") {
+                event.insert("registry_value".to_string(), details.clone());
+            }
+        }
+    }
+}
+
+/// Processes miscellaneous sigma event information
+fn process_sigma_misc_info(event: &mut Map<String, Value>, match_obj: &serde_json::Map<String, Value>) {
+    let misc_fields = vec![
+        ("ImageLoaded", "loaded_image"),
+        ("SignatureStatus", "signature_status"),
+        ("Signed", "signed"),
+    ];
+    
+    for (source, target) in misc_fields {
+        if let Some(value) = match_obj.get(source) {
+            event.insert(target.to_string(), value.clone());
+        }
+    }
+}
+
+/// Processes crowdsourced data (YARA rules and IDS results)
+fn process_crowdsourced_data(
+    documents: &mut Vec<IndexedDocument>,
+    report_uuid: &str,
+    file_hash: &str,
+    attributes: &Value,
+) {
+    process_yara_results(documents, report_uuid, file_hash, attributes);
+    process_ids_results(documents, report_uuid, file_hash, attributes);
+}
+
+/// Processes YARA results
+fn process_yara_results(
+    documents: &mut Vec<IndexedDocument>,
+    report_uuid: &str,
+    file_hash: &str,
+    attributes: &Value,
+) {
+    if let Some(crowdsourced_yara_results) = attributes
+        .get("crowdsourced_yara_results")
+        .and_then(|v| v.as_array())
+    {
+        for (index, yara_result) in crowdsourced_yara_results.iter().enumerate() {
+            let mut yara_doc = create_base_document(report_uuid, file_hash);
+            yara_doc.insert("data_type".to_string(), Value::String("yara".to_string()));
+            yara_doc.insert("data".to_string(), yara_result.clone());
+
+            documents.push(IndexedDocument {
+                index: "vt_crowdsourced_data".to_string(),
+                id: format!("{}_yara_{}", report_uuid, index),
+                body: Value::Object(yara_doc),
+            });
+        }
+    }
+}
+
+/// Processes IDS results
+fn process_ids_results(
+    documents: &mut Vec<IndexedDocument>,
+    report_uuid: &str,
+    file_hash: &str,
+    attributes: &Value,
+) {
+    if let Some(crowdsourced_ids_results) = attributes
+        .get("crowdsourced_ids_results")
+        .and_then(|v| v.as_array())
+    {
+        for (index, ids_result) in crowdsourced_ids_results.iter().enumerate() {
+            let mut ids_doc = create_base_document(report_uuid, file_hash);
+            ids_doc.insert("data_type".to_string(), Value::String("ids".to_string()));
+            ids_doc.insert("data".to_string(), ids_result.clone());
+
+            documents.push(IndexedDocument {
+                index: "vt_crowdsourced_data".to_string(),
+                id: format!("{}_ids_{}", report_uuid, index),
+                body: Value::Object(ids_doc),
+            });
+        }
+    }
+}
+
+/// Processes file relationships
+fn process_relationships(
+    documents: &mut Vec<IndexedDocument>,
+    report_uuid: &str,
+    file_hash: &str,
+    json_data: &Value,
+) {
+    if let Some(links) = json_data.get("links") {
+        let mut relationships_doc = create_base_document(report_uuid, file_hash);
+        relationships_doc.insert("links".to_string(), links.clone());
+
+        documents.push(IndexedDocument {
+            index: "vt_relationships".to_string(),
+            id: format!("{}_links", report_uuid),
+            body: Value::Object(relationships_doc),
+        });
+    }
+}
+
+/// Creates a base document with common fields
+fn create_base_document(report_uuid: &str, file_hash: &str) -> Map<String, Value> {
+    let mut doc = Map::new();
+    doc.insert("report_uuid".to_string(), Value::String(report_uuid.to_string()));
+    doc.insert("file_hash".to_string(), Value::String(file_hash.to_string()));
+    doc.insert("index_time".to_string(), Value::String(Utc::now().to_rfc3339()));
+    doc
+}
+
+/// Main function to process a VirusTotal report into Elasticsearch documents
 fn process_vt_report(
     file_hash: &str,
     json_data: &Value,
@@ -392,575 +815,16 @@ fn process_vt_report(
         .get("attributes")
         .ok_or("Missing attributes in VT report")?;
 
-    // Main report document
-    let mut main_report = Map::new();
-    main_report.insert(
-        "report_uuid".to_string(),
-        Value::String(report_uuid.clone()),
-    );
-    main_report.insert(
-        "file_hash".to_string(),
-        Value::String(file_hash.to_string()),
-    );
-    main_report.insert(
-        "file_id".to_string(),
-        json_data
-            .get("id")
-            .cloned()
-            .unwrap_or(Value::String(file_hash.to_string())),
-    );
-    main_report.insert(
-        "file_type".to_string(),
-        json_data
-            .get("type")
-            .cloned()
-            .unwrap_or(Value::String("file".to_string())),
-    );
+    // Create main report document
+    let main_document = create_main_report_document(&report_uuid, file_hash, json_data, attributes);
+    documents.push(main_document);
 
-    // Add index timestamp
-    main_report.insert(
-        "index_time".to_string(),
-        Value::String(Utc::now().to_rfc3339()),
-    );
-
-    // Add basic file information
-    if let Some(sha256) = attributes.get("sha256") {
-        main_report.insert("sha256".to_string(), sha256.clone());
-    }
-    if let Some(sha1) = attributes.get("sha1") {
-        main_report.insert("sha1".to_string(), sha1.clone());
-    }
-    if let Some(md5) = attributes.get("md5") {
-        main_report.insert("md5".to_string(), md5.clone());
-    }
-
-    // Add similarity hashes
-    if let Some(vhash) = attributes.get("vhash") {
-        main_report.insert("vhash".to_string(), vhash.clone());
-    }
-    if let Some(tlsh) = attributes.get("tlsh") {
-        main_report.insert("tlsh".to_string(), tlsh.clone());
-    }
-    if let Some(ssdeep) = attributes.get("ssdeep") {
-        main_report.insert("ssdeep".to_string(), ssdeep.clone());
-    }
-
-    // Add file analysis details
-    if let Some(magic) = attributes.get("magic") {
-        main_report.insert("magic".to_string(), magic.clone());
-    }
-    if let Some(trid) = attributes.get("trid") {
-        main_report.insert("trid".to_string(), trid.clone());
-    }
-    if let Some(exiftool) = attributes.get("exiftool") {
-        main_report.insert("exiftool".to_string(), exiftool.clone());
-    }
-    if let Some(office_info) = attributes.get("office_info") {
-        main_report.insert("office_info".to_string(), office_info.clone());
-    }
-
-    // Add file metadata
-    if let Some(size) = attributes.get("size") {
-        main_report.insert("size".to_string(), size.clone());
-    }
-    if let Some(names) = attributes.get("names") {
-        main_report.insert("names".to_string(), names.clone());
-    }
-    if let Some(meaningful_name) = attributes.get("meaningful_name") {
-        main_report.insert("meaningful_name".to_string(), meaningful_name.clone());
-    }
-    if let Some(type_description) = attributes.get("type_description") {
-        main_report.insert("type_description".to_string(), type_description.clone());
-    }
-    if let Some(type_tag) = attributes.get("type_tag") {
-        main_report.insert("type_tag".to_string(), type_tag.clone());
-    }
-    if let Some(type_extension) = attributes.get("type_extension") {
-        main_report.insert("type_extension".to_string(), type_extension.clone());
-    }
-
-    // Add submission dates
-    if let Some(first_submission_date) = attributes.get("first_submission_date") {
-        main_report.insert(
-            "first_submission_date".to_string(),
-            first_submission_date.clone(),
-        );
-    }
-    if let Some(last_submission_date) = attributes.get("last_submission_date") {
-        main_report.insert(
-            "last_submission_date".to_string(),
-            last_submission_date.clone(),
-        );
-    }
-    if let Some(last_analysis_date) = attributes.get("last_analysis_date") {
-        main_report.insert("last_analysis_date".to_string(), last_analysis_date.clone());
-    }
-    if let Some(last_modification_date) = attributes.get("last_modification_date") {
-        main_report.insert(
-            "last_modification_date".to_string(),
-            last_modification_date.clone(),
-        );
-    }
-
-    // Add threat intelligence
-    if let Some(times_submitted) = attributes.get("times_submitted") {
-        main_report.insert("times_submitted".to_string(), times_submitted.clone());
-    }
-    if let Some(unique_sources) = attributes.get("unique_sources") {
-        main_report.insert("unique_sources".to_string(), unique_sources.clone());
-    }
-    if let Some(reputation) = attributes.get("reputation") {
-        main_report.insert("reputation".to_string(), reputation.clone());
-    }
-    if let Some(tags) = attributes.get("tags") {
-        main_report.insert("tags".to_string(), tags.clone());
-    }
-    if let Some(total_votes) = attributes.get("total_votes") {
-        main_report.insert("total_votes".to_string(), total_votes.clone());
-    }
-    if let Some(threat_severity) = attributes.get("threat_severity") {
-        main_report.insert("threat_severity".to_string(), threat_severity.clone());
-    }
-
-    // Add analysis stats
-    if let Some(last_analysis_stats) = attributes.get("last_analysis_stats") {
-        main_report.insert(
-            "last_analysis_stats".to_string(),
-            last_analysis_stats.clone(),
-        );
-    }
-
-    // Add special analysis fields
-    if let Some(pe_info) = attributes.get("pe_info") {
-        main_report.insert("pe_info".to_string(), pe_info.clone());
-    }
-    if let Some(androguard) = attributes.get("androguard") {
-        main_report.insert("androguard".to_string(), androguard.clone());
-    }
-    if let Some(bundle_info) = attributes.get("bundle_info") {
-        main_report.insert("bundle_info".to_string(), bundle_info.clone());
-    }
-    if let Some(pdf_info) = attributes.get("pdf_info") {
-        main_report.insert("pdf_info".to_string(), pdf_info.clone());
-    }
-    if let Some(sigma_analysis_summary) = attributes.get("sigma_analysis_summary") {
-        main_report.insert(
-            "sigma_analysis_summary".to_string(),
-            sigma_analysis_summary.clone(),
-        );
-    }
-    if let Some(sigma_analysis_results) = attributes.get("sigma_analysis_results") {
-        main_report.insert(
-            "sigma_analysis_results".to_string(),
-            sigma_analysis_results.clone(),
-        );
-    }
-    if let Some(network_infrastructure) = attributes.get("network_infrastructure") {
-        main_report.insert(
-            "network_infrastructure".to_string(),
-            network_infrastructure.clone(),
-        );
-    }
-    if let Some(dot_net_assembly) = attributes.get("dot_net_assembly") {
-        main_report.insert("dot_net_assembly".to_string(), dot_net_assembly.clone());
-    }
-    if let Some(macho_info) = attributes.get("macho_info") {
-        main_report.insert("macho_info".to_string(), macho_info.clone());
-    }
-    if let Some(powershell_info) = attributes.get("powershell_info") {
-        main_report.insert("powershell_info".to_string(), powershell_info.clone());
-    }
-    if let Some(signature_info) = attributes.get("signature_info") {
-        main_report.insert("signature_info".to_string(), signature_info.clone());
-    }
-    if let Some(packers) = attributes.get("packers") {
-        main_report.insert("packers".to_string(), packers.clone());
-    }
-    if let Some(detectiteasy) = attributes.get("detectiteasy") {
-        main_report.insert("detectiteasy".to_string(), detectiteasy.clone());
-    }
-    if let Some(magika) = attributes.get("magika") {
-        main_report.insert("magika".to_string(), magika.clone());
-    }
-    if let Some(bytehero_info) = attributes.get("bytehero_info") {
-        main_report.insert("bytehero_info".to_string(), bytehero_info.clone());
-    }
-    if let Some(popular_threat_classification) = attributes.get("popular_threat_classification") {
-        main_report.insert(
-            "popular_threat_classification".to_string(),
-            popular_threat_classification.clone(),
-        );
-    }
-    if let Some(crowdsourced_ids_results) = attributes.get("crowdsourced_ids_results") {
-        main_report.insert(
-            "crowdsourced_ids_results".to_string(),
-            crowdsourced_ids_results.clone(),
-        );
-    }
-    if let Some(type_tags) = attributes.get("type_tags") {
-        main_report.insert("type_tags".to_string(), type_tags.clone());
-    }
-    if let Some(permhash) = attributes.get("permhash") {
-        main_report.insert("permhash".to_string(), permhash.clone());
-    }
-    if let Some(symhash) = attributes.get("symhash") {
-        main_report.insert("symhash".to_string(), symhash.clone());
-    }
-    if let Some(first_seen_itw_date) = attributes.get("first_seen_itw_date") {
-        main_report.insert(
-            "first_seen_itw_date".to_string(),
-            first_seen_itw_date.clone(),
-        );
-    }
-    if let Some(last_seen_itw_date) = attributes.get("last_seen_itw_date") {
-        main_report.insert("last_seen_itw_date".to_string(), last_seen_itw_date.clone());
-    }
-    if let Some(creation_date) = attributes.get("creation_date") {
-        main_report.insert("creation_date".to_string(), creation_date.clone());
-    }
-    if let Some(downloadable) = attributes.get("downloadable") {
-        main_report.insert("downloadable".to_string(), downloadable.clone());
-    }
-    if let Some(available_tools) = attributes.get("available_tools") {
-        main_report.insert("available_tools".to_string(), available_tools.clone());
-    }
-
-    documents.push(IndexedDocument {
-        index: "vt_reports".to_string(),
-        id: report_uuid.clone(),
-        body: Value::Object(main_report),
-    });
-
-    // Process last_analysis_results (antivirus scan results)
-    if let Some(analysis_results) = attributes
-        .get("last_analysis_results")
-        .and_then(|v| v.as_object())
-    {
-        for (engine_name, engine_result) in analysis_results {
-            if let Some(engine_data) = engine_result.as_object() {
-                let mut analysis_doc = Map::new();
-                analysis_doc.insert(
-                    "report_uuid".to_string(),
-                    Value::String(report_uuid.clone()),
-                );
-                analysis_doc.insert(
-                    "file_hash".to_string(),
-                    Value::String(file_hash.to_string()),
-                );
-                analysis_doc.insert(
-                    "engine_name".to_string(),
-                    Value::String(engine_name.clone()),
-                );
-                analysis_doc.insert(
-                    "index_time".to_string(),
-                    Value::String(Utc::now().to_rfc3339()),
-                );
-
-                for (key, value) in engine_data {
-                    analysis_doc.insert(key.clone(), value.clone());
-                }
-
-                documents.push(IndexedDocument {
-                    index: "vt_analysis_results".to_string(),
-                    id: format!("{}_{}", report_uuid, engine_name),
-                    body: Value::Object(analysis_doc),
-                });
-            }
-        }
-    }
-
-    // Process sandbox verdicts if available
-    if let Some(sandbox_verdicts) = attributes
-        .get("sandbox_verdicts")
-        .and_then(|v| v.as_object())
-    {
-        for (sandbox_name, verdict) in sandbox_verdicts {
-            let mut sandbox_doc = Map::new();
-            sandbox_doc.insert(
-                "report_uuid".to_string(),
-                Value::String(report_uuid.clone()),
-            );
-            sandbox_doc.insert(
-                "file_hash".to_string(),
-                Value::String(file_hash.to_string()),
-            );
-            sandbox_doc.insert(
-                "sandbox_name".to_string(),
-                Value::String(sandbox_name.clone()),
-            );
-            sandbox_doc.insert(
-                "index_time".to_string(),
-                Value::String(Utc::now().to_rfc3339()),
-            );
-            sandbox_doc.insert("verdict".to_string(), verdict.clone());
-
-            documents.push(IndexedDocument {
-                index: "vt_sandbox_verdicts".to_string(),
-                id: format!("{}_{}", report_uuid, sandbox_name),
-                body: Value::Object(sandbox_doc),
-            });
-        }
-    }
-
-    // Process sigma analysis results for behavioral data
-    if let Some(sigma_results) = attributes
-        .get("sigma_analysis_results")
-        .and_then(|v| v.as_array())
-    {
-        for (index, sigma_result) in sigma_results.iter().enumerate() {
-            if let Some(sigma_obj) = sigma_result.as_object() {
-                let mut behavior_doc = Map::new();
-                behavior_doc.insert(
-                    "report_uuid".to_string(),
-                    Value::String(report_uuid.clone()),
-                );
-                behavior_doc.insert(
-                    "file_hash".to_string(),
-                    Value::String(file_hash.to_string()),
-                );
-                behavior_doc.insert(
-                    "index_time".to_string(),
-                    Value::String(Utc::now().to_rfc3339()),
-                );
-                behavior_doc.insert(
-                    "analysis_type".to_string(),
-                    Value::String("sigma".to_string()),
-                );
-
-                // Extract rule information
-                if let Some(rule_id) = sigma_obj.get("rule_id") {
-                    behavior_doc.insert("rule_id".to_string(), rule_id.clone());
-                }
-                if let Some(rule_title) = sigma_obj.get("rule_title") {
-                    behavior_doc.insert("rule_title".to_string(), rule_title.clone());
-                }
-                if let Some(rule_description) = sigma_obj.get("rule_description") {
-                    behavior_doc.insert("rule_description".to_string(), rule_description.clone());
-                }
-                if let Some(rule_level) = sigma_obj.get("rule_level") {
-                    behavior_doc.insert("severity".to_string(), rule_level.clone());
-                }
-                if let Some(rule_author) = sigma_obj.get("rule_author") {
-                    behavior_doc.insert("rule_author".to_string(), rule_author.clone());
-                }
-                if let Some(rule_source) = sigma_obj.get("rule_source") {
-                    behavior_doc.insert("rule_source".to_string(), rule_source.clone());
-                }
-
-                // Process match data for behavioral details
-                if let Some(matches) = sigma_obj.get("rule_matches").and_then(|v| v.as_array()) {
-                    let mut behavioral_events = Vec::new();
-
-                    for match_item in matches {
-                        if let Some(match_obj) = match_item.as_object() {
-                            let mut event = Map::new();
-
-                            // Extract process information
-                            if let Some(process_info) = match_obj.get("Process") {
-                                event.insert("process_info".to_string(), process_info.clone());
-
-                                // Extract specific process details
-                                if let Some(process_obj) = process_info.as_object() {
-                                    if let Some(image) = process_obj.get("Image") {
-                                        event.insert("process_path".to_string(), image.clone());
-                                    }
-                                    if let Some(command_line) = process_obj.get("CommandLine") {
-                                        event.insert(
-                                            "command_line".to_string(),
-                                            command_line.clone(),
-                                        );
-                                    }
-                                    if let Some(pid) = process_obj.get("ProcessId") {
-                                        event.insert("process_id".to_string(), pid.clone());
-                                    }
-                                    if let Some(parent_image) = process_obj.get("ParentImage") {
-                                        event.insert(
-                                            "parent_process".to_string(),
-                                            parent_image.clone(),
-                                        );
-                                    }
-                                }
-                            }
-
-                            // Extract file operation information
-                            if let Some(file_info) = match_obj.get("File") {
-                                event.insert("file_info".to_string(), file_info.clone());
-
-                                if let Some(file_obj) = file_info.as_object() {
-                                    if let Some(target_filename) = file_obj.get("TargetFilename") {
-                                        event.insert(
-                                            "target_file".to_string(),
-                                            target_filename.clone(),
-                                        );
-                                    }
-                                    if let Some(creation_time) = file_obj.get("CreationUtcTime") {
-                                        event.insert(
-                                            "file_creation_time".to_string(),
-                                            creation_time.clone(),
-                                        );
-                                    }
-                                }
-                            }
-
-                            // Extract network information
-                            if let Some(network_info) = match_obj.get("Network") {
-                                event.insert("network_info".to_string(), network_info.clone());
-
-                                if let Some(network_obj) = network_info.as_object() {
-                                    if let Some(dest_ip) = network_obj.get("DestinationIp") {
-                                        event.insert("destination_ip".to_string(), dest_ip.clone());
-                                    }
-                                    if let Some(dest_port) = network_obj.get("DestinationPort") {
-                                        event.insert(
-                                            "destination_port".to_string(),
-                                            dest_port.clone(),
-                                        );
-                                    }
-                                    if let Some(protocol) = network_obj.get("Protocol") {
-                                        event.insert("protocol".to_string(), protocol.clone());
-                                    }
-                                }
-                            }
-
-                            // Extract registry information
-                            if let Some(registry_info) = match_obj.get("Registry") {
-                                event.insert("registry_info".to_string(), registry_info.clone());
-
-                                if let Some(registry_obj) = registry_info.as_object() {
-                                    if let Some(target_object) = registry_obj.get("TargetObject") {
-                                        event.insert(
-                                            "registry_key".to_string(),
-                                            target_object.clone(),
-                                        );
-                                    }
-                                    if let Some(details) = registry_obj.get("Details") {
-                                        event.insert("registry_value".to_string(), details.clone());
-                                    }
-                                }
-                            }
-
-                            // Extract image loaded information
-                            if let Some(image_loaded) = match_obj.get("ImageLoaded") {
-                                event.insert("loaded_image".to_string(), image_loaded.clone());
-                            }
-                            if let Some(signature_status) = match_obj.get("SignatureStatus") {
-                                event.insert(
-                                    "signature_status".to_string(),
-                                    signature_status.clone(),
-                                );
-                            }
-                            if let Some(signed) = match_obj.get("Signed") {
-                                event.insert("signed".to_string(), signed.clone());
-                            }
-
-                            behavioral_events.push(Value::Object(event));
-                        }
-                    }
-
-                    behavior_doc.insert(
-                        "behavioral_events".to_string(),
-                        Value::Array(behavioral_events),
-                    );
-                    behavior_doc.insert(
-                        "event_count".to_string(),
-                        Value::Number(matches.len().into()),
-                    );
-                }
-
-                // Store full sigma result for reference
-                behavior_doc.insert("raw_sigma_result".to_string(), sigma_result.clone());
-
-                documents.push(IndexedDocument {
-                    index: "vt_sandbox_behaviors".to_string(),
-                    id: format!("{}_sigma_{}", report_uuid, index),
-                    body: Value::Object(behavior_doc),
-                });
-            }
-        }
-    }
-
-    // Process crowdsourced data (YARA rules, IDS, etc.)
-    if let Some(crowdsourced_yara_results) = attributes
-        .get("crowdsourced_yara_results")
-        .and_then(|v| v.as_array())
-    {
-        for (index, yara_result) in crowdsourced_yara_results.iter().enumerate() {
-            let mut yara_doc = Map::new();
-            yara_doc.insert(
-                "report_uuid".to_string(),
-                Value::String(report_uuid.clone()),
-            );
-            yara_doc.insert(
-                "file_hash".to_string(),
-                Value::String(file_hash.to_string()),
-            );
-            yara_doc.insert("data_type".to_string(), Value::String("yara".to_string()));
-            yara_doc.insert(
-                "index_time".to_string(),
-                Value::String(Utc::now().to_rfc3339()),
-            );
-            yara_doc.insert("data".to_string(), yara_result.clone());
-
-            documents.push(IndexedDocument {
-                index: "vt_crowdsourced_data".to_string(),
-                id: format!("{}_yara_{}", report_uuid, index),
-                body: Value::Object(yara_doc),
-            });
-        }
-    }
-
-    if let Some(crowdsourced_ids_results) = attributes
-        .get("crowdsourced_ids_results")
-        .and_then(|v| v.as_array())
-    {
-        for (index, ids_result) in crowdsourced_ids_results.iter().enumerate() {
-            let mut ids_doc = Map::new();
-            ids_doc.insert(
-                "report_uuid".to_string(),
-                Value::String(report_uuid.clone()),
-            );
-            ids_doc.insert(
-                "file_hash".to_string(),
-                Value::String(file_hash.to_string()),
-            );
-            ids_doc.insert("data_type".to_string(), Value::String("ids".to_string()));
-            ids_doc.insert(
-                "index_time".to_string(),
-                Value::String(Utc::now().to_rfc3339()),
-            );
-            ids_doc.insert("data".to_string(), ids_result.clone());
-
-            documents.push(IndexedDocument {
-                index: "vt_crowdsourced_data".to_string(),
-                id: format!("{}_ids_{}", report_uuid, index),
-                body: Value::Object(ids_doc),
-            });
-        }
-    }
-
-    // Process file relationships if available
-    if let Some(links) = json_data.get("links") {
-        let mut relationships_doc = Map::new();
-        relationships_doc.insert(
-            "report_uuid".to_string(),
-            Value::String(report_uuid.clone()),
-        );
-        relationships_doc.insert(
-            "file_hash".to_string(),
-            Value::String(file_hash.to_string()),
-        );
-        relationships_doc.insert(
-            "index_time".to_string(),
-            Value::String(Utc::now().to_rfc3339()),
-        );
-        relationships_doc.insert("links".to_string(), links.clone());
-
-        documents.push(IndexedDocument {
-            index: "vt_relationships".to_string(),
-            id: format!("{}_links", report_uuid),
-            body: Value::Object(relationships_doc),
-        });
-    }
+    // Process different aspects of the report using helper functions
+    process_analysis_results(&mut documents, &report_uuid, file_hash, attributes);
+    process_sandbox_verdicts(&mut documents, &report_uuid, file_hash, attributes);
+    process_sigma_analysis(&mut documents, &report_uuid, file_hash, attributes);
+    process_crowdsourced_data(&mut documents, &report_uuid, file_hash, attributes);
+    process_relationships(&mut documents, &report_uuid, file_hash, json_data);
 
     if args.verbose {
         println!(
@@ -981,62 +845,93 @@ async fn create_elasticsearch_indexes(
     client: &Elasticsearch,
     args: &Args,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let indexes = vec![
+    let indexes = get_index_definitions();
+
+    for (index_name, mapping) in indexes {
+        create_index_if_not_exists(client, index_name, mapping, args).await?;
+    }
+
+    Ok(())
+}
+
+fn get_index_definitions() -> Vec<(&'static str, Value)> {
+    vec![
         ("vt_reports", get_main_index_mapping()),
         ("vt_analysis_results", get_analysis_results_mapping()),
         ("vt_sandbox_verdicts", get_sandbox_verdicts_mapping()),
         ("vt_sandbox_behaviors", get_sandbox_behaviors_mapping()),
         ("vt_crowdsourced_data", get_crowdsourced_data_mapping()),
         ("vt_relationships", get_relationships_mapping()),
-    ];
+    ]
+}
 
-    for (index_name, mapping) in indexes {
-        // Check if index exists
-        let response = client
-            .indices()
-            .exists(elasticsearch::indices::IndicesExistsParts::Index(&[
-                index_name,
-            ]))
-            .send()
-            .await;
-
-        match response {
-            Ok(response) => {
-                if response.status_code().as_u16() == 404 {
-                    // Index doesn't exist, create it
-                    if args.verbose {
-                        println!("Creating index: {}", index_name);
-                    }
-
-                    let create_response = client
-                        .indices()
-                        .create(elasticsearch::indices::IndicesCreateParts::Index(
-                            index_name,
-                        ))
-                        .body(mapping)
-                        .send()
-                        .await?;
-
-                    if !create_response.status_code().is_success() {
-                        return Err(format!(
-                            "Failed to create index {}: {}",
-                            index_name,
-                            create_response.status_code()
-                        )
-                        .into());
-                    }
-                } else if args.verbose {
-                    println!("Index {} already exists", index_name);
-                }
-            }
-            Err(e) => {
-                return Err(
-                    format!("Failed to check if index {} exists: {}", index_name, e).into(),
-                );
+async fn create_index_if_not_exists(
+    client: &Elasticsearch,
+    index_name: &str,
+    mapping: Value,
+    args: &Args,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let exists_response = check_index_exists(client, index_name).await;
+    
+    match exists_response {
+        Ok(response) => {
+            if response.status_code().as_u16() == 404 {
+                create_new_index(client, index_name, mapping, args).await?
+            } else if args.verbose {
+                println!("Index {} already exists", index_name);
             }
         }
+        Err(e) => {
+            return Err(
+                format!("Failed to check if index {} exists: {}", index_name, e).into(),
+            );
+        }
+    }
+    
+    Ok(())
+}
+
+async fn check_index_exists(
+    client: &Elasticsearch,
+    index_name: &str,
+) -> Result<elasticsearch::http::response::Response, elasticsearch::Error> {
+    client
+        .indices()
+        .exists(elasticsearch::indices::IndicesExistsParts::Index(&[
+            index_name,
+        ]))
+        .send()
+        .await
+}
+
+async fn create_new_index(
+    client: &Elasticsearch,
+    index_name: &str,
+    mapping: Value,
+    args: &Args,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if args.verbose {
+        println!("Creating index: {}", index_name);
     }
 
+    let create_response = client
+        .indices()
+        .create(elasticsearch::indices::IndicesCreateParts::Index(
+            index_name,
+        ))
+        .body(mapping)
+        .send()
+        .await?;
+
+    if !create_response.status_code().is_success() {
+        return Err(format!(
+            "Failed to create index {}: {}",
+            index_name,
+            create_response.status_code()
+        )
+        .into());
+    }
+    
     Ok(())
 }
 
@@ -1045,68 +940,97 @@ async fn index_documents_bulk(
     reports: Vec<ProcessedReport>,
     args: &Args,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let total_docs: usize = reports.iter().map(|r| r.documents.len()).sum();
+    let all_documents = flatten_report_documents(reports);
+    let total_docs = all_documents.len();
+    
     println!(
-        "Indexing {} documents from {} reports",
-        total_docs,
-        reports.len()
+        "Indexing {} documents from reports",
+        total_docs
     );
 
-    // Flatten all documents
-    let mut all_documents = Vec::new();
-    for report in reports {
-        for doc in report.documents {
-            all_documents.push(doc);
-        }
-    }
-
-    // Process in batches
     let mut indexed = 0;
     for batch in all_documents.chunks(args.batch_size) {
-        let mut bulk_body = Vec::new();
-
-        for doc in batch {
-            // Action header
-            let action = serde_json::json!({
-                "index": {
-                    "_index": doc.index,
-                    "_id": doc.id
-                }
-            });
-            bulk_body.push(serde_json::to_string(&action)?);
-            bulk_body.push(serde_json::to_string(&doc.body)?);
-        }
-
-        let bulk_body_str = bulk_body.join("\n") + "\n";
-
-        let response = client
-            .bulk(BulkParts::None)
-            .body(vec![bulk_body_str])
-            .send()
-            .await?;
-
-        if !response.status_code().is_success() {
-            return Err(format!("Bulk indexing failed: {}", response.status_code()).into());
-        }
-
-        // Check for errors in the response
-        let response_body: Value = response.json().await?;
-        if let Some(errors) = response_body.get("errors") {
-            if errors.as_bool() == Some(true) {
-                eprintln!("Some documents failed to index: {}", response_body);
-                if !args.skip_errors {
-                    return Err("Bulk indexing had errors".into());
-                }
-            }
-        }
-
-        indexed += batch.len();
+        indexed += process_document_batch(client, batch, args).await?;
+        
         if args.verbose {
             println!("Indexed {}/{} documents", indexed, total_docs);
         }
     }
 
     println!("✓ Successfully indexed {} documents", indexed);
+    Ok(())
+}
+
+fn flatten_report_documents(reports: Vec<ProcessedReport>) -> Vec<IndexedDocument> {
+    let mut all_documents = Vec::new();
+    for report in reports {
+        for doc in report.documents {
+            all_documents.push(doc);
+        }
+    }
+    all_documents
+}
+
+async fn process_document_batch(
+    client: &Elasticsearch,
+    batch: &[IndexedDocument],
+    args: &Args,
+) -> Result<usize, Box<dyn std::error::Error>> {
+    let bulk_body = prepare_bulk_request_body(batch)?;
+    let response = execute_bulk_request(client, bulk_body).await?;
+    handle_bulk_response(response, args).await?;
+    Ok(batch.len())
+}
+
+fn prepare_bulk_request_body(batch: &[IndexedDocument]) -> Result<String, Box<dyn std::error::Error>> {
+    let mut bulk_body = Vec::new();
+    
+    for doc in batch {
+        let action = serde_json::json!({
+            "index": {
+                "_index": doc.index,
+                "_id": doc.id
+            }
+        });
+        bulk_body.push(serde_json::to_string(&action)?);
+        bulk_body.push(serde_json::to_string(&doc.body)?);
+    }
+    
+    Ok(bulk_body.join("\n") + "\n")
+}
+
+async fn execute_bulk_request(
+    client: &Elasticsearch,
+    bulk_body: String,
+) -> Result<elasticsearch::http::response::Response, Box<dyn std::error::Error>> {
+    let response = client
+        .bulk(BulkParts::None)
+        .body(vec![bulk_body])
+        .send()
+        .await?;
+
+    if !response.status_code().is_success() {
+        return Err(format!("Bulk indexing failed: {}", response.status_code()).into());
+    }
+    
+    Ok(response)
+}
+
+async fn handle_bulk_response(
+    response: elasticsearch::http::response::Response,
+    args: &Args,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let response_body: Value = response.json().await?;
+    
+    if let Some(errors) = response_body.get("errors") {
+        if errors.as_bool() == Some(true) {
+            eprintln!("Some documents failed to index: {}", response_body);
+            if !args.skip_errors {
+                return Err("Bulk indexing had errors".into());
+            }
+        }
+    }
+    
     Ok(())
 }
 

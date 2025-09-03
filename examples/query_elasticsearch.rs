@@ -103,7 +103,21 @@ async fn query_summary(client: &Elasticsearch) -> Result<(), Box<dyn std::error:
 async fn query_malicious_files(client: &Elasticsearch) -> Result<(), Box<dyn std::error::Error>> {
     println!("\n=== Files with Malicious Detections ===");
 
-    let query = json!({
+    let query = build_malicious_files_query();
+    let response = client
+        .search(SearchParts::Index(&["vt_reports"]))
+        .body(query)
+        .send()
+        .await?;
+
+    let body: Value = response.json().await?;
+    process_malicious_files_results(&body);
+
+    Ok(())
+}
+
+fn build_malicious_files_query() -> Value {
+    json!({
         "query": {
             "range": {
                 "last_analysis_stats.malicious": {
@@ -119,15 +133,10 @@ async fn query_malicious_files(client: &Elasticsearch) -> Result<(), Box<dyn std
             }
         ],
         "size": 10
-    });
+    })
+}
 
-    let response = client
-        .search(SearchParts::Index(&["vt_reports"]))
-        .body(query)
-        .send()
-        .await?;
-
-    let body: Value = response.json().await?;
+fn process_malicious_files_results(body: &Value) {
     if let Some(hits) = body
         .get("hits")
         .and_then(|h| h.get("hits"))
@@ -135,31 +144,33 @@ async fn query_malicious_files(client: &Elasticsearch) -> Result<(), Box<dyn std
     {
         for hit in hits {
             if let Some(source) = hit.get("_source") {
-                let hash = source
-                    .get("file_hash")
-                    .and_then(|h| h.as_str())
-                    .unwrap_or("unknown");
-                let malicious = source
-                    .get("last_analysis_stats")
-                    .and_then(|s| s.get("malicious"))
-                    .and_then(|m| m.as_u64())
-                    .unwrap_or(0);
-                let name = source
-                    .get("meaningful_name")
-                    .and_then(|n| n.as_str())
-                    .unwrap_or("unknown");
-
-                println!(
-                    "Hash: {} | Detections: {} | Name: {}",
-                    &hash[..16],
-                    malicious,
-                    name
-                );
+                print_malicious_file_info(source);
             }
         }
     }
+}
 
-    Ok(())
+fn print_malicious_file_info(source: &Value) {
+    let hash = source
+        .get("file_hash")
+        .and_then(|h| h.as_str())
+        .unwrap_or("unknown");
+    let malicious = source
+        .get("last_analysis_stats")
+        .and_then(|s| s.get("malicious"))
+        .and_then(|m| m.as_u64())
+        .unwrap_or(0);
+    let name = source
+        .get("meaningful_name")
+        .and_then(|n| n.as_str())
+        .unwrap_or("unknown");
+
+    println!(
+        "Hash: {} | Detections: {} | Name: {}",
+        &hash[..16],
+        malicious,
+        name
+    );
 }
 
 async fn query_engine_stats(client: &Elasticsearch) -> Result<(), Box<dyn std::error::Error>> {
@@ -218,7 +229,23 @@ async fn query_by_hash(
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("\n=== Analysis for Hash: {} ===", hash);
 
-    // First get the main report
+    let main_report = fetch_main_report(client, hash).await?;
+    let report_data = process_main_report(main_report)?;
+    
+    if let Some((report_uuid, source)) = report_data {
+        display_report_summary(&report_uuid, &source);
+        query_and_display_malicious_detections(client, &report_uuid).await?;
+    } else {
+        println!("No report found for hash: {}", hash);
+    }
+
+    Ok(())
+}
+
+async fn fetch_main_report(
+    client: &Elasticsearch,
+    hash: &str,
+) -> Result<Value, Box<dyn std::error::Error>> {
     let query = json!({
         "query": {
             "term": {
@@ -229,11 +256,14 @@ async fn query_by_hash(
 
     let response = client
         .search(SearchParts::Index(&["vt_reports"]))
-        .body(query.clone())
+        .body(query)
         .send()
         .await?;
 
-    let body: Value = response.json().await?;
+    Ok(response.json().await?)
+}
+
+fn process_main_report(body: Value) -> Result<Option<(String, Value)>, Box<dyn std::error::Error>> {
     if let Some(hits) = body
         .get("hits")
         .and_then(|h| h.get("hits"))
@@ -244,84 +274,102 @@ async fn query_by_hash(
                 let report_uuid = source
                     .get("report_uuid")
                     .and_then(|u| u.as_str())
-                    .unwrap_or("unknown");
-
-                println!("Report UUID: {}", report_uuid);
-                if let Some(stats) = source.get("last_analysis_stats") {
-                    println!("Detection Stats:");
-                    println!(
-                        "  Malicious: {}",
-                        stats.get("malicious").and_then(|m| m.as_u64()).unwrap_or(0)
-                    );
-                    println!(
-                        "  Suspicious: {}",
-                        stats
-                            .get("suspicious")
-                            .and_then(|s| s.as_u64())
-                            .unwrap_or(0)
-                    );
-                    println!(
-                        "  Harmless: {}",
-                        stats.get("harmless").and_then(|h| h.as_u64()).unwrap_or(0)
-                    );
-                    println!(
-                        "  Undetected: {}",
-                        stats
-                            .get("undetected")
-                            .and_then(|u| u.as_u64())
-                            .unwrap_or(0)
-                    );
-                }
-
-                // Get malicious detections
-                let malicious_query = json!({
-                    "query": {
-                        "bool": {
-                            "must": [
-                                {"term": {"report_uuid": report_uuid}},
-                                {"term": {"category": "malicious"}}
-                            ]
-                        }
-                    },
-                    "size": 20
-                });
-
-                let mal_response = client
-                    .search(SearchParts::Index(&["vt_analysis_results"]))
-                    .body(malicious_query)
-                    .send()
-                    .await?;
-
-                let mal_body: Value = mal_response.json().await?;
-                if let Some(mal_hits) = mal_body
-                    .get("hits")
-                    .and_then(|h| h.get("hits"))
-                    .and_then(|h| h.as_array())
-                {
-                    if !mal_hits.is_empty() {
-                        println!("\nMalicious Detections:");
-                        for hit in mal_hits {
-                            if let Some(source) = hit.get("_source") {
-                                let engine = source
-                                    .get("engine_name")
-                                    .and_then(|e| e.as_str())
-                                    .unwrap_or("unknown");
-                                let result = source
-                                    .get("result")
-                                    .and_then(|r| r.as_str())
-                                    .unwrap_or("unknown");
-                                println!("  {}: {}", engine, result);
-                            }
-                        }
-                    }
-                }
+                    .unwrap_or("unknown")
+                    .to_string();
+                return Ok(Some((report_uuid, source.clone())));
             }
-        } else {
-            println!("No report found for hash: {}", hash);
         }
     }
+    Ok(None)
+}
 
+fn display_report_summary(report_uuid: &str, source: &Value) {
+    println!("Report UUID: {}", report_uuid);
+    
+    if let Some(stats) = source.get("last_analysis_stats") {
+        display_detection_stats(stats);
+    }
+}
+
+fn display_detection_stats(stats: &Value) {
+    println!("Detection Stats:");
+    println!(
+        "  Malicious: {}",
+        stats.get("malicious").and_then(|m| m.as_u64()).unwrap_or(0)
+    );
+    println!(
+        "  Suspicious: {}",
+        stats.get("suspicious").and_then(|s| s.as_u64()).unwrap_or(0)
+    );
+    println!(
+        "  Harmless: {}",
+        stats.get("harmless").and_then(|h| h.as_u64()).unwrap_or(0)
+    );
+    println!(
+        "  Undetected: {}",
+        stats.get("undetected").and_then(|u| u.as_u64()).unwrap_or(0)
+    );
+}
+
+async fn query_and_display_malicious_detections(
+    client: &Elasticsearch,
+    report_uuid: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let malicious_query = build_malicious_detections_query(report_uuid);
+    
+    let mal_response = client
+        .search(SearchParts::Index(&["vt_analysis_results"]))
+        .body(malicious_query)
+        .send()
+        .await?;
+
+    let mal_body: Value = mal_response.json().await?;
+    display_malicious_detections(&mal_body);
+    
     Ok(())
+}
+
+fn build_malicious_detections_query(report_uuid: &str) -> Value {
+    json!({
+        "query": {
+            "bool": {
+                "must": [
+                    {"term": {"report_uuid": report_uuid}},
+                    {"term": {"category": "malicious"}}
+                ]
+            }
+        },
+        "size": 20
+    })
+}
+
+fn display_malicious_detections(mal_body: &Value) {
+    if let Some(mal_hits) = mal_body
+        .get("hits")
+        .and_then(|h| h.get("hits"))
+        .and_then(|h| h.as_array())
+    {
+        if !mal_hits.is_empty() {
+            println!("\nMalicious Detections:");
+            for hit in mal_hits {
+                if let Some(source) = hit.get("_source") {
+                    print_detection_result(source);
+                }
+            }
+        }
+    }
+}
+
+fn print_detection_result(source: &Value) {
+    let engine = source
+        .get("engine_name")
+        .and_then(|e| e.as_str())
+        .unwrap_or("unknown");
+    let result = source
+        .get("result")
+        .and_then(|r| r.as_str())
+        .unwrap_or("unknown");
+    println!("  {}: {}", engine, result);
 }
 
 async fn query_yara_matches(client: &Elasticsearch) -> Result<(), Box<dyn std::error::Error>> {

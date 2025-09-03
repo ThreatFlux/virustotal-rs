@@ -56,69 +56,125 @@ pub async fn execute(
     dry_run: bool,
     no_color: bool,
 ) -> Result<()> {
-    validate_hash(&args.hash)?;
+    if let Err(_) = validate_input(&args, dry_run) {
+        return Ok(()); // Dry run completed successfully
+    }
+    
+    let client = setup_client(api_key, tier)?;
+    let report_json = fetch_report_data(&client, &args.hash, verbose).await?;
+    
+    save_report_if_requested(&report_json, &args, !no_color, verbose).await?;
+    display_report(&report_json, &args, !no_color)?;
+    
+    Ok(())
+}
 
+/// Validates input parameters and handles dry run mode
+fn validate_input(args: &ReportArgs, dry_run: bool) -> Result<()> {
+    validate_hash(&args.hash)?;
+    
     if dry_run {
         println!("DRY RUN MODE - Would fetch report for hash: {}", args.hash);
-        return Ok(());
+        return Err(anyhow::anyhow!("Dry run completed"));
     }
+    
+    Ok(())
+}
 
-    let client = setup_client(api_key, tier)?;
-
+/// Fetches report data from VirusTotal API
+async fn fetch_report_data(
+    client: &Client,
+    hash: &str,
+    verbose: bool,
+) -> Result<Value> {
     if verbose {
-        println!("Fetching report for hash: {}", args.hash);
+        println!("Fetching report for hash: {}", hash);
     }
-
-    let file_info = match client.files().get(&args.hash).await {
+    
+    let file_info = match client.files().get(hash).await {
         Ok(info) => info,
         Err(e) => {
             let error_msg = handle_vt_error(&e);
             return Err(anyhow::anyhow!("Failed to get report: {}", error_msg));
         }
     };
+    
+    serde_json::to_value(&file_info).context("Failed to serialize report")
+}
 
-    let report_json = serde_json::to_value(&file_info).context("Failed to serialize report")?;
-
-    // Save to file if requested
+/// Saves report to file if output path is specified
+async fn save_report_if_requested(
+    report_json: &Value,
+    args: &ReportArgs,
+    colored: bool,
+    verbose: bool,
+) -> Result<()> {
     if let Some(output_path) = &args.output {
-        let content = match args.format.as_str() {
-            "json" => serde_json::to_string_pretty(&report_json)?,
-            _ => format_report_text(&report_json, &args, !no_color)?,
-        };
-
+        let content = generate_report_content(report_json, args, colored)?;
+        
         tokio::fs::write(output_path, content)
             .await
             .with_context(|| format!("Failed to write report to {}", output_path))?;
-
+        
         if verbose {
             println!("Report saved to: {}", output_path);
         }
     }
+    
+    Ok(())
+}
 
-    // Display report
+/// Generates report content based on format
+fn generate_report_content(
+    report_json: &Value,
+    args: &ReportArgs,
+    colored: bool,
+) -> Result<String> {
     match args.format.as_str() {
-        "json" => {
-            print_json(&report_json, true)?;
-        }
-        "table" => {
-            print_table_report(&report_json, &args, !no_color)?;
-        }
-        "summary" => {
-            print_summary_report(&report_json, &args, !no_color)?;
-        }
-        "detailed" => {
-            print_detailed_report(&report_json, &args, !no_color)?;
-        }
-        _ => {
-            return Err(anyhow::anyhow!("Unknown format: {}", args.format));
-        }
+        "json" => serde_json::to_string_pretty(report_json)
+            .context("Failed to serialize JSON"),
+        _ => format_report_text(report_json, args, colored),
     }
+}
 
+/// Displays report in the requested format
+fn display_report(
+    report_json: &Value,
+    args: &ReportArgs,
+    colored: bool,
+) -> Result<()> {
+    display_main_report(report_json, args, colored)?;
+    display_raw_json_if_requested(report_json, args, colored)?;
+    
+    Ok(())
+}
+
+/// Displays the main report in the specified format
+fn display_main_report(
+    report_json: &Value,
+    args: &ReportArgs,
+    colored: bool,
+) -> Result<()> {
+    match args.format.as_str() {
+        "json" => print_json(report_json, true),
+        "table" => print_table_report(report_json, args, colored),
+        "summary" => print_summary_report(report_json, args, colored),
+        "detailed" => print_detailed_report(report_json, args, colored),
+        _ => Err(anyhow::anyhow!("Unknown format: {}", args.format)),
+    }
+}
+
+/// Displays raw JSON if requested
+fn display_raw_json_if_requested(
+    report_json: &Value,
+    args: &ReportArgs,
+    colored: bool,
+) -> Result<()> {
     if args.include_raw {
-        println!("\n{}", colorize_text("=== Raw JSON ===", "bold", !no_color));
-        print_json(&report_json, true)?;
+        println!("\n{}", colorize_text("=== Raw JSON ===", "bold", colored));
+        print_json(report_json, true)?;
     }
-
+    
     Ok(())
 }
 

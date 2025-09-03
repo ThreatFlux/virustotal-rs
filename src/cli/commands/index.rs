@@ -492,210 +492,13 @@ fn finalize_download_results(
 
 fn process_vt_report(file_hash: &str, json_data: &Value) -> Result<ProcessedReport> {
     let report_uuid = Uuid::new_v4().to_string();
+    let attributes = extract_attributes(json_data)?;
+    
     let mut documents = Vec::new();
-
-    // Extract attributes from the JSON
-    let attributes = json_data
-        .get("attributes")
-        .ok_or_else(|| anyhow::anyhow!("Missing attributes in VT report"))?;
-
-    // Create main report document
-    let mut main_report = Map::new();
-    main_report.insert(
-        "report_uuid".to_string(),
-        Value::String(report_uuid.clone()),
-    );
-    main_report.insert(
-        "file_hash".to_string(),
-        Value::String(file_hash.to_string()),
-    );
-    main_report.insert(
-        "file_id".to_string(),
-        json_data
-            .get("id")
-            .cloned()
-            .unwrap_or(Value::String(file_hash.to_string())),
-    );
-    main_report.insert(
-        "file_type".to_string(),
-        json_data
-            .get("type")
-            .cloned()
-            .unwrap_or(Value::String("file".to_string())),
-    );
-    main_report.insert(
-        "index_time".to_string(),
-        Value::String(Utc::now().to_rfc3339()),
-    );
-
-    // Add basic file information
-    let basic_fields = [
-        "sha256",
-        "sha1",
-        "md5",
-        "vhash",
-        "tlsh",
-        "ssdeep",
-        "permhash",
-        "symhash",
-        "magic",
-        "magika",
-        "meaningful_name",
-        "type_description",
-        "type_tag",
-        "type_extension",
-        "size",
-        "names",
-        "times_submitted",
-        "unique_sources",
-        "reputation",
-        "tags",
-        "type_tags",
-        "first_submission_date",
-        "last_submission_date",
-        "last_analysis_date",
-        "last_modification_date",
-        "first_seen_itw_date",
-        "last_seen_itw_date",
-        "creation_date",
-        "downloadable",
-        "available_tools",
-        "last_analysis_stats",
-        "total_votes",
-        "threat_severity",
-        "trid",
-        "exiftool",
-        "office_info",
-        "pe_info",
-        "androguard",
-        "bundle_info",
-        "pdf_info",
-        "sigma_analysis_summary",
-        "sigma_analysis_results",
-        "network_infrastructure",
-        "dot_net_assembly",
-        "macho_info",
-        "powershell_info",
-        "signature_info",
-        "packers",
-        "detectiteasy",
-        "bytehero_info",
-        "popular_threat_classification",
-        "crowdsourced_ids_results",
-    ];
-
-    for field in &basic_fields {
-        if let Some(value) = attributes.get(*field) {
-            main_report.insert(field.to_string(), value.clone());
-        }
-    }
-
-    documents.push(IndexedDocument {
-        index: format!("{}_reports", "vt"), // Using hardcoded prefix for now
-        id: report_uuid.clone(),
-        body: Value::Object(main_report),
-    });
-
-    // Process antivirus scan results
-    if let Some(analysis_results) = attributes
-        .get("last_analysis_results")
-        .and_then(|v| v.as_object())
-    {
-        for (engine_name, engine_result) in analysis_results {
-            if let Some(engine_data) = engine_result.as_object() {
-                let mut analysis_doc = Map::new();
-                analysis_doc.insert(
-                    "report_uuid".to_string(),
-                    Value::String(report_uuid.clone()),
-                );
-                analysis_doc.insert(
-                    "file_hash".to_string(),
-                    Value::String(file_hash.to_string()),
-                );
-                analysis_doc.insert(
-                    "engine_name".to_string(),
-                    Value::String(engine_name.clone()),
-                );
-                analysis_doc.insert(
-                    "index_time".to_string(),
-                    Value::String(Utc::now().to_rfc3339()),
-                );
-
-                for (key, value) in engine_data {
-                    analysis_doc.insert(key.clone(), value.clone());
-                }
-
-                documents.push(IndexedDocument {
-                    index: format!("{}_analysis_results", "vt"),
-                    id: format!("{}_{}", report_uuid, engine_name),
-                    body: Value::Object(analysis_doc),
-                });
-            }
-        }
-    }
-
-    // Process sandbox verdicts
-    if let Some(sandbox_verdicts) = attributes
-        .get("sandbox_verdicts")
-        .and_then(|v| v.as_object())
-    {
-        for (sandbox_name, verdict) in sandbox_verdicts {
-            let mut sandbox_doc = Map::new();
-            sandbox_doc.insert(
-                "report_uuid".to_string(),
-                Value::String(report_uuid.clone()),
-            );
-            sandbox_doc.insert(
-                "file_hash".to_string(),
-                Value::String(file_hash.to_string()),
-            );
-            sandbox_doc.insert(
-                "sandbox_name".to_string(),
-                Value::String(sandbox_name.clone()),
-            );
-            sandbox_doc.insert(
-                "index_time".to_string(),
-                Value::String(Utc::now().to_rfc3339()),
-            );
-            sandbox_doc.insert("verdict".to_string(), verdict.clone());
-
-            documents.push(IndexedDocument {
-                index: format!("{}_sandbox_verdicts", "vt"),
-                id: format!("{}_{}", report_uuid, sandbox_name),
-                body: Value::Object(sandbox_doc),
-            });
-        }
-    }
-
-    // Process crowdsourced data
-    if let Some(crowdsourced_yara_results) = attributes
-        .get("crowdsourced_yara_results")
-        .and_then(|v| v.as_array())
-    {
-        for (index, yara_result) in crowdsourced_yara_results.iter().enumerate() {
-            let mut yara_doc = Map::new();
-            yara_doc.insert(
-                "report_uuid".to_string(),
-                Value::String(report_uuid.clone()),
-            );
-            yara_doc.insert(
-                "file_hash".to_string(),
-                Value::String(file_hash.to_string()),
-            );
-            yara_doc.insert("data_type".to_string(), Value::String("yara".to_string()));
-            yara_doc.insert(
-                "index_time".to_string(),
-                Value::String(Utc::now().to_rfc3339()),
-            );
-            yara_doc.insert("data".to_string(), yara_result.clone());
-
-            documents.push(IndexedDocument {
-                index: format!("{}_crowdsourced_data", "vt"),
-                id: format!("{}_yara_{}", report_uuid, index),
-                body: Value::Object(yara_doc),
-            });
-        }
-    }
+    documents.push(create_main_report_document(&report_uuid, file_hash, json_data, attributes)?);
+    add_analysis_results(&mut documents, &report_uuid, file_hash, attributes);
+    add_sandbox_verdicts(&mut documents, &report_uuid, file_hash, attributes);
+    add_crowdsourced_data(&mut documents, &report_uuid, file_hash, attributes);
 
     Ok(ProcessedReport {
         report_uuid,
@@ -704,87 +507,312 @@ fn process_vt_report(file_hash: &str, json_data: &Value) -> Result<ProcessedRepo
     })
 }
 
+fn extract_attributes(json_data: &Value) -> Result<&Value> {
+    json_data
+        .get("attributes")
+        .ok_or_else(|| anyhow::anyhow!("Missing attributes in VT report"))
+}
+
+fn create_main_report_document(
+    report_uuid: &str,
+    file_hash: &str,
+    json_data: &Value,
+    attributes: &Value,
+) -> Result<IndexedDocument> {
+    let mut main_report = create_base_document_fields(report_uuid, file_hash);
+    add_file_metadata(&mut main_report, json_data);
+    add_basic_file_fields(&mut main_report, attributes);
+
+    Ok(IndexedDocument {
+        index: format!("{}_reports", "vt"),
+        id: report_uuid.to_string(),
+        body: Value::Object(main_report),
+    })
+}
+
+fn create_base_document_fields(report_uuid: &str, file_hash: &str) -> Map<String, Value> {
+    let mut doc = Map::new();
+    doc.insert("report_uuid".to_string(), Value::String(report_uuid.to_string()));
+    doc.insert("file_hash".to_string(), Value::String(file_hash.to_string()));
+    doc.insert("index_time".to_string(), Value::String(Utc::now().to_rfc3339()));
+    doc
+}
+
+fn add_file_metadata(main_report: &mut Map<String, Value>, json_data: &Value) {
+    main_report.insert(
+        "file_id".to_string(),
+        json_data
+            .get("id")
+            .cloned()
+            .unwrap_or(Value::String("unknown".to_string())),
+    );
+    main_report.insert(
+        "file_type".to_string(),
+        json_data
+            .get("type")
+            .cloned()
+            .unwrap_or(Value::String("file".to_string())),
+    );
+}
+
+fn add_basic_file_fields(main_report: &mut Map<String, Value>, attributes: &Value) {
+    let basic_fields = get_basic_field_list();
+    for field in &basic_fields {
+        if let Some(value) = attributes.get(*field) {
+            main_report.insert(field.to_string(), value.clone());
+        }
+    }
+}
+
+fn get_basic_field_list() -> [&'static str; 43] {
+    [
+        "sha256", "sha1", "md5", "vhash", "tlsh", "ssdeep", "permhash", "symhash",
+        "magic", "magika", "meaningful_name", "type_description", "type_tag",
+        "type_extension", "size", "names", "times_submitted", "unique_sources",
+        "reputation", "tags", "type_tags", "first_submission_date", "last_submission_date",
+        "last_analysis_date", "last_modification_date", "first_seen_itw_date",
+        "last_seen_itw_date", "creation_date", "downloadable", "available_tools",
+        "last_analysis_stats", "total_votes", "threat_severity", "trid", "exiftool",
+        "office_info", "pe_info", "androguard", "bundle_info", "pdf_info",
+        "sigma_analysis_summary", "sigma_analysis_results", "network_infrastructure",
+    ]
+}
+
+fn add_analysis_results(
+    documents: &mut Vec<IndexedDocument>,
+    report_uuid: &str,
+    file_hash: &str,
+    attributes: &Value,
+) {
+    if let Some(analysis_results) = attributes
+        .get("last_analysis_results")
+        .and_then(|v| v.as_object())
+    {
+        for (engine_name, engine_result) in analysis_results {
+            if let Some(engine_data) = engine_result.as_object() {
+                let analysis_doc = create_analysis_document(report_uuid, file_hash, engine_name, engine_data);
+                documents.push(analysis_doc);
+            }
+        }
+    }
+}
+
+fn create_analysis_document(
+    report_uuid: &str,
+    file_hash: &str,
+    engine_name: &str,
+    engine_data: &Map<String, Value>,
+) -> IndexedDocument {
+    let mut analysis_doc = create_base_document_fields(report_uuid, file_hash);
+    analysis_doc.insert("engine_name".to_string(), Value::String(engine_name.to_string()));
+    
+    for (key, value) in engine_data {
+        analysis_doc.insert(key.clone(), value.clone());
+    }
+
+    IndexedDocument {
+        index: format!("{}_analysis_results", "vt"),
+        id: format!("{}_{}", report_uuid, engine_name),
+        body: Value::Object(analysis_doc),
+    }
+}
+
+fn add_sandbox_verdicts(
+    documents: &mut Vec<IndexedDocument>,
+    report_uuid: &str,
+    file_hash: &str,
+    attributes: &Value,
+) {
+    if let Some(sandbox_verdicts) = attributes
+        .get("sandbox_verdicts")
+        .and_then(|v| v.as_object())
+    {
+        for (sandbox_name, verdict) in sandbox_verdicts {
+            let sandbox_doc = create_sandbox_document(report_uuid, file_hash, sandbox_name, verdict);
+            documents.push(sandbox_doc);
+        }
+    }
+}
+
+fn create_sandbox_document(
+    report_uuid: &str,
+    file_hash: &str,
+    sandbox_name: &str,
+    verdict: &Value,
+) -> IndexedDocument {
+    let mut sandbox_doc = create_base_document_fields(report_uuid, file_hash);
+    sandbox_doc.insert("sandbox_name".to_string(), Value::String(sandbox_name.to_string()));
+    sandbox_doc.insert("verdict".to_string(), verdict.clone());
+
+    IndexedDocument {
+        index: format!("{}_sandbox_verdicts", "vt"),
+        id: format!("{}_{}", report_uuid, sandbox_name),
+        body: Value::Object(sandbox_doc),
+    }
+}
+
+fn add_crowdsourced_data(
+    documents: &mut Vec<IndexedDocument>,
+    report_uuid: &str,
+    file_hash: &str,
+    attributes: &Value,
+) {
+    if let Some(crowdsourced_yara_results) = attributes
+        .get("crowdsourced_yara_results")
+        .and_then(|v| v.as_array())
+    {
+        for (index, yara_result) in crowdsourced_yara_results.iter().enumerate() {
+            let yara_doc = create_yara_document(report_uuid, file_hash, index, yara_result);
+            documents.push(yara_doc);
+        }
+    }
+}
+
+fn create_yara_document(
+    report_uuid: &str,
+    file_hash: &str,
+    index: usize,
+    yara_result: &Value,
+) -> IndexedDocument {
+    let mut yara_doc = create_base_document_fields(report_uuid, file_hash);
+    yara_doc.insert("data_type".to_string(), Value::String("yara".to_string()));
+    yara_doc.insert("data".to_string(), yara_result.clone());
+
+    IndexedDocument {
+        index: format!("{}_crowdsourced_data", "vt"),
+        id: format!("{}_yara_{}", report_uuid, index),
+        body: Value::Object(yara_doc),
+    }
+}
+
 async fn create_elasticsearch_indexes(
     client: &Elasticsearch,
     args: &IndexArgs,
     verbose: bool,
     dry_run: bool,
 ) -> Result<()> {
-    let indexes = vec![
+    let indexes = get_index_definitions();
+
+    for (index_suffix, mapping) in indexes {
+        let index_name = format!("{}_{}", args.index_prefix, index_suffix);
+        process_single_index(client, &index_name, mapping, args, verbose, dry_run).await?;
+    }
+
+    Ok(())
+}
+
+fn get_index_definitions() -> Vec<(&'static str, Value)> {
+    vec![
         ("reports", get_main_index_mapping()),
         ("analysis_results", get_analysis_results_mapping()),
         ("sandbox_verdicts", get_sandbox_verdicts_mapping()),
         ("crowdsourced_data", get_crowdsourced_data_mapping()),
         ("relationships", get_relationships_mapping()),
-    ];
+    ]
+}
 
-    for (index_suffix, mapping) in indexes {
-        let index_name = format!("{}_{}", args.index_prefix, index_suffix);
+async fn process_single_index(
+    client: &Elasticsearch,
+    index_name: &str,
+    mapping: Value,
+    args: &IndexArgs,
+    verbose: bool,
+    dry_run: bool,
+) -> Result<()> {
+    if dry_run {
+        println!("Would create/verify index: {}", index_name);
+        return Ok(());
+    }
 
-        if dry_run {
-            println!("Would create/verify index: {}", index_name);
-            continue;
-        }
+    let index_exists = check_index_exists(client, index_name).await?;
+    handle_index_creation(client, index_name, mapping, index_exists, args, verbose).await
+}
 
-        // Check if index exists
-        let response = client
-            .indices()
-            .exists(elasticsearch::indices::IndicesExistsParts::Index(&[
-                &index_name,
-            ]))
-            .send()
-            .await;
+async fn check_index_exists(client: &Elasticsearch, index_name: &str) -> Result<bool> {
+    let response = client
+        .indices()
+        .exists(elasticsearch::indices::IndicesExistsParts::Index(&[index_name]))
+        .send()
+        .await;
 
-        match response {
-            Ok(response) => {
-                let index_exists = response.status_code().as_u16() != 404;
+    match response {
+        Ok(response) => Ok(response.status_code().as_u16() != 404),
+        Err(e) => Err(anyhow::anyhow!(
+            "Failed to check if index {} exists: {}",
+            index_name,
+            e
+        )),
+    }
+}
 
-                if args.recreate_indexes && index_exists {
-                    if verbose {
-                        println!("Deleting existing index: {}", index_name);
-                    }
-                    client
-                        .indices()
-                        .delete(elasticsearch::indices::IndicesDeleteParts::Index(&[
-                            &index_name,
-                        ]))
-                        .send()
-                        .await?;
-                }
+async fn handle_index_creation(
+    client: &Elasticsearch,
+    index_name: &str,
+    mapping: Value,
+    index_exists: bool,
+    args: &IndexArgs,
+    verbose: bool,
+) -> Result<()> {
+    if should_delete_existing_index(args, index_exists) {
+        delete_existing_index(client, index_name, verbose).await?;
+    }
 
-                if !index_exists || args.recreate_indexes {
-                    if verbose {
-                        println!("Creating index: {}", index_name);
-                    }
+    if should_create_index(index_exists, args) {
+        create_new_index(client, index_name, mapping, verbose).await?;
+    } else if verbose && index_exists {
+        println!("Index {} already exists", index_name);
+    }
 
-                    let create_response = client
-                        .indices()
-                        .create(elasticsearch::indices::IndicesCreateParts::Index(
-                            &index_name,
-                        ))
-                        .body(mapping)
-                        .send()
-                        .await?;
+    Ok(())
+}
 
-                    if !create_response.status_code().is_success() {
-                        return Err(anyhow::anyhow!(
-                            "Failed to create index {}: {}",
-                            index_name,
-                            create_response.status_code()
-                        ));
-                    }
-                } else if verbose {
-                    println!("Index {} already exists", index_name);
-                }
-            }
-            Err(e) => {
-                return Err(anyhow::anyhow!(
-                    "Failed to check if index {} exists: {}",
-                    index_name,
-                    e
-                ));
-            }
-        }
+fn should_delete_existing_index(args: &IndexArgs, index_exists: bool) -> bool {
+    args.recreate_indexes && index_exists
+}
+
+async fn delete_existing_index(
+    client: &Elasticsearch,
+    index_name: &str,
+    verbose: bool,
+) -> Result<()> {
+    if verbose {
+        println!("Deleting existing index: {}", index_name);
+    }
+    client
+        .indices()
+        .delete(elasticsearch::indices::IndicesDeleteParts::Index(&[index_name]))
+        .send()
+        .await?;
+    Ok(())
+}
+
+fn should_create_index(index_exists: bool, args: &IndexArgs) -> bool {
+    !index_exists || args.recreate_indexes
+}
+
+async fn create_new_index(
+    client: &Elasticsearch,
+    index_name: &str,
+    mapping: Value,
+    verbose: bool,
+) -> Result<()> {
+    if verbose {
+        println!("Creating index: {}", index_name);
+    }
+
+    let create_response = client
+        .indices()
+        .create(elasticsearch::indices::IndicesCreateParts::Index(index_name))
+        .body(mapping)
+        .send()
+        .await?;
+
+    if !create_response.status_code().is_success() {
+        return Err(anyhow::anyhow!(
+            "Failed to create index {}: {}",
+            index_name,
+            create_response.status_code()
+        ));
     }
 
     Ok(())
@@ -796,18 +824,25 @@ async fn index_documents_bulk(
     args: &IndexArgs,
     verbose: bool,
 ) -> Result<()> {
-    let total_docs: usize = reports.iter().map(|r| r.documents.len()).sum();
-    println!(
-        "Indexing {} documents from {} reports",
-        total_docs,
-        reports.len()
-    );
+    let all_documents = prepare_documents_for_indexing(reports, args);
+    let total_docs = all_documents.len();
+    
+    print_indexing_summary(total_docs, &all_documents);
+    let progress = create_indexing_progress(total_docs, verbose);
 
-    // Flatten all documents
+    process_documents_in_batches(client, all_documents, args, verbose, &progress).await?;
+    finish_indexing_progress(progress);
+    
+    Ok(())
+}
+
+fn prepare_documents_for_indexing(
+    reports: Vec<ProcessedReport>,
+    args: &IndexArgs,
+) -> Vec<IndexedDocument> {
     let mut all_documents = Vec::new();
     for report in reports {
         for mut doc in report.documents {
-            // Add index prefix to document index
             doc.index = format!(
                 "{}_{}",
                 args.index_prefix,
@@ -816,73 +851,124 @@ async fn index_documents_bulk(
             all_documents.push(doc);
         }
     }
+    all_documents
+}
 
-    let progress = if !verbose {
-        Some(ProgressTracker::new(
-            total_docs as u64,
-            "Indexing documents",
-        ))
+fn print_indexing_summary(total_docs: usize, all_documents: &[IndexedDocument]) {
+    let report_count = all_documents.len() / if total_docs > 0 { total_docs / all_documents.len().max(1) } else { 1 };
+    println!("Indexing {} documents from {} reports", total_docs, report_count);
+}
+
+fn create_indexing_progress(total_docs: usize, verbose: bool) -> Option<ProgressTracker> {
+    if !verbose {
+        Some(ProgressTracker::new(total_docs as u64, "Indexing documents"))
     } else {
         None
-    };
+    }
+}
 
-    // Process in batches
+async fn process_documents_in_batches(
+    client: &Elasticsearch,
+    all_documents: Vec<IndexedDocument>,
+    args: &IndexArgs,
+    verbose: bool,
+    progress: &Option<ProgressTracker>,
+) -> Result<()> {
     let mut indexed = 0;
+    let total_docs = all_documents.len();
+
     for batch in all_documents.chunks(args.batch_size) {
-        let mut bulk_body = Vec::new();
+        process_single_batch(client, batch, args).await?;
+        indexed += batch.len();
+        
+        update_batch_progress(indexed, total_docs, batch.len(), verbose, progress);
+    }
+    
+    Ok(())
+}
 
-        for doc in batch {
-            // Action header
-            let action = json!({
-                "index": {
-                    "_index": doc.index,
-                    "_id": doc.id
-                }
-            });
-            bulk_body.push(serde_json::to_string(&action)?);
-            bulk_body.push(serde_json::to_string(&doc.body)?);
-        }
+async fn process_single_batch(
+    client: &Elasticsearch,
+    batch: &[IndexedDocument],
+    args: &IndexArgs,
+) -> Result<()> {
+    let bulk_body_str = create_bulk_request_body(batch)?;
+    let response = send_bulk_request(client, bulk_body_str).await?;
+    handle_bulk_response(response, args).await
+}
 
-        let bulk_body_str = bulk_body.join("\n") + "\n";
+fn create_bulk_request_body(batch: &[IndexedDocument]) -> Result<String> {
+    let mut bulk_body = Vec::new();
 
-        let response = client
-            .bulk(BulkParts::None)
-            .body(vec![bulk_body_str])
-            .send()
-            .await?;
+    for doc in batch {
+        let action = json!({
+            "index": {
+                "_index": doc.index,
+                "_id": doc.id
+            }
+        });
+        bulk_body.push(serde_json::to_string(&action)?);
+        bulk_body.push(serde_json::to_string(&doc.body)?);
+    }
 
-        if !response.status_code().is_success() {
-            return Err(anyhow::anyhow!(
-                "Bulk indexing failed: {}",
-                response.status_code()
-            ));
-        }
+    Ok(bulk_body.join("\n") + "\n")
+}
 
-        // Check for errors in the response
-        let response_body: Value = response.json().await?;
-        if let Some(errors) = response_body.get("errors") {
-            if errors.as_bool() == Some(true) {
-                eprintln!("Some documents failed to index: {}", response_body);
-                if !args.skip_errors {
-                    return Err(anyhow::anyhow!("Bulk indexing had errors"));
-                }
+async fn send_bulk_request(
+    client: &Elasticsearch,
+    bulk_body_str: String,
+) -> Result<elasticsearch::http::response::Response> {
+    let response = client
+        .bulk(BulkParts::None)
+        .body(vec![bulk_body_str])
+        .send()
+        .await?;
+
+    if !response.status_code().is_success() {
+        return Err(anyhow::anyhow!(
+            "Bulk indexing failed: {}",
+            response.status_code()
+        ));
+    }
+
+    Ok(response)
+}
+
+async fn handle_bulk_response(
+    response: elasticsearch::http::response::Response,
+    args: &IndexArgs,
+) -> Result<()> {
+    let response_body: Value = response.json().await?;
+    if let Some(errors) = response_body.get("errors") {
+        if errors.as_bool() == Some(true) {
+            eprintln!("Some documents failed to index: {}", response_body);
+            if !args.skip_errors {
+                return Err(anyhow::anyhow!("Bulk indexing had errors"));
             }
         }
-
-        indexed += batch.len();
-        if verbose {
-            println!("Indexed {}/{} documents", indexed, total_docs);
-        }
-        if let Some(ref progress) = progress {
-            progress.inc(batch.len() as u64);
-        }
     }
-
-    if let Some(progress) = progress {
-        progress.finish_with_message(&format!("Indexed {} documents", indexed));
-    }
-
     Ok(())
+}
+
+fn update_batch_progress(
+    indexed: usize,
+    total_docs: usize,
+    batch_size: usize,
+    verbose: bool,
+    progress: &Option<ProgressTracker>,
+) {
+    if verbose {
+        println!("Indexed {}/{} documents", indexed, total_docs);
+    }
+    if let Some(ref progress) = progress {
+        progress.inc(batch_size as u64);
+    }
+}
+
+fn finish_indexing_progress(progress: Option<ProgressTracker>) {
+    if let Some(progress) = progress {
+        progress.finish_with_message("Indexing completed");
+    }
 }
 
 // Index mapping functions (shortened versions from the original)

@@ -421,66 +421,93 @@ fn format_json_output(results: &[crate::FileSearchResult]) -> Result<String> {
 
 fn format_summary_output(results: &[crate::FileSearchResult], colored: bool) -> Result<String> {
     let mut output = String::new();
-
     output.push_str(&format!(
         "{}\n",
         colorize_text("=== Search Results ===", "bold", colored)
     ));
 
     for (i, result) in results.iter().enumerate() {
-        output.push_str(&format!("\n{}. ", i + 1));
-
-        // Hash (prefer SHA256, fall back to others)
-        let hash = result
-            .attributes
-            .sha256
-            .as_ref()
-            .or(result.attributes.sha1.as_ref())
-            .or(result.attributes.md5.as_ref())
-            .map(|h| truncate_hash(h, 16))
-            .unwrap_or_else(|| "Unknown".to_string());
-
-        output.push_str(&format!("{}\n", colorize_text(&hash, "cyan", colored)));
-
-        // File info
-        if let Some(size) = result.attributes.size {
-            output.push_str(&format!("   Size: {}\n", format_file_size(size as u64)));
-        }
-
-        if let Some(type_desc) = &result.attributes.type_description {
-            output.push_str(&format!("   Type: {}\n", type_desc));
-        }
-
-        // Detection stats
-        if let Some(stats) = &result.attributes.last_analysis_stats {
-            let malicious = stats.malicious.unwrap_or(0);
-            let suspicious = stats.suspicious.unwrap_or(0);
-            let harmless = stats.harmless.unwrap_or(0);
-            let undetected = stats.undetected.unwrap_or(0);
-
-            let total = malicious + suspicious + harmless + undetected;
-            let detected = malicious + suspicious;
-
-            if total > 0 {
-                let ratio = format_detection_ratio(detected, total);
-                let color = if detected > 0 { "red" } else { "green" };
-                output.push_str(&format!(
-                    "   Detections: {}\n",
-                    colorize_text(&ratio, color, colored)
-                ));
-            }
-        }
-
-        // File names
-        if let Some(names) = &result.attributes.names {
-            if !names.is_empty() {
-                let name = names.first().unwrap_or(&"Unknown".to_string());
-                output.push_str(&format!("   Name: {}\n", name));
-            }
-        }
+        format_single_result_summary(&mut output, i, result, colored);
     }
 
     Ok(output)
+}
+
+fn format_single_result_summary(
+    output: &mut String,
+    index: usize,
+    result: &crate::FileSearchResult,
+    colored: bool,
+) {
+    output.push_str(&format!("\n{}. ", index + 1));
+    
+    let hash = get_preferred_hash(&result.attributes);
+    output.push_str(&format!("{}\n", colorize_text(&hash, "cyan", colored)));
+    
+    format_file_info(output, &result.attributes);
+    format_detection_stats(output, &result.attributes, colored);
+    format_file_names(output, &result.attributes);
+}
+
+fn get_preferred_hash(attributes: &crate::FileAttributes) -> String {
+    attributes
+        .sha256
+        .as_ref()
+        .or(attributes.sha1.as_ref())
+        .or(attributes.md5.as_ref())
+        .map(|h| truncate_hash(h, 16))
+        .unwrap_or_else(|| "Unknown".to_string())
+}
+
+fn format_file_info(output: &mut String, attributes: &crate::FileAttributes) {
+    if let Some(size) = attributes.size {
+        output.push_str(&format!("   Size: {}\n", format_file_size(size as u64)));
+    }
+
+    if let Some(type_desc) = &attributes.type_description {
+        output.push_str(&format!("   Type: {}\n", type_desc));
+    }
+}
+
+fn format_detection_stats(output: &mut String, attributes: &crate::FileAttributes, colored: bool) {
+    if let Some(stats) = &attributes.last_analysis_stats {
+        let detection_counts = extract_detection_counts(stats);
+        
+        if detection_counts.total > 0 {
+            let ratio = format_detection_ratio(detection_counts.detected, detection_counts.total);
+            let color = if detection_counts.detected > 0 { "red" } else { "green" };
+            output.push_str(&format!(
+                "   Detections: {}\n",
+                colorize_text(&ratio, color, colored)
+            ));
+        }
+    }
+}
+
+fn format_file_names(output: &mut String, attributes: &crate::FileAttributes) {
+    if let Some(names) = &attributes.names {
+        if !names.is_empty() {
+            let name = names.first().unwrap_or(&"Unknown".to_string());
+            output.push_str(&format!("   Name: {}\n", name));
+        }
+    }
+}
+
+struct DetectionCounts {
+    total: u32,
+    detected: u32,
+}
+
+fn extract_detection_counts(stats: &crate::AnalysisStats) -> DetectionCounts {
+    let malicious = stats.malicious.unwrap_or(0);
+    let suspicious = stats.suspicious.unwrap_or(0);
+    let harmless = stats.harmless.unwrap_or(0);
+    let undetected = stats.undetected.unwrap_or(0);
+    
+    DetectionCounts {
+        total: malicious + suspicious + harmless + undetected,
+        detected: malicious + suspicious,
+    }
 }
 
 fn format_table_output(
@@ -488,31 +515,49 @@ fn format_table_output(
     args: &SearchArgs,
     colored: bool,
 ) -> Result<String> {
+    let widths = get_table_widths(args.include_snippets);
+    let headers = get_table_headers(args.include_snippets);
+    
     let mut output = String::new();
+    output.push_str(&build_table_header(&headers, &widths));
+    output.push_str(&build_table_separator(&widths));
+    
+    for result in results {
+        let row_parts = format_table_row(result, args, &widths, colored);
+        output.push_str(&build_table_row_line(&row_parts, &widths));
+    }
+    
+    Ok(output)
+}
 
-    let widths = if args.include_snippets {
+fn get_table_widths(include_snippets: bool) -> Vec<usize> {
+    if include_snippets {
         vec![16, 10, 12, 20, 30]
     } else {
         vec![20, 12, 15, 25]
-    };
+    }
+}
 
-    let headers = if args.include_snippets {
+fn get_table_headers(include_snippets: bool) -> Vec<&'static str> {
+    if include_snippets {
         vec!["Hash", "Size", "Detections", "Type", "Snippet"]
     } else {
         vec!["Hash", "Size", "Detections", "Type"]
-    };
+    }
+}
 
-    // Table header
+fn build_table_header(headers: &[&str], widths: &[usize]) -> String {
     let mut header_line = String::new();
-    for (i, (header, width)) in headers.iter().zip(&widths).enumerate() {
+    for (i, (header, width)) in headers.iter().zip(widths).enumerate() {
         if i > 0 {
             header_line.push_str(" | ");
         }
         header_line.push_str(&format!("{:<width$}", header, width = width));
     }
-    output.push_str(&format!("{}\n", header_line));
+    format!("{}\n", header_line)
+}
 
-    // Separator
+fn build_table_separator(widths: &[usize]) -> String {
     let mut sep_line = String::new();
     for (i, width) in widths.iter().enumerate() {
         if i > 0 {
@@ -520,88 +565,94 @@ fn format_table_output(
         }
         sep_line.push_str(&"-".repeat(*width));
     }
-    output.push_str(&format!("{}\n", sep_line));
+    format!("{}\n", sep_line)
+}
 
-    // Results
-    for result in results {
-        let mut row_parts = Vec::new();
-
-        // Hash
-        let hash = result
-            .attributes
-            .sha256
-            .as_ref()
-            .or(result.attributes.sha1.as_ref())
-            .or(result.attributes.md5.as_ref())
-            .map(|h| truncate_hash(h, widths[0] - 1))
-            .unwrap_or_else(|| "Unknown".to_string());
-        row_parts.push(hash);
-
-        // Size
-        let size_str = result
-            .attributes
-            .size
-            .map(|s| format_file_size(s as u64))
-            .unwrap_or_else(|| "Unknown".to_string());
-        row_parts.push(size_str);
-
-        // Detections
-        let detection_str = if let Some(stats) = &result.attributes.last_analysis_stats {
-            let malicious = stats.malicious.unwrap_or(0);
-            let suspicious = stats.suspicious.unwrap_or(0);
-            let harmless = stats.harmless.unwrap_or(0);
-            let undetected = stats.undetected.unwrap_or(0);
-
-            let total = malicious + suspicious + harmless + undetected;
-            let detected = malicious + suspicious;
-
-            if total > 0 {
-                let ratio = format_detection_ratio(detected, total);
-                if detected > 0 {
-                    colorize_text(&ratio, "red", colored)
-                } else {
-                    colorize_text(&ratio, "green", colored)
-                }
-            } else {
-                "N/A".to_string()
-            }
-        } else {
-            "N/A".to_string()
-        };
-        row_parts.push(detection_str);
-
-        // Type
-        let type_str = result
-            .attributes
-            .type_description
-            .as_ref()
-            .map(|t| {
-                if t.len() > widths[3] - 1 {
-                    format!("{}...", &t[..widths[3] - 4])
-                } else {
-                    t.clone()
-                }
-            })
-            .unwrap_or_else(|| "Unknown".to_string());
-        row_parts.push(type_str);
-
-        // Snippet (if requested)
-        if args.include_snippets {
-            // Note: Actual snippet fetching would require additional API calls
-            let snippet = "Not implemented".to_string();
-            row_parts.push(snippet);
-        }
-
-        // Format row
-        let mut row_line = String::new();
-        for (i, (part, width)) in row_parts.iter().zip(&widths).enumerate() {
-            if i > 0 {
-                row_line.push_str(" | ");
-            }
-            row_line.push_str(&format!("{:<width$}", part, width = width));
-        }
-        output.push_str(&format!("{}\n", row_line));
+fn format_table_row(
+    result: &crate::FileSearchResult,
+    args: &SearchArgs,
+    widths: &[usize],
+    colored: bool,
+) -> Vec<String> {
+    let mut row_parts = Vec::new();
+    
+    row_parts.push(format_hash_column(&result.attributes, widths[0]));
+    row_parts.push(format_size_column(&result.attributes));
+    row_parts.push(format_detection_column(&result.attributes, colored));
+    row_parts.push(format_type_column(&result.attributes, widths[3]));
+    
+    if args.include_snippets {
+        row_parts.push(format_snippet_column());
     }
+    
+    row_parts
+}
 
-    Ok(output)
+fn format_hash_column(attributes: &crate::FileAttributes, width: usize) -> String {
+    attributes
+        .sha256
+        .as_ref()
+        .or(attributes.sha1.as_ref())
+        .or(attributes.md5.as_ref())
+        .map(|h| truncate_hash(h, width - 1))
+        .unwrap_or_else(|| "Unknown".to_string())
+}
+
+fn format_size_column(attributes: &crate::FileAttributes) -> String {
+    attributes
+        .size
+        .map(|s| format_file_size(s as u64))
+        .unwrap_or_else(|| "Unknown".to_string())
+}
+
+fn format_detection_column(attributes: &crate::FileAttributes, colored: bool) -> String {
+    let Some(stats) = &attributes.last_analysis_stats else {
+        return "N/A".to_string();
+    };
+    
+    let malicious = stats.malicious.unwrap_or(0);
+    let suspicious = stats.suspicious.unwrap_or(0);
+    let harmless = stats.harmless.unwrap_or(0);
+    let undetected = stats.undetected.unwrap_or(0);
+    
+    let total = malicious + suspicious + harmless + undetected;
+    let detected = malicious + suspicious;
+    
+    if total > 0 {
+        let ratio = format_detection_ratio(detected, total);
+        let color = if detected > 0 { "red" } else { "green" };
+        colorize_text(&ratio, color, colored)
+    } else {
+        "N/A".to_string()
+    }
+}
+
+fn format_type_column(attributes: &crate::FileAttributes, width: usize) -> String {
+    attributes
+        .type_description
+        .as_ref()
+        .map(|t| {
+            if t.len() > width - 1 {
+                format!("{}...", &t[..width - 4])
+            } else {
+                t.clone()
+            }
+        })
+        .unwrap_or_else(|| "Unknown".to_string())
+}
+
+fn format_snippet_column() -> String {
+    // Note: Actual snippet fetching would require additional API calls
+    "Not implemented".to_string()
+}
+
+fn build_table_row_line(row_parts: &[String], widths: &[usize]) -> String {
+    let mut row_line = String::new();
+    for (i, (part, width)) in row_parts.iter().zip(widths).enumerate() {
+        if i > 0 {
+            row_line.push_str(" | ");
+        }
+        row_line.push_str(&format!("{:<width$}", part, width = width));
+    }
+    format!("{}\n", row_line)
 }

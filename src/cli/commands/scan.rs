@@ -675,61 +675,91 @@ fn print_summary_results(results: &[ScanResult], colored: bool) -> Result<()> {
     println!("{}", colorize_text("=== Scan Results ===", "bold", colored));
 
     for (i, result) in results.iter().enumerate() {
-        println!("\n{}. {}", i + 1, result.file_path.display());
-        println!("   Size: {}", format_file_size(result.file_size));
-
-        if let Some(ref error) = result.error {
-            println!(
-                "   Status: {}",
-                colorize_text(&format!("Failed - {}", error), "red", colored)
-            );
-        } else if let Some(ref analysis_id) = result.analysis_id {
-            if let Some(ref analysis_result) = result.analysis_result {
-                let status = if analysis_result.is_completed() {
-                    "completed"
-                } else {
-                    "in_progress"
-                };
-                let color = match status {
-                    "completed" => "green",
-                    "in_progress" | "queued" => "yellow",
-                    _ => "red",
-                };
-                println!("   Status: {}", colorize_text(status, color, colored));
-
-                // Show detection results if available
-                if let Some(ref stats) = analysis_result.object.attributes.stats {
-                    let detected = stats.malicious + stats.suspicious;
-
-                    if detected > 0 {
-                        println!(
-                            "   Detections: {}",
-                            colorize_text(
-                                &format!("{} engines detected threats", detected),
-                                "red",
-                                colored
-                            )
-                        );
-                    } else {
-                        println!(
-                            "   Detections: {}",
-                            colorize_text("Clean", "green", colored)
-                        );
-                    }
-                }
-            } else {
-                println!(
-                    "   Status: {}",
-                    colorize_text("Submitted for analysis", "yellow", colored)
-                );
-                println!("   Analysis ID: {}", analysis_id);
-            }
-        } else {
-            println!("   Status: {}", colorize_text("Skipped", "dim", colored));
-        }
+        print_result_header(i, result);
+        print_result_status(result, colored);
     }
 
     Ok(())
+}
+
+fn print_result_header(index: usize, result: &ScanResult) {
+    println!("\n{}. {}", index + 1, result.file_path.display());
+    println!("   Size: {}", format_file_size(result.file_size));
+}
+
+fn print_result_status(result: &ScanResult, colored: bool) {
+    if let Some(ref error) = result.error {
+        print_error_status(error, colored);
+    } else if let Some(ref analysis_id) = result.analysis_id {
+        print_analysis_status(result, analysis_id, colored);
+    } else {
+        print_skipped_status(colored);
+    }
+}
+
+fn print_error_status(error: &str, colored: bool) {
+    println!(
+        "   Status: {}",
+        colorize_text(&format!("Failed - {}", error), "red", colored)
+    );
+}
+
+fn print_analysis_status(result: &ScanResult, analysis_id: &str, colored: bool) {
+    if let Some(ref analysis_result) = result.analysis_result {
+        print_completed_analysis(analysis_result, colored);
+    } else {
+        print_pending_analysis(analysis_id, colored);
+    }
+}
+
+fn print_completed_analysis(analysis_result: &Analysis, colored: bool) {
+    let status = if analysis_result.is_completed() { "completed" } else { "in_progress" };
+    let color = get_status_color(status);
+    println!("   Status: {}", colorize_text(status, color, colored));
+
+    if let Some(ref stats) = analysis_result.object.attributes.stats {
+        print_detection_results(stats, colored);
+    }
+}
+
+fn print_pending_analysis(analysis_id: &str, colored: bool) {
+    println!(
+        "   Status: {}",
+        colorize_text("Submitted for analysis", "yellow", colored)
+    );
+    println!("   Analysis ID: {}", analysis_id);
+}
+
+fn print_skipped_status(colored: bool) {
+    println!("   Status: {}", colorize_text("Skipped", "dim", colored));
+}
+
+fn get_status_color(status: &str) -> &'static str {
+    match status {
+        "completed" => "green",
+        "in_progress" | "queued" => "yellow",
+        _ => "red",
+    }
+}
+
+fn print_detection_results(stats: &crate::AnalysisStats, colored: bool) {
+    let detected = stats.malicious + stats.suspicious;
+
+    if detected > 0 {
+        println!(
+            "   Detections: {}",
+            colorize_text(
+                &format!("{} engines detected threats", detected),
+                "red",
+                colored
+            )
+        );
+    } else {
+        println!(
+            "   Detections: {}",
+            colorize_text("Clean", "green", colored)
+        );
+    }
 }
 
 fn print_table_results(results: &[ScanResult], colored: bool) -> Result<()> {

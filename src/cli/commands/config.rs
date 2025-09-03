@@ -89,20 +89,32 @@ async fn handle_set(set_args: SetArgs, config_path: Option<PathBuf>, dry_run: bo
         return Ok(());
     }
 
-    let config_file_path = match config_path {
-        Some(p) => p,
-        None => Config::default_path()?,
-    };
-
-    let mut config = if config_file_path.exists() {
-        load_config(Some(config_file_path.clone()))?
-    } else {
-        Config::new()
-    };
-
+    let config_file_path = get_config_file_path(config_path)?;
+    let mut config = load_or_create_config(&config_file_path)?;
+    
     set_config_value(&mut config, &set_args.key, &set_args.value)?;
+    save_config_and_confirm(&config, &config_file_path, &set_args)?;
+    
+    Ok(())
+}
 
-    config.save_to_file(&config_file_path).with_context(|| {
+fn get_config_file_path(config_path: Option<PathBuf>) -> Result<PathBuf> {
+    match config_path {
+        Some(p) => Ok(p),
+        None => Config::default_path(),
+    }
+}
+
+fn load_or_create_config(config_file_path: &PathBuf) -> Result<Config> {
+    if config_file_path.exists() {
+        load_config(Some(config_file_path.clone()))
+    } else {
+        Ok(Config::new())
+    }
+}
+
+fn save_config_and_confirm(config: &Config, config_file_path: &PathBuf, set_args: &SetArgs) -> Result<()> {
+    config.save_to_file(config_file_path).with_context(|| {
         format!(
             "Failed to save configuration to {}",
             config_file_path.display()
