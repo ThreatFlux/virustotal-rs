@@ -15,12 +15,10 @@ use anyhow::Result;
 #[cfg(feature = "mcp-jwt")]
 use virustotal_rs::mcp::auth::{Claims, JwtConfig, JwtManager};
 
-#[allow(unexpected_cfgs)]
-#[cfg(feature = "clap")]
+#[cfg(feature = "cli")]
 use clap::Parser;
 
-#[allow(unexpected_cfgs)]
-#[cfg(feature = "clap")]
+#[cfg(feature = "cli")]
 #[derive(Parser)]
 #[command(name = "jwt-token-generator")]
 #[command(about = "Generate JWT tokens for VirusTotal MCP server")]
@@ -50,8 +48,7 @@ struct Args {
     output: String,
 }
 
-#[allow(unexpected_cfgs)]
-#[cfg(not(feature = "clap"))]
+#[cfg(not(feature = "cli"))]
 #[allow(dead_code)]
 struct Args {
     user: String,
@@ -77,8 +74,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg(feature = "mcp-jwt")]
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
-    #[allow(unexpected_cfgs)]
-    #[cfg(feature = "clap")]
+    #[cfg(feature = "cli")]
     let args = Args::parse();
 
     #[allow(unexpected_cfgs)]

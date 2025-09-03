@@ -22,15 +22,6 @@ skip = [
     { name = "wasi", version = "=0.11.1+wasi-snapshot-preview1" },
     { name = "windows-sys", version = "=0.52.0" },
     { name = "windows-sys", version = "=0.59.0" },
-    { name = "windows-targets", version = "=0.52.6" },
-    { name = "windows_aarch64_gnullvm", version = "=0.52.6" },
-    { name = "windows_aarch64_msvc", version = "=0.52.6" },
-    { name = "windows_i686_gnu", version = "=0.52.6" },
-    { name = "windows_i686_gnullvm", version = "=0.52.6" },
-    { name = "windows_i686_msvc", version = "=0.52.6" },
-    { name = "windows_x86_64_gnu", version = "=0.52.6" },
-    { name = "windows_x86_64_gnullvm", version = "=0.52.6" },
-    { name = "windows_x86_64_msvc", version = "=0.52.6" },
 ]
 
 [sources]
