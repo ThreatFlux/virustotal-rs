@@ -71,7 +71,7 @@ futures = { version = "0.3", optional = true }
 
 [features]
 default = []
-cli = ["clap", "colored", "indicatif", "dirs", "toml", "elasticsearch", "futures"]
+cli = ["clap", "colored", "indicatif", "dirs", "toml", "elasticsearch", "futures", "anyhow"]
 mcp = ["axum", "tokio-util", "anyhow", "regex", "lazy_static", "tracing", "tracing-subscriber"]
 mcp-jwt = ["mcp", "jsonwebtoken", "serde_with", "uuid", "tower", "tower-http", "axum-extra"]
 mcp-oauth = ["mcp", "oauth2", "rand", "uuid", "tower", "tower-http", "axum-extra"]
