@@ -21,7 +21,7 @@ pub mod test_utilities {
     pub use super::constants;
     pub use super::environment::TestEnvironment;
     pub use super::mock_client::MockApiClient;
-    pub use super::responses::{create_json_response, create_mock_response, ResponseFactory};
+    pub use super::responses::{create_json_response, create_mock_response, ResponseFactory, MockSetup};
 }
 
 #[cfg(test)]
