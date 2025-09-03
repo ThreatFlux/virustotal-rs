@@ -13,9 +13,13 @@ use wiremock::matchers::body_json;
 mod client_http_operations {
     use super::*;
 
+    async fn setup_mock_client() -> MockApiClient {
+        MockApiClient::new().await.unwrap()
+    }
+
     #[tokio::test]
     async fn test_client_get_success() {
-        let mock_client = MockApiClient::new().await.unwrap();
+        let mock_client = setup_mock_client().await;
         let mock_server = mock_client.mock_server();
         let client = mock_client.client();
 
@@ -38,7 +42,7 @@ mod client_http_operations {
 
     #[tokio::test]
     async fn test_client_post_success() {
-        let mock_client = MockApiClient::new().await.unwrap();
+        let mock_client = setup_mock_client().await;
         let mock_server = mock_client.mock_server();
         let client = mock_client.client();
 
@@ -63,7 +67,7 @@ mod client_http_operations {
 
     #[tokio::test]
     async fn test_client_put_success() {
-        let mock_client = MockApiClient::new().await.unwrap();
+        let mock_client = setup_mock_client().await;
         let mock_server = mock_client.mock_server();
         let client = mock_client.client();
 
@@ -88,7 +92,7 @@ mod client_http_operations {
 
     #[tokio::test]
     async fn test_client_delete_success() {
-        let mock_client = MockApiClient::new().await.unwrap();
+        let mock_client = setup_mock_client().await;
         let mock_server = mock_client.mock_server();
         let client = mock_client.client();
 

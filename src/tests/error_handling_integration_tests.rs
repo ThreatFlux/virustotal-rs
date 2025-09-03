@@ -9,9 +9,13 @@ use serde_json::Value;
 mod http_error_tests {
     use super::*;
 
+    async fn setup_mock_client() -> MockApiClient {
+        MockApiClient::new().await.unwrap()
+    }
+
     #[tokio::test]
     async fn test_bad_request_error() {
-        let mock_client = MockApiClient::new().await.unwrap();
+        let mock_client = setup_mock_client().await;
         let mock_server = mock_client.mock_server();
         let client = mock_client.client();
 
@@ -36,7 +40,7 @@ mod http_error_tests {
 
     #[tokio::test]
     async fn test_unauthorized_error() {
-        let mock_client = MockApiClient::new().await.unwrap();
+        let mock_client = setup_mock_client().await;
         let mock_server = mock_client.mock_server();
         let client = mock_client.client();
 
@@ -61,7 +65,7 @@ mod http_error_tests {
 
     #[tokio::test]
     async fn test_forbidden_error() {
-        let mock_client = MockApiClient::new().await.unwrap();
+        let mock_client = setup_mock_client().await;
         let mock_server = mock_client.mock_server();
         let client = mock_client.client();
 
@@ -86,7 +90,7 @@ mod http_error_tests {
 
     #[tokio::test]
     async fn test_not_found_error() {
-        let mock_client = MockApiClient::new().await.unwrap();
+        let mock_client = setup_mock_client().await;
         let mock_server = mock_client.mock_server();
         let client = mock_client.client();
 
@@ -111,7 +115,7 @@ mod http_error_tests {
 
     #[tokio::test]
     async fn test_rate_limit_error() {
-        let mock_client = MockApiClient::new().await.unwrap();
+        let mock_client = setup_mock_client().await;
         let mock_server = mock_client.mock_server();
         let client = mock_client.client();
 
@@ -136,7 +140,7 @@ mod http_error_tests {
 
     #[tokio::test]
     async fn test_internal_server_error() {
-        let mock_client = MockApiClient::new().await.unwrap();
+        let mock_client = setup_mock_client().await;
         let mock_server = mock_client.mock_server();
         let client = mock_client.client();
 

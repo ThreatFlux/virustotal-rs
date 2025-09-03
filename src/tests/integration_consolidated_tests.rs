@@ -14,12 +14,15 @@ use std::time::Duration;
 mod network_failure_tests {
     use super::*;
 
+    async fn setup_mock_client() -> MockApiClient {
+        MockApiClient::new().await.unwrap()
+    }
+
     #[tokio::test]
     async fn test_timeout_error() {
-        let mock_client = MockApiClient::new().await.unwrap();
+        let mock_client = setup_mock_client().await;
         let mock_server = mock_client.mock_server();
-        let mut client = mock_client.client().clone();
-        client = client.with_timeout(Duration::from_millis(1)).unwrap();
+        let client = mock_client.client().clone().with_timeout(Duration::from_millis(1)).unwrap();
 
         let response = MockResponseBuilder::new()
             .with_data(sample_file_data())
@@ -41,7 +44,7 @@ mod network_failure_tests {
 
     #[tokio::test]
     async fn test_invalid_json_response() {
-        let mock_client = MockApiClient::new().await.unwrap();
+        let mock_client = setup_mock_client().await;
         let mock_server = mock_client.mock_server();
         let client = mock_client.client();
 
@@ -68,9 +71,13 @@ mod network_failure_tests {
 mod files_integration_tests {
     use super::*;
 
+    async fn setup_mock_client() -> MockApiClient {
+        MockApiClient::new().await.unwrap()
+    }
+
     #[tokio::test]
     async fn test_file_get_by_hash() {
-        let mock_client = MockApiClient::new().await.unwrap();
+        let mock_client = setup_mock_client().await;
         let mock_server = mock_client.mock_server();
         let client = mock_client.client();
         let file_client = client.files();
@@ -94,7 +101,7 @@ mod files_integration_tests {
 
     #[tokio::test]
     async fn test_file_analyse() {
-        let mock_client = MockApiClient::new().await.unwrap();
+        let mock_client = setup_mock_client().await;
         let mock_server = mock_client.mock_server();
         let client = mock_client.client();
         let file_client = client.files();
@@ -122,7 +129,7 @@ mod files_integration_tests {
     #[tokio::test]
     #[ignore = "Mock test with inconsistent behavior"]
     async fn test_file_comments() {
-        let mock_client = MockApiClient::new().await.unwrap();
+        let mock_client = setup_mock_client().await;
         let mock_server = mock_client.mock_server();
         let client = mock_client.client();
         let file_client = client.files();
@@ -153,9 +160,13 @@ mod files_integration_tests {
 mod domains_integration_tests {
     use super::*;
 
+    async fn setup_mock_client() -> MockApiClient {
+        MockApiClient::new().await.unwrap()
+    }
+
     #[tokio::test]
     async fn test_domain_get() {
-        let mock_client = MockApiClient::new().await.unwrap();
+        let mock_client = setup_mock_client().await;
         let mock_server = mock_client.mock_server();
         let client = mock_client.client();
         let domain_client = client.domains();
@@ -182,7 +193,7 @@ mod domains_integration_tests {
 
     #[tokio::test]
     async fn test_domain_analyse() {
-        let mock_client = MockApiClient::new().await.unwrap();
+        let mock_client = setup_mock_client().await;
         let mock_server = mock_client.mock_server();
         let client = mock_client.client();
         let domain_client = client.domains();
@@ -210,7 +221,7 @@ mod domains_integration_tests {
     #[tokio::test]
     #[ignore = "Mock test with inconsistent behavior"]
     async fn test_domain_votes() {
-        let mock_client = MockApiClient::new().await.unwrap();
+        let mock_client = setup_mock_client().await;
         let mock_server = mock_client.mock_server();
         let client = mock_client.client();
         let domain_client = client.domains();
@@ -241,9 +252,13 @@ mod domains_integration_tests {
 mod ip_integration_tests {
     use super::*;
 
+    async fn setup_mock_client() -> MockApiClient {
+        MockApiClient::new().await.unwrap()
+    }
+
     #[tokio::test]
     async fn test_ip_get() {
-        let mock_client = MockApiClient::new().await.unwrap();
+        let mock_client = setup_mock_client().await;
         let mock_server = mock_client.mock_server();
         let client = mock_client.client();
         let ip_client = client.ip_addresses();
@@ -270,7 +285,7 @@ mod ip_integration_tests {
 
     #[tokio::test]
     async fn test_ip_analyse() {
-        let mock_client = MockApiClient::new().await.unwrap();
+        let mock_client = setup_mock_client().await;
         let mock_server = mock_client.mock_server();
         let client = mock_client.client();
         let ip_client = client.ip_addresses();
@@ -298,7 +313,7 @@ mod ip_integration_tests {
     #[tokio::test]
     #[ignore = "Mock test with inconsistent behavior"]
     async fn test_ip_comments() {
-        let mock_client = MockApiClient::new().await.unwrap();
+        let mock_client = setup_mock_client().await;
         let mock_server = mock_client.mock_server();
         let client = mock_client.client();
         let ip_client = client.ip_addresses();
@@ -329,10 +344,14 @@ mod ip_integration_tests {
 mod rules_integration_tests {
     use super::*;
 
+    async fn setup_mock_client() -> MockApiClient {
+        MockApiClient::new().await.unwrap()
+    }
+
     #[tokio::test]
     #[ignore = "Mock test with inconsistent behavior"]
     async fn test_yara_rulesets_list() {
-        let mock_client = MockApiClient::new().await.unwrap();
+        let mock_client = setup_mock_client().await;
         let mock_server = mock_client.mock_server();
         let client = mock_client.client();
 
@@ -355,7 +374,7 @@ mod rules_integration_tests {
     #[tokio::test]
     #[ignore = "Mock test with inconsistent behavior"]
     async fn test_sigma_rules_list() {
-        let mock_client = MockApiClient::new().await.unwrap();
+        let mock_client = setup_mock_client().await;
         let mock_server = mock_client.mock_server();
         let client = mock_client.client();
 
