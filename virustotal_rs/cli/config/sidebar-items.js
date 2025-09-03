@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["init_config","load_config"],"struct":["Config","ElasticsearchConfig","OutputConfig","RateLimitConfig"]};
