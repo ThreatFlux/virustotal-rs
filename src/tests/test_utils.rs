@@ -6,7 +6,7 @@ use crate::auth::ApiTier;
 use crate::client::{Client, ClientBuilder};
 use crate::error::Result;
 use std::time::Duration;
-use wiremock::{MockServer, ResponseTemplate};
+use wiremock::MockServer;
 
 /// Legacy test utilities for backward compatibility - DEPRECATED
 /// Use the new `MockApiClient` from `test_utilities` module for new tests
@@ -39,23 +39,6 @@ impl TestUtils {
             .timeout(Duration::from_secs(5))
             .build()
     }
-
-    /// Create both mock server and client - DEPRECATED
-    /// Use `MockApiClient::new()` instead
-    #[deprecated(since = "0.4.0", note = "Use MockApiClient::new() instead")]
-    pub async fn create_mock_server_and_client() -> (MockServer, Client) {
-        let mock_server = Self::create_mock_server().await;
-        let client = Self::create_test_client(&mock_server).await.unwrap();
-        (mock_server, client)
-    }
-
-    /// Create a response template with standard headers
-    pub fn create_response_template(status: u16) -> ResponseTemplate {
-        ResponseTemplate::new(status)
-            .append_header("Content-Type", "application/json")
-            .append_header("X-RateLimit-Remaining", "999")
-            .append_header("X-RateLimit-Reset", "3600")
-    }
 }
 
 // Deprecated macros - use the builders and utilities from test_utilities instead
@@ -64,6 +47,7 @@ impl TestUtils {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils::test_utilities::create_json_response;
 
     #[tokio::test]
     #[allow(deprecated)]
