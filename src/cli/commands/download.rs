@@ -615,14 +615,12 @@ async fn process_single_download(
 }
 
 /// Create async closure for processing a single hash download
-fn create_download_closure(
+async fn create_download_closure(
     hash: String,
     params: Arc<ProcessDownloadsParams>,
     progress: Option<&ProgressTracker>,
-) -> impl std::future::Future<Output = Result<(), anyhow::Error>> + '_ {
-    async move {
-        process_single_download(hash, &params, progress).await
-    }
+) -> Result<(), anyhow::Error> {
+    process_single_download(hash, &params, progress).await
 }
 
 /// Process all downloads with concurrency control
@@ -638,7 +636,9 @@ async fn process_downloads(
         .map(|hash| {
             let hash = hash.clone();
             let params = Arc::clone(&params);
-            create_download_closure(hash, params, progress)
+            async move {
+                create_download_closure(hash, params, progress).await
+            }
         })
         .buffer_unordered(concurrency)
         .collect()
