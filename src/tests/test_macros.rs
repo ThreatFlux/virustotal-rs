@@ -372,3 +372,46 @@ macro_rules! test_delete_request {
         }
     };
 }
+
+/// Generates standard object operations tests for any resource type
+/// This macro eliminates the duplication of test_*_object_operations() functions
+/// across different test files by providing a consistent way to test:
+/// - collection_name() method
+/// - object_url() method 
+/// - relationships_url() method
+/// - relationship_objects_url() method (if present)
+#[macro_export]
+macro_rules! test_object_operations {
+    ($type:ty, $collection:expr, $id:expr, $relationship:expr) => {
+        #[test]
+        fn test_object_operations() {
+            use $crate::objects::ObjectOperations;
+            
+            assert_eq!(<$type>::collection_name(), $collection);
+            assert_eq!(<$type>::object_url($id), format!("{}/{}", $collection, $id));
+            assert_eq!(
+                <$type>::relationships_url($id, $relationship),
+                format!("{}/{}/relationships/{}", $collection, $id, $relationship)
+            );
+        }
+    };
+    
+    // Extended version that also tests relationship_objects_url method
+    ($type:ty, $collection:expr, $id:expr, $relationship:expr, with_relationship_objects) => {
+        #[test]
+        fn test_object_operations() {
+            use $crate::objects::ObjectOperations;
+            
+            assert_eq!(<$type>::collection_name(), $collection);
+            assert_eq!(<$type>::object_url($id), format!("{}/{}", $collection, $id));
+            assert_eq!(
+                <$type>::relationships_url($id, $relationship),
+                format!("{}/{}/relationships/{}", $collection, $id, $relationship)
+            );
+            assert_eq!(
+                <$type>::relationship_objects_url($id, $relationship),
+                format!("{}/{}/{}", $collection, $id, $relationship)
+            );
+        }
+    };
+}
