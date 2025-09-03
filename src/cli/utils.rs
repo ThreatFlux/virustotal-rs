@@ -1,4 +1,6 @@
 use crate::{ApiKey, ApiTier, Client, Error as VtError};
+// Re-export format_file_size from display module to maintain compatibility
+pub use crate::display::format_file_size;
 use anyhow::{Context, Result};
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::{Deserialize, Serialize};
@@ -81,6 +83,12 @@ pub fn setup_client(api_key: Option<String>, tier: &str) -> Result<Client> {
     };
 
     Client::new(api_key, api_tier).context("Failed to create VirusTotal client")
+}
+
+/// Creates a VirusTotal client wrapped in Arc for concurrent use
+pub fn setup_client_arc(api_key: Option<String>, tier: &str) -> Result<std::sync::Arc<Client>> {
+    let client = setup_client(api_key, tier)?;
+    Ok(std::sync::Arc::new(client))
 }
 
 pub fn read_hashes_from_file<P: AsRef<Path>>(path: P) -> Result<Vec<String>> {
@@ -250,23 +258,6 @@ pub fn validate_hash(hash: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn format_file_size(bytes: u64) -> String {
-    const UNITS: &[&str] = &["B", "KB", "MB", "GB", "TB"];
-    let mut size = bytes as f64;
-    let mut unit_index = 0;
-
-    while size >= 1024.0 && unit_index < UNITS.len() - 1 {
-        size /= 1024.0;
-        unit_index += 1;
-    }
-
-    if unit_index == 0 {
-        format!("{} {}", size as u64, UNITS[unit_index])
-    } else {
-        format!("{:.1} {}", size, UNITS[unit_index])
-    }
-}
-
 pub fn format_timestamp(timestamp: Option<u64>) -> String {
     match timestamp {
         Some(ts) => {
@@ -319,6 +310,32 @@ pub fn print_table_separator(widths: &[usize]) {
         print!("{}", "-".repeat(*width));
     }
     println!();
+}
+
+/// Build a table row as a string instead of printing it directly
+pub fn build_table_row(columns: &[&str], widths: &[usize]) -> String {
+    let mut row = String::new();
+    for (i, (col, width)) in columns.iter().zip(widths).enumerate() {
+        if i > 0 {
+            row.push_str(" | ");
+        }
+        row.push_str(&format!("{:<width$}", col, width = width));
+    }
+    row.push('\n');
+    row
+}
+
+/// Build a table separator as a string instead of printing it directly
+pub fn build_table_separator(widths: &[usize]) -> String {
+    let mut separator = String::new();
+    for (i, width) in widths.iter().enumerate() {
+        if i > 0 {
+            separator.push_str("-+-");
+        }
+        separator.push_str(&"-".repeat(*width));
+    }
+    separator.push('\n');
+    separator
 }
 
 /// Handle HTTP status code errors
@@ -464,6 +481,56 @@ pub fn colorize_text(text: &str, color: &str, enabled: bool) -> String {
         "dim" => format!("\x1b[2m{}\x1b[0m", text),
         _ => text.to_string(),
     }
+}
+
+/// Create a progress tracker based on verbosity and total count
+/// Returns None for verbose mode (no progress bar), Some(ProgressTracker) for non-verbose mode
+pub fn create_progress_tracker(
+    verbose: bool,
+    total: usize,
+    operation: &str,
+) -> Option<ProgressTracker> {
+    if !verbose {
+        Some(ProgressTracker::new(total as u64, operation))
+    } else {
+        None
+    }
+}
+
+/// Handle dry run mode by printing what would be processed and returning early
+pub fn handle_dry_run_check(dry_run: bool, message: &str) -> Result<()> {
+    if dry_run {
+        println!("DRY RUN MODE - {}", message);
+        return Err(anyhow::anyhow!("Dry run completed"));
+    }
+    Ok(())
+}
+
+/// Generic JSON output formatter for consistent JSON output across commands
+pub fn format_json_output<T: serde::Serialize>(data: &T, pretty: bool) -> Result<String> {
+    if pretty {
+        serde_json::to_string_pretty(data).context("Failed to serialize JSON")
+    } else {
+        serde_json::to_string(data).context("Failed to serialize JSON")
+    }
+}
+
+/// Save formatted output to a file
+pub async fn save_output_to_file(
+    content: &str,
+    output_path: &str,
+    verbose: bool,
+    operation: &str,
+) -> Result<()> {
+    tokio::fs::write(output_path, content)
+        .await
+        .with_context(|| format!("Failed to write {} to {}", operation, output_path))?;
+
+    if verbose {
+        println!("{} saved to: {}", operation, output_path);
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
