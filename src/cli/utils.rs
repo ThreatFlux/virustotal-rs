@@ -1,4 +1,6 @@
 use crate::{ApiKey, ApiTier, Client, Error as VtError};
+// Re-export format_file_size from display module to maintain compatibility
+pub use crate::display::format_file_size;
 use anyhow::{Context, Result};
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::{Deserialize, Serialize};
@@ -250,22 +252,6 @@ pub fn validate_hash(hash: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn format_file_size(bytes: u64) -> String {
-    const UNITS: &[&str] = &["B", "KB", "MB", "GB", "TB"];
-    let mut size = bytes as f64;
-    let mut unit_index = 0;
-
-    while size >= 1024.0 && unit_index < UNITS.len() - 1 {
-        size /= 1024.0;
-        unit_index += 1;
-    }
-
-    if unit_index == 0 {
-        format!("{} {}", size as u64, UNITS[unit_index])
-    } else {
-        format!("{:.1} {}", size, UNITS[unit_index])
-    }
-}
 
 pub fn format_timestamp(timestamp: Option<u64>) -> String {
     match timestamp {
@@ -319,6 +305,32 @@ pub fn print_table_separator(widths: &[usize]) {
         print!("{}", "-".repeat(*width));
     }
     println!();
+}
+
+/// Build a table row as a string instead of printing it directly
+pub fn build_table_row(columns: &[&str], widths: &[usize]) -> String {
+    let mut row = String::new();
+    for (i, (col, width)) in columns.iter().zip(widths).enumerate() {
+        if i > 0 {
+            row.push_str(" | ");
+        }
+        row.push_str(&format!("{:<width$}", col, width = width));
+    }
+    row.push('\n');
+    row
+}
+
+/// Build a table separator as a string instead of printing it directly
+pub fn build_table_separator(widths: &[usize]) -> String {
+    let mut separator = String::new();
+    for (i, width) in widths.iter().enumerate() {
+        if i > 0 {
+            separator.push_str("-+-");
+        }
+        separator.push_str(&"-".repeat(*width));
+    }
+    separator.push('\n');
+    separator
 }
 
 /// Handle HTTP status code errors

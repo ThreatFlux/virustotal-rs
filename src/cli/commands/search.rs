@@ -1,7 +1,7 @@
 use crate::cli::utils::{
-    colorize_text, format_detection_ratio, format_file_size, get_detection_ratio, handle_vt_error,
-    print_json, print_table_row, print_table_separator, setup_client, truncate_hash,
-    ProgressTracker,
+    build_table_row, build_table_separator, colorize_text, format_detection_ratio, format_file_size, 
+    get_detection_ratio, handle_vt_error, print_json, print_table_row, print_table_separator, 
+    setup_client, truncate_hash, ProgressTracker,
 };
 use crate::{Client, SearchOrder};
 use anyhow::{Context, Result};
@@ -519,12 +519,13 @@ fn format_table_output(
     let headers = get_table_headers(args.include_snippets);
     
     let mut output = String::new();
-    output.push_str(&build_table_header(&headers, &widths));
+    output.push_str(&build_table_row(&headers, &widths));
     output.push_str(&build_table_separator(&widths));
     
     for result in results {
         let row_parts = format_table_row(result, args, &widths, colored);
-        output.push_str(&build_table_row_line(&row_parts, &widths));
+        let row_str_refs: Vec<&str> = row_parts.iter().map(|s| s.as_str()).collect();
+        output.push_str(&build_table_row(&row_str_refs, &widths));
     }
     
     Ok(output)
@@ -546,27 +547,7 @@ fn get_table_headers(include_snippets: bool) -> Vec<&'static str> {
     }
 }
 
-fn build_table_header(headers: &[&str], widths: &[usize]) -> String {
-    let mut header_line = String::new();
-    for (i, (header, width)) in headers.iter().zip(widths).enumerate() {
-        if i > 0 {
-            header_line.push_str(" | ");
-        }
-        header_line.push_str(&format!("{:<width$}", header, width = width));
-    }
-    format!("{}\n", header_line)
-}
 
-fn build_table_separator(widths: &[usize]) -> String {
-    let mut sep_line = String::new();
-    for (i, width) in widths.iter().enumerate() {
-        if i > 0 {
-            sep_line.push_str("-+-");
-        }
-        sep_line.push_str(&"-".repeat(*width));
-    }
-    format!("{}\n", sep_line)
-}
 
 fn format_table_row(
     result: &crate::FileSearchResult,
@@ -646,13 +627,3 @@ fn format_snippet_column() -> String {
     "Not implemented".to_string()
 }
 
-fn build_table_row_line(row_parts: &[String], widths: &[usize]) -> String {
-    let mut row_line = String::new();
-    for (i, (part, width)) in row_parts.iter().zip(widths).enumerate() {
-        if i > 0 {
-            row_line.push_str(" | ");
-        }
-        row_line.push_str(&format!("{:<width$}", part, width = width));
-    }
-    format!("{}\n", row_line)
-}
