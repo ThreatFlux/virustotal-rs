@@ -1,0 +1,664 @@
+import React, { useEffect, useState } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { AnalysisDisplay } from '@/components/analysis/AnalysisDisplay';
+import { BehavioralAnalysisDisplay } from '@/components/analysis/BehavioralAnalysisDisplay';
+import { DetectionRulesViewer } from '@/components/DetectionRulesViewer';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { fetchFileAnalysis } from '@/services/elasticsearch';
+import { FileAnalysis } from '@/types';
+import { 
+  formatDate, 
+  formatBytes, 
+  truncateHash, 
+  getVerdictBadgeVariant,
+  getVerdictColor 
+} from '@/lib/utils';
+import {
+  FileText,
+  Shield,
+  AlertTriangle,
+  Clock,
+  Hash,
+  Download,
+  Copy,
+  ExternalLink,
+  ChevronLeft,
+  Activity,
+  Database,
+  Network,
+} from 'lucide-react';
+
+export function ReportDetail() {
+  const { reportId } = useParams<{ reportId: string }>();
+  const [analysis, setAnalysis] = useState<FileAnalysis | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [copiedHash, setCopiedHash] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadAnalysis = async () => {
+      if (!reportId) return;
+
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const response = await fetchFileAnalysis(reportId);
+        
+        if (response.success && response.data) {
+          setAnalysis(response.data);
+        } else {
+          setError(response.error || 'Report not found');
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load report');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadAnalysis();
+  }, [reportId]);
+
+  const copyToClipboard = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedHash(label);
+      setTimeout(() => setCopiedHash(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="p-6 space-y-6">
+        <div className="flex items-center space-x-4">
+          <div className="h-8 w-8 bg-muted animate-pulse rounded" />
+          <div className="space-y-2">
+            <div className="h-6 w-48 bg-muted animate-pulse rounded" />
+            <div className="h-4 w-32 bg-muted animate-pulse rounded" />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="space-y-4">
+            <div className="h-32 bg-muted animate-pulse rounded-lg" />
+            <div className="h-48 bg-muted animate-pulse rounded-lg" />
+          </div>
+          <div className="lg:col-span-2">
+            <div className="h-96 bg-muted animate-pulse rounded-lg" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !analysis) {
+    return (
+      <div className="p-6">
+        <div className="flex items-center space-x-4 mb-6">
+          <Button variant="ghost" size="sm" asChild>
+            <Link to="/reports">
+              <ChevronLeft className="h-4 w-4 mr-2" />
+              Back to Reports
+            </Link>
+          </Button>
+        </div>
+        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-6 text-destructive">
+          <h3 className="font-semibold mb-2">Error loading report</h3>
+          <p>{error || 'Report not found'}</p>
+        </div>
+      </div>
+    );
+  }
+
+  const { report, analysis_results, sandbox_verdicts, sandbox_behaviors, behavioral_analysis, crowdsourced_data, relationships, risk_score } = analysis;
+  
+  const detectionCounts = {
+    malicious: analysis_results.filter(r => r.category.toLowerCase() === 'malicious').length,
+    suspicious: analysis_results.filter(r => r.category.toLowerCase() === 'suspicious').length,
+    clean: analysis_results.filter(r => r.category.toLowerCase() === 'harmless' || r.category.toLowerCase() === 'clean').length,
+    undetected: analysis_results.filter(r => r.category.toLowerCase() === 'undetected').length,
+    timeout: analysis_results.filter(r => r.category.toLowerCase() === 'timeout').length,
+    error: analysis_results.filter(r => r.category.toLowerCase() === 'failure').length,
+  };
+
+  return (
+    <div className="p-6 space-y-6">
+      {/* Header */}
+      <div className="space-y-4">
+        <Button variant="ghost" size="sm" asChild className="mb-2">
+          <Link to="/reports">
+            <ChevronLeft className="h-4 w-4 mr-2" />
+            <span className="hidden sm:inline">Back to Reports</span>
+            <span className="sm:hidden">Back</span>
+          </Link>
+        </Button>
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl sm:text-2xl font-bold text-foreground">File Analysis Report</h1>
+            <p className="text-sm sm:text-base text-muted-foreground mt-1 break-all">
+              {report.meaningful_name || report.names?.[0] || 'Unknown filename'}
+            </p>
+          </div>
+          <Badge 
+            variant={getVerdictBadgeVariant(risk_score.level.toLowerCase())}
+            className="text-sm px-3 py-1 self-start"
+          >
+            Risk: {risk_score.level} ({risk_score.score}%)
+          </Badge>
+        </div>
+      </div>
+
+      {/* Report Navigation Tabs */}
+      <Tabs defaultValue="av-results" className="space-y-6">
+        <div className="overflow-x-auto">
+          <TabsList className="inline-flex h-10 items-center justify-start rounded-md bg-muted p-1 text-muted-foreground min-w-max">
+            <TabsTrigger value="av-results" className="whitespace-nowrap">
+              <Shield className="h-4 w-4 mr-1 sm:mr-2" />
+              <span>AV Results</span>
+            </TabsTrigger>
+            <TabsTrigger value="sandbox" className="whitespace-nowrap">
+              <Activity className="h-4 w-4 mr-1 sm:mr-2" />
+              <span>Sandbox</span>
+            </TabsTrigger>
+            <TabsTrigger value="intelligence" className="whitespace-nowrap">
+              <Database className="h-4 w-4 mr-1 sm:mr-2" />
+              <span className="hidden sm:inline">Intelligence</span>
+              <span className="sm:hidden">Intel</span>
+            </TabsTrigger>
+            <TabsTrigger value="relationships" className="whitespace-nowrap">
+              <Network className="h-4 w-4 mr-1 sm:mr-2" />
+              <span>Relations</span>
+            </TabsTrigger>
+            <TabsTrigger value="technical" className="whitespace-nowrap">
+              <FileText className="h-4 w-4 mr-1 sm:mr-2" />
+              <span>Technical</span>
+            </TabsTrigger>
+          </TabsList>
+        </div>
+
+        {/* AV Results Tab */}
+        <TabsContent value="av-results" className="space-y-6">
+          {/* Detection Statistics */}
+          <div>
+            <h2 className="text-xl font-semibold mb-4">Detection & Intelligence</h2>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2">
+                  <Shield className="h-5 w-5" />
+                  <span>Detection Statistics</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                  {[
+                    { label: 'Malicious', count: detectionCounts.malicious, color: 'hsl(var(--malicious))' },
+                    { label: 'Suspicious', count: detectionCounts.suspicious, color: 'hsl(var(--suspicious))' },
+                    { label: 'Clean', count: detectionCounts.clean, color: 'hsl(var(--clean))' },
+                    { label: 'Undetected', count: detectionCounts.undetected, color: 'hsl(var(--undetected))' },
+                    { label: 'Timeout', count: detectionCounts.timeout, color: 'hsl(var(--muted-foreground))' },
+                    { label: 'Error', count: detectionCounts.error, color: 'hsl(var(--muted-foreground))' },
+                  ].map(stat => (
+                    <div key={stat.label} className="text-center">
+                      <div 
+                        className="w-4 h-4 rounded-full mx-auto mb-2" 
+                        style={{ backgroundColor: stat.color }}
+                      />
+                      <div className="text-2xl font-bold">{stat.count}</div>
+                      <div className="text-xs text-muted-foreground">{stat.label}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 pt-4 border-t text-center">
+                  <div className="text-lg font-semibold">Total Engines: {analysis_results.length}</div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* AV Detection Results */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Antivirus Detection Results</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <ScrollArea className="h-96">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Engine</TableHead>
+                      <TableHead>Version</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Result</TableHead>
+                      <TableHead>Update</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {analysis_results.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                          No detection results available
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      analysis_results
+                        .sort((a, b) => {
+                          // Sort by category (malicious first, then suspicious, etc.)
+                          const categoryOrder = ['malicious', 'suspicious', 'harmless', 'clean', 'undetected', 'timeout', 'failure'];
+                          const aIndex = categoryOrder.indexOf(a.category.toLowerCase());
+                          const bIndex = categoryOrder.indexOf(b.category.toLowerCase());
+                          if (aIndex !== bIndex) return aIndex - bIndex;
+                          return a.engine_name.localeCompare(b.engine_name);
+                        })
+                        .map((result, idx) => (
+                          <TableRow key={`${result.engine_name}-${idx}`}>
+                            <TableCell className="font-medium">{result.engine_name}</TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {result.engine_version || 'N/A'}
+                            </TableCell>
+                            <TableCell>
+                              <Badge 
+                                variant={getVerdictBadgeVariant(result.category)}
+                                className="text-xs"
+                              >
+                                {result.category}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="font-mono text-sm">
+                              {result.result || 'Clean'}
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
+                              {result.engine_update || 'N/A'}
+                            </TableCell>
+                          </TableRow>
+                        ))
+                    )}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Sandbox Results Tab */}
+        <TabsContent value="sandbox" className="space-y-4">
+          <h2 className="text-xl font-semibold mb-4">Sandbox Analysis</h2>
+          {/* Enhanced Behavioral Analysis */}
+          {behavioral_analysis && behavioral_analysis.total_behaviors > 0 ? (
+            <BehavioralAnalysisDisplay 
+              behavioral_analysis={behavioral_analysis} 
+              sandbox_behaviors={sandbox_behaviors || []}
+            />
+          ) : (
+            <Card>
+            <CardHeader>
+              <CardTitle>Sandbox Analysis</CardTitle>
+              {sandbox_verdicts.length > 0 && (
+                <p className="text-sm text-muted-foreground mt-2">
+                  Analyzed by {sandbox_verdicts.length} sandbox environment{sandbox_verdicts.length > 1 ? 's' : ''}
+                </p>
+              )}
+            </CardHeader>
+            <CardContent>
+              {sandbox_verdicts.length === 0 ? (
+                <div className="p-6 text-center text-muted-foreground">
+                  <Activity className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>No sandbox analysis results available</p>
+                  <p className="text-xs mt-2">This file may not have been analyzed in sandbox environments</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Summary Stats */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {(() => {
+                      const maliciousCount = sandbox_verdicts.filter(v => v.verdict?.category === 'malicious').length;
+                      const suspiciousCount = sandbox_verdicts.filter(v => v.verdict?.category === 'suspicious').length;
+                      const harmlessCount = sandbox_verdicts.filter(v => v.verdict?.category === 'harmless').length;
+                      const undetectedCount = sandbox_verdicts.filter(v => v.verdict?.category === 'undetected').length;
+                      
+                      return (
+                        <>
+                          {maliciousCount > 0 && (
+                            <div className="p-3 border rounded-lg">
+                              <div className="text-2xl font-bold text-destructive">{maliciousCount}</div>
+                              <div className="text-xs text-muted-foreground">Malicious</div>
+                            </div>
+                          )}
+                          {suspiciousCount > 0 && (
+                            <div className="p-3 border rounded-lg">
+                              <div className="text-2xl font-bold text-orange-500">{suspiciousCount}</div>
+                              <div className="text-xs text-muted-foreground">Suspicious</div>
+                            </div>
+                          )}
+                          {harmlessCount > 0 && (
+                            <div className="p-3 border rounded-lg">
+                              <div className="text-2xl font-bold text-green-500">{harmlessCount}</div>
+                              <div className="text-xs text-muted-foreground">Harmless</div>
+                            </div>
+                          )}
+                          {undetectedCount > 0 && (
+                            <div className="p-3 border rounded-lg">
+                              <div className="text-2xl font-bold text-muted-foreground">{undetectedCount}</div>
+                              <div className="text-xs text-muted-foreground">Undetected</div>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Detailed Results */}
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-medium text-muted-foreground">Detailed Results</h4>
+                    {sandbox_verdicts.map((verdict, idx) => {
+                      const category = verdict.verdict?.category || 'unknown';
+                      const classification = verdict.verdict?.malware_classification;
+                      const malwareNames = verdict.verdict?.malware_names;
+                      const confidence = verdict.verdict?.confidence;
+                      
+                      return (
+                        <div key={`${verdict.sandbox_name}-${idx}`} className="border rounded-lg p-4 space-y-3">
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 bg-muted rounded-lg">
+                                <Activity className="h-4 w-4" />
+                              </div>
+                              <div>
+                                <div className="font-medium">{verdict.sandbox_name}</div>
+                                <div className="text-xs text-muted-foreground">Sandbox Environment</div>
+                              </div>
+                            </div>
+                            <Badge 
+                              variant={getVerdictBadgeVariant(category)}
+                              className="text-xs"
+                            >
+                              {category}
+                            </Badge>
+                          </div>
+                          
+                          {(classification || malwareNames || confidence) && (
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-3 border-t">
+                              {confidence && (
+                                <div>
+                                  <div className="text-xs text-muted-foreground">Confidence</div>
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <div className="w-20 bg-muted rounded-full h-2">
+                                      <div 
+                                        className="bg-primary h-2 rounded-full" 
+                                        style={{ width: `${confidence}%` }}
+                                      />
+                                    </div>
+                                    <span className="text-sm">{confidence}%</span>
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {classification && classification.length > 0 && (
+                                <div>
+                                  <div className="text-xs text-muted-foreground">Classification</div>
+                                  <div className="mt-1">
+                                    {classification.map((cls, i) => (
+                                      <Badge key={i} variant="outline" className="text-xs mr-1">
+                                        {cls}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {malwareNames && malwareNames.length > 0 && (
+                                <div>
+                                  <div className="text-xs text-muted-foreground">Detected As</div>
+                                  <div className="mt-1 font-mono text-xs">
+                                    {malwareNames.join(', ')}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          
+                          {!classification && !malwareNames && !confidence && category === 'undetected' && (
+                            <div className="text-xs text-muted-foreground italic">
+                              No malicious behavior detected during sandbox execution
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+          )}
+        </TabsContent>
+
+        {/* Intelligence Tab */}
+        <TabsContent value="intelligence" className="space-y-4">
+          <h2 className="text-xl font-semibold mb-4">Threat Intelligence</h2>
+          {(() => {
+            // Filter detection rules (YARA, Sigma) and other intel
+            const detectionRules = crowdsourced_data.filter(item => 
+              item.data_type === 'yara' || item.data_type === 'sigma'
+            );
+            
+            // Other intel data (non-YARA, non-Sigma)
+            const otherIntel = crowdsourced_data.filter(item => 
+              item.data_type !== 'yara' && item.data_type !== 'sigma'
+            );
+            
+            return (
+              <>
+                {/* Detection Rules Viewer (YARA & Sigma) */}
+                {detectionRules.length > 0 && (
+                  <DetectionRulesViewer 
+                    crowdsourcedData={detectionRules} 
+                    fileHash={report.sha256 || report.file_hash || ''}
+                  />
+                )}
+                
+                {/* Other Intelligence Data */}
+                {otherIntel.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Other Threat Intelligence</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      <ScrollArea className="h-96">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Type</TableHead>
+                              <TableHead>Source</TableHead>
+                              <TableHead>Description</TableHead>
+                              <TableHead>Author</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {otherIntel.map((item, idx) => {
+                              const data = item.data || {};
+                              const dataType = item.data_type || 'unknown';
+                              const description = data.description || item.description || '';
+                              const author = data.author || item.author || 'N/A';
+                              const source = data.source || item.source || 'N/A';
+                              
+                              return (
+                                <TableRow key={`${dataType}-${idx}`}>
+                                  <TableCell className="font-medium">
+                                    <Badge variant="outline" className="text-xs">
+                                      {dataType.toUpperCase()}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="font-mono text-sm">{source}</TableCell>
+                                  <TableCell className="text-sm max-w-md">
+                                    <div className="truncate" title={description}>
+                                      {description || 'No description available'}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="text-sm">{author}</TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </ScrollArea>
+                    </CardContent>
+                  </Card>
+                )}
+                
+                {/* No data message */}
+                {crowdsourced_data.length === 0 && (
+                  <Card>
+                    <CardContent className="p-6">
+                      <div className="text-center text-muted-foreground">
+                        No threat intelligence data available
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </>
+            );
+          })()}
+        </TabsContent>
+
+        {/* Relationships Tab */}
+        <TabsContent value="relationships" className="space-y-4">
+          <h2 className="text-xl font-semibold mb-4">File Relationships</h2>
+          <Card>
+            <CardHeader>
+              <CardTitle>File Relationships</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {relationships.length === 0 ? (
+                <div className="p-6 text-center text-muted-foreground">
+                  No file relationships available
+                </div>
+              ) : (
+                <ScrollArea className="h-96">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Relationship Type</TableHead>
+                        <TableHead>Target ID</TableHead>
+                        <TableHead>Target Type</TableHead>
+                        <TableHead>Context</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {relationships.map((rel, idx) => (
+                        <TableRow key={`${rel.relation_type}-${idx}`}>
+                          <TableCell className="font-medium">{rel.relation_type}</TableCell>
+                          <TableCell className="font-mono text-sm">
+                            {truncateHash(rel.target_id, 20)}
+                          </TableCell>
+                          <TableCell>{rel.target_type || 'N/A'}</TableCell>
+                          <TableCell className="text-sm">{rel.context || 'N/A'}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </ScrollArea>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Technical Analysis Tab */}
+        <TabsContent value="technical" className="space-y-6">
+          <h2 className="text-xl font-semibold mb-4">Technical Analysis</h2>
+          <AnalysisDisplay report={report} />
+
+          {/* File Metadata Section */}
+          <div>
+            <h2 className="text-xl font-semibold mb-4">File Metadata</h2>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* File Information */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <FileText className="h-5 w-5" />
+                    <span>File Information</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">File Name</label>
+                      <p className="text-sm font-mono break-all">{report.meaningful_name || report.names?.[0] || 'Unknown'}</p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">File Type</label>
+                      <p className="text-sm">{report.type_description || report.type_tag || 'Unknown'}</p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">File Size</label>
+                      <p className="text-sm">{report.size ? formatBytes(report.size) : 'Unknown'}</p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-muted-foreground">Magic</label>
+                      <p className="text-sm">{report.magic || 'N/A'}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* File Hashes */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <Hash className="h-5 w-5" />
+                    <span>File Hashes</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {[
+                    { label: 'SHA256', value: report.sha256 || report.file_hash },
+                    { label: 'SHA1', value: report.sha1 },
+                    { label: 'MD5', value: report.md5 },
+                    { label: 'SSDEEP', value: report.ssdeep },
+                    { label: 'TLSH', value: report.tlsh },
+                    { label: 'Imphash', value: report.imphash },
+                    { label: 'Authentihash', value: report.authentihash },
+                  ].map(hash => hash.value && (
+                    <div key={hash.label} className="space-y-1">
+                      <label className="text-sm font-medium text-muted-foreground">{hash.label}</label>
+                      <div className="flex items-center space-x-2">
+                        <p className="text-xs font-mono break-all flex-1">{hash.value}</p>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => copyToClipboard(hash.value!, hash.label)}
+                          className="h-6 w-6 p-0"
+                        >
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      {copiedHash === hash.label && (
+                        <p className="text-xs text-green-600">Copied!</p>
+                      )}
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </TabsContent>
+
+      </Tabs>
+    </div>
+  );
+}
+
