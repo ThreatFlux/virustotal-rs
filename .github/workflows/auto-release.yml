@@ -386,7 +386,7 @@ jobs:
       with:
         images: |
           threatflux/virustotal-rs-mcp
-          ${{ env.REGISTRY }}/threatflux/virustotal-rs-mcp
+          ${{ env.REGISTRY }}/${{ github.repository }}-mcp
         tags: |
           type=ref,event=branch
           type=semver,pattern={{version}},value=${{ needs.version-bump.outputs.new_version }}
@@ -406,7 +406,7 @@ jobs:
       uses: docker/metadata-action@v5
       with:
         images: |
-          ${{ env.REGISTRY }}/threatflux/virustotal-rs-mcp
+          ${{ env.REGISTRY }}/${{ github.repository }}-mcp
         tags: |
           type=ref,event=branch
           type=semver,pattern={{version}},value=${{ needs.version-bump.outputs.new_version }}
@@ -446,7 +446,7 @@ jobs:
     - name: Generate image reference
       id: image-ref
       run: |
-        echo "image-ref=${{ env.REGISTRY }}/threatflux/virustotal-rs-mcp@${{ steps.build.outputs.digest }}" >> $GITHUB_OUTPUT
+        echo "image-ref=${{ env.REGISTRY }}/${{ github.repository }}-mcp@${{ steps.build.outputs.digest }}" >> $GITHUB_OUTPUT
 
   # Security scan Docker image
   docker-scan:
@@ -471,12 +471,12 @@ jobs:
 
     - name: Pull Docker image
       run: |
-        docker pull ${{ env.REGISTRY }}/threatflux/virustotal-rs-mcp:latest
+        docker pull ${{ env.REGISTRY }}/${{ github.repository }}-mcp:latest
 
     - name: Run Trivy vulnerability scanner
       uses: aquasecurity/trivy-action@master
       with:
-        image-ref: ${{ env.REGISTRY }}/threatflux/virustotal-rs-mcp:latest
+        image-ref: ${{ env.REGISTRY }}/${{ github.repository }}-mcp:latest
         format: 'sarif'
         output: 'trivy-results.sarif'
         severity: 'CRITICAL,HIGH,MEDIUM'
@@ -538,17 +538,25 @@ jobs:
       env:
         COSIGN_EXPERIMENTAL: 1
       run: |
-        # Sign using digest (more secure)
-        echo "Signing image with digest: ${{ needs.build-docker.outputs.digest }}"
-        cosign sign --yes ${{ needs.build-docker.outputs.image-ref }}
+        # Debug output
+        echo "Image reference: ${{ needs.build-docker.outputs.image-ref }}"
+        echo "Digest: ${{ needs.build-docker.outputs.digest }}"
         
-        # Sign GitHub Container Registry image by tag as well
-        cosign sign --yes ${{ env.REGISTRY }}/threatflux/virustotal-rs-mcp:${{ needs.version-bump.outputs.new_version }}
+        # Verify image exists before signing
+        if docker manifest inspect ${{ needs.build-docker.outputs.image-ref }} > /dev/null 2>&1; then
+          echo "✅ Image found, proceeding with signing..."
+          cosign sign --yes ${{ needs.build-docker.outputs.image-ref }}
+        else
+          echo "❌ Image not found: ${{ needs.build-docker.outputs.image-ref }}"
+          echo "Available images:"
+          docker images | grep mcp || echo "No MCP images found"
+          exit 1
+        fi
         
         # Only sign Docker Hub image if credentials exist and image was pushed
         if [[ "${{ steps.check-dockerhub-sign.outputs.has-dockerhub }}" == "true" ]]; then
           if docker manifest inspect threatflux/virustotal-rs-mcp:${{ needs.version-bump.outputs.new_version }} > /dev/null 2>&1; then
-            echo "Signing Docker Hub image..."
+            echo "Signing Docker Hub image by tag..."
             cosign sign --yes threatflux/virustotal-rs-mcp:${{ needs.version-bump.outputs.new_version }}
           else
             echo "Docker Hub image not found, skipping Docker Hub signing"
@@ -570,11 +578,8 @@ jobs:
       env:
         COSIGN_EXPERIMENTAL: 1
       run: |
-        # Attach SBOM using digest reference
+        # Attach SBOM using digest reference (most secure)
         cosign attach sbom --sbom sbom.spdx.json ${{ needs.build-docker.outputs.image-ref }}
-        
-        # Attach to GitHub Container Registry by tag as well
-        cosign attach sbom --sbom sbom.spdx.json ${{ env.REGISTRY }}/threatflux/virustotal-rs-mcp:${{ needs.version-bump.outputs.new_version }}
         
         # Only attach to Docker Hub if credentials exist and image was pushed
         if [[ "${{ steps.check-dockerhub-sign.outputs.has-dockerhub }}" == "true" ]]; then
