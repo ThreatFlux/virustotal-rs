@@ -1,15 +1,8 @@
 use crate::domains::{Domain, DomainAttributes};
-use crate::objects::{Object, ObjectOperations};
+use crate::objects::Object;
 
-#[test]
-fn test_domain_object_operations() {
-    assert_eq!(Domain::collection_name(), "domains");
-    assert_eq!(Domain::object_url("example.com"), "domains/example.com");
-    assert_eq!(
-        Domain::relationships_url("example.com", "subdomains"),
-        "domains/example.com/relationships/subdomains"
-    );
-}
+// Test object operations using the macro to eliminate duplication
+crate::test_object_operations!(Domain, "domains", "example.com", "subdomains");
 
 #[test]
 fn test_domain_creation() {

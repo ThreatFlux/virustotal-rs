@@ -1,7 +1,7 @@
 use crate::cli::utils::{
-    colorize_text, format_detection_ratio, format_file_size, format_timestamp, get_detection_ratio,
-    handle_vt_error, print_json, print_table_row, print_table_separator, setup_client,
-    truncate_hash, validate_hash,
+    colorize_text, format_detection_ratio, format_file_size, format_json_output, format_timestamp, 
+    get_detection_ratio, handle_dry_run_check, handle_vt_error, print_json, print_table_row, 
+    print_table_separator, save_output_to_file, setup_client, truncate_hash, validate_hash,
 };
 use crate::Client;
 use anyhow::{Context, Result};
@@ -56,7 +56,7 @@ pub async fn execute(
     dry_run: bool,
     no_color: bool,
 ) -> Result<()> {
-    if let Err(_) = validate_input(&args, dry_run) {
+    if validate_input(&args, dry_run).is_err() {
         return Ok(()); // Dry run completed successfully
     }
     
@@ -72,12 +72,7 @@ pub async fn execute(
 /// Validates input parameters and handles dry run mode
 fn validate_input(args: &ReportArgs, dry_run: bool) -> Result<()> {
     validate_hash(&args.hash)?;
-    
-    if dry_run {
-        println!("DRY RUN MODE - Would fetch report for hash: {}", args.hash);
-        return Err(anyhow::anyhow!("Dry run completed"));
-    }
-    
+    handle_dry_run_check(dry_run, &format!("Would fetch report for hash: {}", args.hash))?;
     Ok(())
 }
 
@@ -111,14 +106,7 @@ async fn save_report_if_requested(
 ) -> Result<()> {
     if let Some(output_path) = &args.output {
         let content = generate_report_content(report_json, args, colored)?;
-        
-        tokio::fs::write(output_path, content)
-            .await
-            .with_context(|| format!("Failed to write report to {}", output_path))?;
-        
-        if verbose {
-            println!("Report saved to: {}", output_path);
-        }
+        save_output_to_file(&content, output_path, verbose, "Report").await?;
     }
     
     Ok(())
@@ -131,8 +119,7 @@ fn generate_report_content(
     colored: bool,
 ) -> Result<String> {
     match args.format.as_str() {
-        "json" => serde_json::to_string_pretty(report_json)
-            .context("Failed to serialize JSON"),
+        "json" => format_json_output(report_json, true),
         _ => format_report_text(report_json, args, colored),
     }
 }
@@ -616,7 +603,7 @@ fn format_report_text(report: &Value, args: &ReportArgs, colored: bool) -> Resul
             }
         }
         _ => {
-            output = serde_json::to_string_pretty(report)?;
+            output = format_json_output(report, true)?;
         }
     }
 

@@ -1,18 +1,8 @@
 use crate::ip_addresses::{IpAddress, IpAddressAttributes};
-use crate::objects::{Object, ObjectOperations};
+use crate::objects::Object;
 
-#[test]
-fn test_ip_address_object_operations() {
-    assert_eq!(IpAddress::collection_name(), "ip_addresses");
-    assert_eq!(
-        IpAddress::object_url("192.168.1.1"),
-        "ip_addresses/192.168.1.1"
-    );
-    assert_eq!(
-        IpAddress::relationships_url("192.168.1.1", "resolutions"),
-        "ip_addresses/192.168.1.1/relationships/resolutions"
-    );
-}
+// Test object operations using the macro to eliminate duplication
+crate::test_object_operations!(IpAddress, "ip_addresses", "192.168.1.1", "resolutions");
 
 #[test]
 fn test_ip_address_creation() {

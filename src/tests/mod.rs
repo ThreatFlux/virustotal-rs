@@ -62,6 +62,5 @@ mod example_with_new_utilities;
 #[cfg(test)]
 mod test_utilities_tests;
 
-// Refactoring examples showing before/after
-#[cfg(test)]
-mod refactored_example;
+// Refactoring examples showing before/after - consolidated into example_with_new_utilities
+// mod refactored_example;

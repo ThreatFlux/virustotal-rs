@@ -1,6 +1,7 @@
 use crate::cli::utils::{
-    colorize_text, format_file_size, handle_vt_error, print_json, setup_client, validate_hash,
-    ProgressTracker,
+    colorize_text, create_progress_tracker, format_file_size, format_json_output,
+    handle_dry_run_check, handle_vt_error, print_json, save_output_to_file, setup_client_arc,
+    validate_hash, ProgressTracker,
 };
 use crate::{Analysis, Client};
 use anyhow::{Context, Result};
@@ -95,7 +96,7 @@ pub async fn execute(
     dry_run: bool,
     no_color: bool,
 ) -> Result<()> {
-    let client = Arc::new(setup_client(api_key, tier)?);
+    let client = setup_client_arc(api_key, tier)?;
     let input_path = Path::new(&args.input);
 
     if !input_path.exists() {
@@ -120,23 +121,15 @@ pub async fn execute(
 
     println!("Found {} files to scan", files_to_scan.len());
 
-    if dry_run {
-        println!("DRY RUN MODE - Files that would be scanned:");
-        for file_path in &files_to_scan {
-            println!("  {}", file_path.display());
-        }
+    if handle_dry_run_check(
+        dry_run,
+        &format!("Would scan {} files", files_to_scan.len()),
+    ).is_err() {
         return Ok(());
     }
 
     // Progress tracking
-    let progress = if !verbose {
-        Some(ProgressTracker::new(
-            files_to_scan.len() as u64,
-            "Scanning files",
-        ))
-    } else {
-        None
-    };
+    let progress = create_progress_tracker(verbose, files_to_scan.len(), "Scanning files");
 
     let successful = Arc::new(AtomicUsize::new(0));
     let failed = Arc::new(AtomicUsize::new(0));
@@ -237,8 +230,8 @@ pub async fn execute(
     // Display results
     match args.format.as_str() {
         "json" => {
-            let json_output = serde_json::to_value(&scan_results)?;
-            print_json(&json_output, true)?;
+            let json_output = format_json_output(&scan_results, true)?;
+            println!("{}", json_output);
         }
         "table" => {
             print_table_results(&scan_results, !no_color)?;
@@ -254,17 +247,11 @@ pub async fn execute(
     // Save results if requested
     if let Some(output_path) = &args.output {
         let output_content = match args.format.as_str() {
-            "json" => serde_json::to_string_pretty(&scan_results)?,
+            "json" => format_json_output(&scan_results, true)?,
             _ => format_results_as_text(&scan_results)?,
         };
 
-        tokio::fs::write(output_path, output_content)
-            .await
-            .with_context(|| format!("Failed to write results to {}", output_path.display()))?;
-
-        if verbose {
-            println!("Results saved to: {}", output_path.display());
-        }
+        save_output_to_file(&output_content, &output_path.to_string_lossy(), verbose, "Scan results").await?;
     }
 
     // Print summary statistics
@@ -527,7 +514,7 @@ async fn wait_for_analysis_results(
         return Ok(());
     }
 
-    let progress = create_progress_tracker(&pending_analyses, verbose);
+    let progress = create_waiting_progress_tracker(&pending_analyses, verbose);
     let mut completed = 0;
 
     while should_continue_polling(completed, &pending_analyses, &poll_config) {
@@ -574,15 +561,8 @@ fn collect_pending_analyses(scan_results: &[ScanResult]) -> Vec<usize> {
         .collect()
 }
 
-fn create_progress_tracker(pending_analyses: &[usize], verbose: bool) -> Option<ProgressTracker> {
-    if !verbose {
-        Some(ProgressTracker::new(
-            pending_analyses.len() as u64,
-            "Waiting for results",
-        ))
-    } else {
-        None
-    }
+fn create_waiting_progress_tracker(pending_analyses: &[usize], verbose: bool) -> Option<ProgressTracker> {
+    create_progress_tracker(verbose, pending_analyses.len(), "Waiting for results")
 }
 
 fn should_continue_polling(

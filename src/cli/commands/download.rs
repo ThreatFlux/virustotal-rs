@@ -1,7 +1,7 @@
 use crate::cli::utils::{
-    detect_input_type, format_file_size, handle_vt_error, read_hashes_from_file,
-    read_hashes_from_json_export, setup_client, truncate_hash, validate_hash, InputType,
-    ProgressTracker,
+    create_progress_tracker, detect_input_type, format_file_size, format_json_output,
+    handle_dry_run_check, handle_vt_error, read_hashes_from_file, read_hashes_from_json_export,
+    setup_client_arc, truncate_hash, validate_hash, InputType, ProgressTracker,
 };
 use crate::{ApiTier, Client};
 use anyhow::{Context, Result};
@@ -160,8 +160,8 @@ fn should_skip_file(
         || should_skip_both(context, file_exists, report_exists)
 }
 
-/// Print download summary as JSON format
-fn print_json_summary(
+/// Create JSON summary structure
+fn create_json_summary(
     args: &DownloadArgs,
     hashes_count: usize,
     successful_count: usize,
@@ -169,8 +169,8 @@ fn print_json_summary(
     skipped_count: usize,
     total_bytes: usize,
     context: &DownloadContext,
-) -> Result<()> {
-    let summary = serde_json::json!({
+) -> serde_json::Value {
+    serde_json::json!({
         "total": hashes_count,
         "successful": successful_count,
         "failed": failed_count,
@@ -179,9 +179,7 @@ fn print_json_summary(
         "total_size_formatted": format_file_size(total_bytes as u64),
         "output_directory": args.output,
         "reports_directory": if context.download_reports { Some(&args.reports_dir) } else { None }
-    });
-    println!("{}", serde_json::to_string_pretty(&summary)?);
-    Ok(())
+    })
 }
 
 /// Print download summary as table format
@@ -228,15 +226,20 @@ fn print_download_summary(
     let total_bytes = counters.total_size.load(Ordering::SeqCst);
 
     match args.format.as_str() {
-        "json" => print_json_summary(
-            args,
-            hashes_count,
-            successful_count,
-            failed_count,
-            skipped_count,
-            total_bytes,
-            context,
-        ),
+        "json" => {
+            let summary = create_json_summary(
+                args,
+                hashes_count,
+                successful_count,
+                failed_count,
+                skipped_count,
+                total_bytes,
+                context,
+            );
+            let json_output = format_json_output(&summary, true)?;
+            println!("{}", json_output);
+            Ok(())
+        }
         _ => {
             print_table_summary(
                 args,
@@ -333,20 +336,11 @@ async fn validate_and_parse_input(
 
     println!("Found {} hashes to process", hashes.len());
 
-    if dry_run {
-        handle_dry_run(&hashes);
+    if handle_dry_run_check(dry_run, &format!("Would process {} hashes", hashes.len())).is_err() {
         return Ok(vec![]);
     }
 
     Ok(hashes)
-}
-
-/// Handle dry run mode by printing what would be processed
-fn handle_dry_run(hashes: &[String]) {
-    println!("DRY RUN MODE - No files will be downloaded");
-    for hash in hashes {
-        println!("Would process: {}", truncate_hash(hash, 16));
-    }
 }
 
 /// Create download context based on arguments
@@ -379,11 +373,7 @@ async fn setup_concurrency_and_tier(
 
 /// Setup progress tracking based on verbosity
 fn setup_progress_tracking(hash_count: usize, verbose: bool) -> Option<ProgressTracker> {
-    if !verbose {
-        Some(ProgressTracker::new(hash_count as u64, "Downloading"))
-    } else {
-        None
-    }
+    create_progress_tracker(verbose, hash_count, "Downloading")
 }
 
 /// Handle error checking and reporting based on skip_errors flag
@@ -410,7 +400,7 @@ pub async fn execute(
     verbose: bool,
     dry_run: bool,
 ) -> Result<()> {
-    let client = Arc::new(setup_client(api_key, tier)?);
+    let client = setup_client_arc(api_key, tier)?;
 
     // Validate input and handle dry run
     let hashes = validate_and_parse_input(&args, verbose, dry_run).await?;

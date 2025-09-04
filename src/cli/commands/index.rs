@@ -1,4 +1,4 @@
-use crate::cli::utils::{handle_vt_error, read_hashes_from_file, setup_client, ProgressTracker};
+use crate::cli::utils::{handle_vt_error, read_hashes_from_file, setup_client_arc, ProgressTracker};
 use crate::{ApiTier, Client};
 use anyhow::{Context, Result};
 use chrono::Utc;
@@ -266,7 +266,7 @@ async fn download_and_process_hashes(
     tier: &str,
     verbose: bool,
 ) -> Result<Vec<ProcessedReport>> {
-    let client = Arc::new(setup_client(api_key, tier)?);
+    let client = setup_client_arc(api_key, tier)?;
     let hashes = read_hashes_from_file(&args.input)?;
 
     if hashes.is_empty() {
