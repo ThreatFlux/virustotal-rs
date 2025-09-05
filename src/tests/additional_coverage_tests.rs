@@ -302,58 +302,12 @@ mod rate_limit_coverage_tests {
 // Tests for object operations
 #[cfg(test)]
 mod objects_coverage_tests {
-    use crate::domains::Domain;
-    use crate::files::File;
-    use crate::ip_addresses::IpAddress;
-    use crate::objects::ObjectOperations;
     use crate::objects::{Collection, CollectionMeta, Links};
     #[allow(unused_imports)]
     use std::collections::HashMap;
 
-    #[test]
-    fn test_file_object_operations() {
-        assert_eq!(File::collection_name(), "files");
-        assert_eq!(File::object_url("abc123"), "files/abc123");
-        assert_eq!(
-            File::relationships_url("abc123", "comments"),
-            "files/abc123/relationships/comments"
-        );
-        assert_eq!(
-            File::relationship_objects_url("abc123", "comments"),
-            "files/abc123/comments"
-        );
-    }
-
-    #[test]
-    fn test_domain_object_operations() {
-        assert_eq!(Domain::collection_name(), "domains");
-        assert_eq!(Domain::object_url("example.com"), "domains/example.com");
-        assert_eq!(
-            Domain::relationships_url("example.com", "urls"),
-            "domains/example.com/relationships/urls"
-        );
-        assert_eq!(
-            Domain::relationship_objects_url("example.com", "urls"),
-            "domains/example.com/urls"
-        );
-    }
-
-    #[test]
-    fn test_ip_object_operations() {
-        assert_eq!(IpAddress::collection_name(), "ip_addresses");
-        assert_eq!(
-            IpAddress::object_url("192.168.1.1"),
-            "ip_addresses/192.168.1.1"
-        );
-        assert_eq!(
-            IpAddress::relationships_url("192.168.1.1", "urls"),
-            "ip_addresses/192.168.1.1/relationships/urls"
-        );
-        assert_eq!(
-            IpAddress::relationship_objects_url("192.168.1.1", "urls"),
-            "ip_addresses/192.168.1.1/urls"
-        );
-    }
+    // These object operations tests are now covered by the individual test files using macros
+    // Removed duplicated functions: test_file_object_operations, test_domain_object_operations, test_ip_object_operations
 
     #[test]
     fn test_links_creation() {

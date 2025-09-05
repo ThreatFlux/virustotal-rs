@@ -1,5 +1,6 @@
-/// Example tests demonstrating the new test utilities
+/// Comprehensive example tests demonstrating the new test utilities
 /// This shows how the test utilities eliminate duplication and make tests more readable
+/// Combines examples from both old example files to prevent duplication
 #[cfg(test)]
 mod example_tests {
     use crate::error::Error;
@@ -13,10 +14,21 @@ mod example_tests {
         Mock,
     };
 
+    /// Helper function to setup common mock endpoints - reduces duplication
+    /// This demonstrates the new MockSetup utility
+    async fn setup_mock_endpoint(
+        mock_client: &MockApiClient,
+        endpoint: &str,
+        response_data: serde_json::Value,
+    ) {
+        // Using the new MockSetup helper reduces even more duplication
+        MockSetup::setup_get_endpoint(mock_client.mock_server(), endpoint, response_data, None)
+            .await;
+    }
+
     #[tokio::test]
     async fn test_file_analysis_clean() {
-        // Before: Lots of boilerplate setup
-        // After: Simple builder pattern with sensible defaults
+        // Simple builder pattern with sensible defaults
         let mock_client = MockApiClient::new().await.unwrap();
 
         let clean_file_data = FileResponseBuilder::clean_file()
@@ -25,13 +37,7 @@ mod example_tests {
             .build();
 
         let response = ResponseFactory::success_response(clean_file_data);
-
-        Mock::given(method("GET"))
-            .and(path("/files/test-hash"))
-            .and(header("x-apikey", constants::TEST_API_KEY))
-            .respond_with(create_json_response(200, &response))
-            .mount(mock_client.mock_server())
-            .await;
+        setup_mock_endpoint(&mock_client, "/files/test-hash", response).await;
 
         let result: Result<serde_json::Value, _> =
             mock_client.client().get("files/test-hash").await;
@@ -61,13 +67,7 @@ mod example_tests {
             .build();
 
         let response = ResponseFactory::success_response(malicious_file_data);
-
-        Mock::given(method("GET"))
-            .and(path("/files/malicious-hash"))
-            .and(header("x-apikey", constants::TEST_API_KEY))
-            .respond_with(create_json_response(200, &response))
-            .mount(mock_client.mock_server())
-            .await;
+        setup_mock_endpoint(&mock_client, "/files/malicious-hash", response).await;
 
         let result: Result<serde_json::Value, _> =
             mock_client.client().get("files/malicious-hash").await;
@@ -91,13 +91,7 @@ mod example_tests {
             .build();
 
         let response = ResponseFactory::success_response(domain_data);
-
-        Mock::given(method("GET"))
-            .and(path("/domains/test-domain.com"))
-            .and(header("x-apikey", constants::TEST_API_KEY))
-            .respond_with(create_json_response(200, &response))
-            .mount(mock_client.mock_server())
-            .await;
+        setup_mock_endpoint(&mock_client, "/domains/test-domain.com", response).await;
 
         let result: Result<serde_json::Value, _> =
             mock_client.client().get("domains/test-domain.com").await;
@@ -122,13 +116,7 @@ mod example_tests {
             .build();
 
         let response = ResponseFactory::success_response(ip_data);
-
-        Mock::given(method("GET"))
-            .and(path("/ip_addresses/1.1.1.1"))
-            .and(header("x-apikey", constants::TEST_API_KEY))
-            .respond_with(create_json_response(200, &response))
-            .mount(mock_client.mock_server())
-            .await;
+        setup_mock_endpoint(&mock_client, "/ip_addresses/1.1.1.1", response).await;
 
         let result: Result<serde_json::Value, _> =
             mock_client.client().get("ip_addresses/1.1.1.1").await;
@@ -158,12 +146,7 @@ mod example_tests {
         let collection_response =
             ResponseFactory::collection_response(vec![file1, file2], Some("next-cursor-123"));
 
-        Mock::given(method("GET"))
-            .and(path("/files"))
-            .and(header("x-apikey", constants::TEST_API_KEY))
-            .respond_with(create_json_response(200, &collection_response))
-            .mount(mock_client.mock_server())
-            .await;
+        setup_mock_endpoint(&mock_client, "/files", collection_response).await;
 
         let result: Result<serde_json::Value, _> = mock_client.client().get("files").await;
         assert!(result.is_ok());
@@ -177,18 +160,30 @@ mod example_tests {
         assert_eq!(response["meta"]["count"], 2);
     }
 
+    /// Helper function to setup error mock endpoints - demonstrates MockSetup::setup_error_endpoint
+    async fn setup_error_mock(
+        mock_client: &MockApiClient,
+        endpoint: &str,
+        status: u16,
+        error_response: serde_json::Value,
+    ) {
+        // For demonstration, keeping the manual approach
+        // In real tests you could use MockSetup::setup_error_endpoint directly
+        Mock::given(method("GET"))
+            .and(path(endpoint))
+            .and(header("x-apikey", constants::TEST_API_KEY))
+            .respond_with(create_json_response(status, &error_response))
+            .mount(mock_client.mock_server())
+            .await;
+    }
+
     #[tokio::test]
     async fn test_error_scenarios() {
         let mock_client = MockApiClient::new().await.unwrap();
 
         // Test rate limit error
         let (status, error_response) = ResponseFactory::rate_limit_error();
-        Mock::given(method("GET"))
-            .and(path("/rate-limited"))
-            .and(header("x-apikey", constants::TEST_API_KEY))
-            .respond_with(create_json_response(status, &error_response))
-            .mount(mock_client.mock_server())
-            .await;
+        setup_error_mock(&mock_client, "/rate-limited", status, error_response).await;
 
         let result: Result<serde_json::Value, _> = mock_client.client().get("rate-limited").await;
         assert!(result.is_err());
@@ -199,12 +194,7 @@ mod example_tests {
 
         // Test not found error
         let (status, error_response) = ResponseFactory::not_found_error();
-        Mock::given(method("GET"))
-            .and(path("/not-found"))
-            .and(header("x-apikey", constants::TEST_API_KEY))
-            .respond_with(create_json_response(status, &error_response))
-            .mount(mock_client.mock_server())
-            .await;
+        setup_error_mock(&mock_client, "/not-found", status, error_response).await;
 
         let result: Result<serde_json::Value, _> = mock_client.client().get("not-found").await;
         assert!(result.is_err());
@@ -278,5 +268,118 @@ mod example_tests {
 
         let suspicious_stats = AnalysisStatsBuilder::suspicious().build();
         assert_analysis_malicious!(suspicious_stats);
+    }
+
+    // Example showing BEFORE and AFTER - this demonstrates the value of the utilities
+    #[tokio::test]
+    async fn example_old_vs_new_style() {
+        // NEW STYLE: Clean, readable, maintainable
+        let mock_client = MockApiClient::new().await.unwrap();
+
+        // Expressive, type-safe data builders
+        let file_data = FileResponseBuilder::clean_file()
+            .with_names(vec!["hello.txt".to_string()])
+            .with_size(68)
+            .build();
+
+        let response = ResponseFactory::success_response(file_data);
+        setup_mock_endpoint(&mock_client, "/files/test", response).await;
+
+        let result: crate::Result<serde_json::Value> = mock_client.client().get("files/test").await;
+        assert!(result.is_ok());
+
+        let file_data = result.unwrap()["data"].clone();
+        let stats: crate::common::AnalysisStats =
+            serde_json::from_value(file_data["attributes"]["last_analysis_stats"].clone()).unwrap();
+
+        // Clear, expressive assertion
+        assert_analysis_clean!(stats);
+
+        // Compare to old style which would have required:
+        // 1. Manual MockServer::start().await
+        // 2. Manual ClientBuilder with multiple configuration steps
+        // 3. Manual JSON construction with hardcoded values
+        // 4. Manual ResponseTemplate creation
+        // 5. Verbose Mock::given setup
+        // 6. Manual assertion checking with multiple assert_eq! calls
+        // 7. No type safety or reusable builders
+    }
+
+    #[tokio::test]
+    async fn test_custom_analysis_scenario_consolidated() {
+        let mock_client = MockApiClient::new().await.unwrap();
+
+        // Custom statistics with specific numbers
+        let custom_stats = AnalysisStatsBuilder::new()
+            .with_harmless(60)
+            .with_malicious(3)
+            .with_suspicious(1)
+            .with_undetected(2)
+            .build();
+
+        let file_data = FileResponseBuilder::new("custom-hash")
+            .with_stats(custom_stats)
+            .build();
+
+        let response = ResponseFactory::success_response(file_data);
+        setup_mock_endpoint(&mock_client, "/files/custom", response).await;
+
+        let result: crate::Result<serde_json::Value> =
+            mock_client.client().get("files/custom").await;
+        assert!(result.is_ok());
+
+        let stats: crate::common::AnalysisStats = serde_json::from_value(
+            result.unwrap()["data"]["attributes"]["last_analysis_stats"].clone(),
+        )
+        .unwrap();
+
+        assert_eq!(stats.harmless, 60);
+        assert_eq!(stats.malicious, 3);
+        assert_eq!(stats.suspicious, 1);
+        assert_analysis_malicious!(stats);
+    }
+
+    #[tokio::test]
+    async fn test_multiple_endpoints_setup() {
+        // Demonstrate MockSetup::setup_multiple_endpoints for reducing setup duplication
+        let mock_client = MockApiClient::new().await.unwrap();
+
+        let file1 = FileResponseBuilder::clean_file().build();
+        let file2 = FileResponseBuilder::malicious_file().build();
+        let domain = DomainResponseBuilder::clean_domain().build();
+
+        // Setup multiple endpoints at once
+        let endpoints = vec![
+            (
+                "/files/clean".to_string(),
+                ResponseFactory::success_response(file1),
+                None,
+            ),
+            (
+                "/files/malicious".to_string(),
+                ResponseFactory::success_response(file2),
+                None,
+            ),
+            (
+                "/domains/example.com".to_string(),
+                ResponseFactory::success_response(domain),
+                None,
+            ),
+        ];
+
+        MockSetup::setup_multiple_endpoints(mock_client.mock_server(), endpoints).await;
+
+        // Test all endpoints
+        let clean_result: crate::Result<serde_json::Value> =
+            mock_client.client().get("files/clean").await;
+        assert!(clean_result.is_ok());
+
+        let malicious_result: crate::Result<serde_json::Value> =
+            mock_client.client().get("files/malicious").await;
+        assert!(malicious_result.is_ok());
+
+        let domain_result: crate::Result<serde_json::Value> =
+            mock_client.client().get("domains/example.com").await;
+        assert!(domain_result.is_ok());
     }
 }
