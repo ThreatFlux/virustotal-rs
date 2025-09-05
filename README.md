@@ -45,16 +45,22 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-virustotal-rs = "0.1.0"
+virustotal-rs = "0.4.0"
+
+# For CLI functionality  
+virustotal-rs = { version = "0.4.0", features = ["cli"] }
 
 # For MCP server functionality
-virustotal-rs = { version = "0.1.0", features = ["mcp"] }
+virustotal-rs = { version = "0.4.0", features = ["mcp"] }
 
-# For MCP with JWT authentication
-virustotal-rs = { version = "0.1.0", features = ["mcp-jwt"] }
+# For CLI with integrated MCP support
+virustotal-rs = { version = "0.4.0", features = ["cli-mcp"] }
 
-# For MCP with OAuth 2.1 authentication
-virustotal-rs = { version = "0.1.0", features = ["mcp-oauth"] }
+# For CLI with MCP and JWT authentication
+virustotal-rs = { version = "0.4.0", features = ["cli-mcp-jwt"] }
+
+# For CLI with MCP and OAuth 2.1 authentication
+virustotal-rs = { version = "0.4.0", features = ["cli-mcp-oauth"] }
 ```
 
 ### Docker Container (MCP Server)
@@ -71,12 +77,33 @@ docker run -e VIRUSTOTAL_API_KEY=your_api_key -p 8080:8080 \
   threatflux/virustotal-rs-mcp:latest
 ```
 
-### Pre-built Binaries
+### CLI Installation
+
+#### Pre-built Binaries
 
 Download from [GitHub Releases](https://github.com/threatflux/virustotal-rs/releases) for:
 - Linux (x86_64)
 - Windows (x86_64) 
 - macOS (x86_64, ARM64)
+
+#### Install from Source
+
+```bash
+# Install CLI with basic features
+cargo install virustotal-rs --features cli
+
+# Install CLI with integrated MCP support
+cargo install virustotal-rs --features cli-mcp
+
+# Install CLI with MCP and JWT authentication
+cargo install virustotal-rs --features cli-mcp-jwt
+
+# Install CLI with MCP and OAuth authentication  
+cargo install virustotal-rs --features cli-mcp-oauth
+
+# After installation, the vt-cli command will be available
+vt-cli --help
+```
 
 ## 🚀 Quick Start
 
@@ -109,9 +136,95 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+### CLI Usage
+
+The `vt-cli` command-line interface provides easy access to VirusTotal functionality:
+
+#### Basic CLI Commands
+
+```bash
+# Set your API key (or use --api-key flag)
+export VIRUSTOTAL_API_KEY=your_api_key
+
+# Download files by hash
+vt-cli download --hash 44d88612fea8a8f36de82e1278abb02f
+
+# Get user information
+vt-cli user info
+
+# Run with premium tier
+vt-cli --tier premium user info
+
+# Enable verbose output
+vt-cli --verbose download --hash <hash>
+
+# Use dry-run mode to see what would be done
+vt-cli --dry-run download --hash <hash>
+```
+
+#### MCP Server via CLI
+
+```bash
+# Start STDIO MCP server (recommended for local use)
+vt-cli mcp stdio
+
+# Start HTTP MCP server with custom address
+vt-cli mcp http --addr 0.0.0.0:8080
+
+# Start with authentication (requires appropriate features)
+vt-cli mcp http --jwt --jwt-secret your_secret
+vt-cli mcp http --oauth --oauth-client-id id --oauth-client-secret secret
+
+# Get help for MCP commands
+vt-cli mcp --help
+vt-cli mcp http --help
+```
+
+📖 **For comprehensive MCP CLI usage, see the [MCP CLI Usage Guide](MCP_CLI_USAGE_GUIDE.md)**
+
 ### MCP Server Usage
 
-#### HTTP Server Mode
+The VirusTotal SDK provides multiple ways to run the MCP server:
+
+#### 1. Using the Integrated CLI (Recommended)
+
+The `vt-cli mcp` command provides the easiest way to run MCP servers with full configuration options:
+
+##### STDIO Mode (for local usage)
+```bash
+# Basic usage
+vt-cli mcp stdio --api-key your_key
+
+# With environment variable
+VIRUSTOTAL_API_KEY=your_key vt-cli mcp stdio
+
+# With premium tier
+vt-cli mcp stdio --api-key your_key --tier premium
+
+# Connect with MCP Inspector
+npx @modelcontextprotocol/inspector vt-cli mcp stdio --api-key your_key
+```
+
+##### HTTP Mode (for remote access)
+```bash
+# Default address (127.0.0.1:3000)
+vt-cli mcp http --api-key your_key
+
+# Custom address
+vt-cli mcp http --api-key your_key --addr 0.0.0.0:8080
+
+# With JWT authentication (requires cli-mcp-jwt feature)
+vt-cli mcp http --api-key your_key --jwt --jwt-secret your_secret
+
+# With OAuth authentication (requires cli-mcp-oauth feature)  
+vt-cli mcp http --api-key your_key --oauth \
+  --oauth-client-id your_id --oauth-client-secret your_secret
+
+# Connect with MCP Inspector
+npx @modelcontextprotocol/inspector http://localhost:3000
+```
+
+#### 2. Using the Standalone Binary (Legacy)
 
 ```bash
 # Start MCP HTTP server
@@ -125,7 +238,7 @@ docker run -e VIRUSTOTAL_API_KEY=your_key -p 8080:8080 \
 npx @modelcontextprotocol/inspector http://localhost:8080
 ```
 
-#### Stdio Server Mode (for direct MCP client integration)
+#### 3. Stdio Server Mode (for direct MCP client integration)
 
 ```bash
 SERVER_MODE=stdio VIRUSTOTAL_API_KEY=your_key cargo run --bin mcp_server --features mcp
@@ -196,12 +309,18 @@ cd virustotal-rs
 # Build with all features
 cargo build --all-features
 
-# Run tests (requires VT_API_KEY environment variable)
-export VT_API_KEY=your_api_key
-cargo test --all-features
+# Build the CLI
+cargo build --bin vt-cli --features cli
+
+# Build CLI with MCP support
+cargo build --bin vt-cli --features cli-mcp
 
 # Build the MCP server
 cargo build --bin mcp_server --features mcp
+
+# Run tests (requires VT_API_KEY environment variable)
+export VT_API_KEY=your_api_key
+cargo test --all-features
 ```
 
 ### Development Commands
@@ -233,6 +352,10 @@ export VIRUSTOTAL_API_KEY=your_api_key
 # Run basic examples
 cargo run --example test_file --all-features
 cargo run --example test_url --all-features
+
+# Run CLI examples
+cargo run --bin vt-cli --features cli -- --help
+cargo run --bin vt-cli --features cli-mcp -- mcp --help
 
 # Run MCP server examples
 cargo run --example mcp_http_server --features mcp

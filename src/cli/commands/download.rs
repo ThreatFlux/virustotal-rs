@@ -930,9 +930,9 @@ fn has_premium_privileges(user: &crate::users::User) -> bool {
         .privileges
         .as_ref()
         .map(|p| {
-            p.download_file.unwrap_or(false)
-                || p.intelligence.unwrap_or(false)
-                || p.private_scanning.unwrap_or(false)
+            p.download_file().unwrap_or(false)
+                || p.intelligence().unwrap_or(false)
+                || p.private_scanning().unwrap_or(false)
         })
         .unwrap_or(false)
 }

@@ -144,8 +144,8 @@ pub use url_utils::{
 };
 pub use urls::{Url, UrlClient};
 pub use users::{
-    ApiQuota, User, UserAttributes, UserPrivileges, UserQuotas, UserResponse, UserUpdate,
-    UserUpdateAttributes, UserUpdateRequest, UsersClient,
+    ApiQuota, PrivilegeInfo, User, UserAttributes, UserPrivileges, UserQuotas, UserResponse,
+    UserUpdate, UserUpdateAttributes, UserUpdateRequest, UsersClient,
 };
 pub use votes::{Vote, VoteVerdict};
 pub use yara_rulesets::{YaraRuleset, YaraRulesetResponse, YaraRulesetsClient};
