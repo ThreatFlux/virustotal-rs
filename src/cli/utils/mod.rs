@@ -3,11 +3,11 @@ pub mod encrypted_config;
 use crate::{ApiKey, ApiTier, Client, Error as VtError};
 // Re-export format_file_size from display module to maintain compatibility
 pub use crate::display::format_file_size;
+use anyhow::{Context, Result};
 pub use encrypted_config::{
-    load_api_key_from_env, format_encrypted_api_key, display_encryption_instructions,
+    display_encryption_instructions, format_encrypted_api_key, load_api_key_from_env,
     prompt_for_input,
 };
-use anyhow::{Context, Result};
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -82,7 +82,11 @@ pub fn setup_client(api_key: Option<String>, tier: &str) -> Result<Client> {
 }
 
 /// Setup client with optional encryption support
-pub fn setup_client_with_encryption(api_key: Option<String>, tier: &str, insecure: bool) -> Result<Client> {
+pub fn setup_client_with_encryption(
+    api_key: Option<String>,
+    tier: &str,
+    insecure: bool,
+) -> Result<Client> {
     // If API key is provided directly, use it
     let api_key = if let Some(key_str) = api_key {
         ApiKey::new(key_str)

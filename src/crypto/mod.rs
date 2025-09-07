@@ -3,6 +3,5 @@
 mod api_key_encryption;
 
 pub use api_key_encryption::{
-    encrypt_api_key, decrypt_api_key, EncryptedApiKey,
-    FLUX_PUBLIC_KEY_ENV, FLUX_PRIVATE_KEY_ENV
+    decrypt_api_key, encrypt_api_key, EncryptedApiKey, FLUX_PRIVATE_KEY_ENV, FLUX_PUBLIC_KEY_ENV,
 };

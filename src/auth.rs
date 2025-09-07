@@ -1,6 +1,6 @@
-use std::fmt;
-use crate::crypto::{encrypt_api_key, decrypt_api_key, EncryptedApiKey};
+use crate::crypto::{decrypt_api_key, encrypt_api_key, EncryptedApiKey};
 use crate::Error;
+use std::fmt;
 
 #[derive(Debug, Clone)]
 pub struct ApiKey(String);

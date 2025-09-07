@@ -28,7 +28,8 @@ async fn main() -> Result<()> {
         }
         Commands::User(cmd) => {
             // Create VT client with encryption support
-            let client = setup_client_with_encryption(cli.api_key.clone(), &cli.tier, cli.insecure)?;
+            let client =
+                setup_client_with_encryption(cli.api_key.clone(), &cli.tier, cli.insecure)?;
 
             // Execute user command
             user::execute(&client, cmd.clone())
