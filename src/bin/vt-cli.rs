@@ -1,11 +1,11 @@
 use anyhow::Result;
 use virustotal_rs::cli::{
     commands::{download, user /*, index, report, search, scan, config*/},
+    utils::setup_client_with_encryption,
     // config::load_config,
     Cli,
     Commands,
 };
-use virustotal_rs::{ApiKey, ApiTier, Client};
 
 #[cfg(feature = "mcp")]
 use virustotal_rs::cli::commands::mcp;
@@ -27,23 +27,8 @@ async fn main() -> Result<()> {
             .await?;
         }
         Commands::User(cmd) => {
-            // Get API key from CLI arg or environment variable
-            let api_key = cli
-                .api_key
-                .clone()
-                .or_else(|| std::env::var("VTI_API_KEY").ok())
-                .ok_or_else(|| {
-                    anyhow::anyhow!("API key required. Use --api-key or set VTI_API_KEY")
-                })?;
-
-            // Determine API tier
-            let tier = match cli.tier.to_lowercase().as_str() {
-                "premium" | "private" => ApiTier::Premium,
-                _ => ApiTier::Public,
-            };
-
-            // Create VT client
-            let client = Client::new(ApiKey::new(api_key), tier).expect("Failed to create client");
+            // Create VT client with encryption support
+            let client = setup_client_with_encryption(cli.api_key.clone(), &cli.tier, cli.insecure)?;
 
             // Execute user command
             user::execute(&client, cmd.clone())

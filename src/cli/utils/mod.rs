@@ -1,6 +1,12 @@
+pub mod encrypted_config;
+
 use crate::{ApiKey, ApiTier, Client, Error as VtError};
 // Re-export format_file_size from display module to maintain compatibility
 pub use crate::display::format_file_size;
+pub use encrypted_config::{
+    load_api_key_from_env, format_encrypted_api_key, display_encryption_instructions,
+    prompt_for_input,
+};
 use anyhow::{Context, Result};
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::{Deserialize, Serialize};
@@ -72,11 +78,21 @@ impl ProgressTracker {
 }
 
 pub fn setup_client(api_key: Option<String>, tier: &str) -> Result<Client> {
-    let api_key_str = api_key
-        .or_else(|| std::env::var("VTI_API_KEY").ok())
-        .context("API key required: use --api-key or set VTI_API_KEY environment variable")?;
+    setup_client_with_encryption(api_key, tier, false)
+}
 
-    let api_key = ApiKey::new(api_key_str);
+/// Setup client with optional encryption support
+pub fn setup_client_with_encryption(api_key: Option<String>, tier: &str, insecure: bool) -> Result<Client> {
+    // If API key is provided directly, use it
+    let api_key = if let Some(key_str) = api_key {
+        ApiKey::new(key_str)
+    } else {
+        // Try to load from environment with encryption support
+        load_api_key_from_env("VTI_API_KEY", insecure)
+            .or_else(|_| load_api_key_from_env("VT_API_KEY", insecure))
+            .context("API key required: use --api-key or set VTI_API_KEY environment variable")?
+    };
+
     let api_tier = match tier.to_lowercase().as_str() {
         "premium" | "private" => ApiTier::Premium,
         _ => ApiTier::Public,

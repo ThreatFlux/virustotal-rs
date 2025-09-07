@@ -8,6 +8,7 @@ pub mod collections;
 pub mod comments;
 pub mod common;
 pub mod crowdsourced_yara_rules;
+pub mod crypto;
 pub mod display;
 pub mod domains;
 pub mod error;
@@ -70,6 +71,7 @@ pub use collections::{
 pub use comments::{
     Comment, CommentIterator, CommentVoteType, CommentsClient, VoteCommentResponse,
 };
+pub use crypto::{encrypt_api_key, decrypt_api_key, EncryptedApiKey, FLUX_PUBLIC_KEY_ENV, FLUX_PRIVATE_KEY_ENV};
 pub use crowdsourced_yara_rules::{
     CrowdsourcedYaraRule, CrowdsourcedYaraRulesClient, YaraRuleMeta, YaraRuleOrder,
 };
