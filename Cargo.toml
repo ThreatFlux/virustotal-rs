@@ -51,7 +51,7 @@ tracing-subscriber = { version = "0.3.20", features = ["env-filter"], optional =
 # JWT authentication dependencies (optional)
 jsonwebtoken = { version = "9.3", optional = true }
 serde_with = { version = "3.9", optional = true }
-uuid = { version = "1.10", features = ["v4", "serde"], optional = true }
+uuid = { version = "1.18", features = ["v4", "serde"], optional = true }
 tower = { version = "0.5", features = ["util"], optional = true }
 tower-http = { version = "0.6", features = ["cors", "trace"], optional = true }
 axum-extra = { version = "0.10", features = ["typed-header"], optional = true }
@@ -83,7 +83,7 @@ wiremock = "0.6.2"
 clap = { version = "4.5", features = ["derive"] }
 tempfile = "3.12.0"
 futures = "0.3"
-uuid = { version = "1.10", features = ["v4"] }
+uuid = { version = "1.18", features = ["v4"] }
 
 [[example]]
 name = "elasticsearch_indexer"
