@@ -1,3 +1,5 @@
+use crate::crypto::{decrypt_api_key, encrypt_api_key, EncryptedApiKey};
+use crate::Error;
 use std::fmt;
 
 #[derive(Debug, Clone)]
@@ -10,6 +12,19 @@ impl ApiKey {
 
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+
+    /// Encrypt this API key using FluxEncrypt
+    pub fn encrypt(&self) -> Result<EncryptedApiKey, Error> {
+        encrypt_api_key(&self.0)
+            .map_err(|e| Error::CryptoError(format!("Failed to encrypt API key: {}", e)))
+    }
+
+    /// Create an ApiKey from an encrypted key using FluxEncrypt
+    pub fn from_encrypted(encrypted: &EncryptedApiKey) -> Result<Self, Error> {
+        let decrypted = decrypt_api_key(encrypted)
+            .map_err(|e| Error::CryptoError(format!("Failed to decrypt API key: {}", e)))?;
+        Ok(Self::new(decrypted))
     }
 }
 

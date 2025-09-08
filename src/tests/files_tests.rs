@@ -1,15 +1,8 @@
 use crate::files::{File, FileAttributes, MitreSeverity};
-use crate::objects::{Object, ObjectOperations};
+use crate::objects::Object;
 
-#[test]
-fn test_file_object_operations() {
-    assert_eq!(File::collection_name(), "files");
-    assert_eq!(File::object_url("abc123"), "files/abc123");
-    assert_eq!(
-        File::relationships_url("abc123", "comments"),
-        "files/abc123/relationships/comments"
-    );
-}
+// Test object operations using the macro to eliminate duplication
+crate::test_object_operations!(File, "files", "abc123", "comments");
 
 #[test]
 fn test_mitre_severity_enum() {

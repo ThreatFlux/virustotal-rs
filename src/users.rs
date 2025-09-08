@@ -1,3 +1,5 @@
+pub mod api_key_utils;
+
 use crate::client::Client;
 use crate::error::Result;
 use crate::objects::{Collection, CollectionIterator};
@@ -136,6 +138,32 @@ impl UsersClient {
             .await
     }
 
+    /// Reset/regenerate API key for a user
+    ///
+    /// Generates a new API key for the user. The old API key will be invalidated.
+    /// This operation can only be performed by the account owner.
+    ///
+    /// # Arguments
+    /// * `id` - User ID or API key (use current API key to reset your own)
+    ///
+    /// # Returns
+    /// Returns a UserResponse containing the updated user with the new API key
+    ///
+    /// # Example
+    /// ```ignore
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = virustotal_rs::Client::new("your_api_key".into(), virustotal_rs::ApiTier::Public)?;
+    /// # let users_client = client.users();
+    /// let response = users_client.reset_api_key("current_api_key").await?;
+    /// println!("New API key: {:?}", response.data.attributes.apikey);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn reset_api_key(&self, id: &str) -> Result<UserResponse> {
+        let endpoint = format!("{}/api_key/reset", self.build_user_endpoint(id));
+        self.client.post(&endpoint, &serde_json::json!({})).await
+    }
+
     /// Get objects related to a user
     ///
     /// Retrieves related objects IDs for a user. Some relationships are only
@@ -229,43 +257,67 @@ pub struct User {
 /// User attributes
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserAttributes {
-    /// User's first name
+    /// Account's VirusTotal API key (only visible for the account's owner)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub apikey: Option<String>,
+
+    /// Account's email (only visible for the account's owner and its group's admin)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub email: Option<String>,
+
+    /// User's first name (can be modified by the account's owner)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub first_name: Option<String>,
 
-    /// User's last name
+    /// Whether the user has 2FA enabled (only visible for the account's owner)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub has_2fa: Option<bool>,
+
+    /// User's last login date as UTC timestamp (only visible for the account's owner and its group's admin)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_login: Option<i64>,
+
+    /// User's last name (can be modified by the account's owner)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_name: Option<String>,
 
-    /// User's email address
+    /// VirusTotal user's preferences (only visible for the account's owner)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub email: Option<String>,
+    pub preferences: Option<HashMap<String, serde_json::Value>>,
+
+    /// User's granted privileges (only visible for the account's owner)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub privileges: Option<UserPrivileges>,
+
+    /// User's profile phrase (can be modified by the account's owner)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub profile_phrase: Option<String>,
+
+    /// User's quota details (only visible for the account's owner and the user's group's admin)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub quotas: Option<UserQuotas>,
+
+    /// User's community reputation
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reputation: Option<i32>,
+
+    /// User's status
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+
+    /// User's join date as UTC timestamp
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user_since: Option<i64>,
 
     /// User's country
     #[serde(skip_serializing_if = "Option::is_none")]
     pub country: Option<String>,
 
-    /// User's privileges
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub privileges: Option<UserPrivileges>,
-
-    /// User's quotas
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub quotas: Option<UserQuotas>,
-
-    /// User's preferences
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub preferences: Option<HashMap<String, serde_json::Value>>,
-
-    /// User status
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub status: Option<String>,
-
     /// Email verified
     #[serde(skip_serializing_if = "Option::is_none")]
     pub email_verified: Option<bool>,
 
-    /// User biography/description
+    /// User biography/description (legacy field, use profile_phrase)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bio: Option<String>,
 
@@ -274,35 +326,88 @@ pub struct UserAttributes {
     pub additional: HashMap<String, serde_json::Value>,
 }
 
-/// User privileges
+/// Individual privilege information
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UserPrivileges {
-    /// Can the user download files
+pub struct PrivilegeInfo {
+    /// Privilege's expiration date as UTC timestamp
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub download_file: Option<bool>,
+    pub expiration_date: Option<i64>,
 
-    /// Can the user access intelligence data
+    /// Whether that privilege is granted or not
+    pub granted: bool,
+
+    /// Group name the permission is inherited from
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub intelligence: Option<bool>,
+    pub inherited_from: Option<String>,
 
-    /// Can the user access private scanning
+    /// Quota group where the permission is
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub private_scanning: Option<bool>,
-
-    /// Can the user access retrohunt
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub retrohunt: Option<bool>,
-
-    /// Can the user access livehunt
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub livehunt: Option<bool>,
-
-    /// Additional privileges
-    #[serde(flatten)]
-    pub additional: HashMap<String, serde_json::Value>,
+    pub inherited_via: Option<String>,
 }
 
-/// User quotas
+/// User privileges structure that handles both simple boolean and detailed privilege info
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum UserPrivileges {
+    /// Detailed privileges with expiration and inheritance info
+    Detailed(HashMap<String, PrivilegeInfo>),
+    /// Simple privilege flags (backward compatibility)
+    Simple {
+        /// Can the user download files
+        #[serde(skip_serializing_if = "Option::is_none")]
+        download_file: Option<bool>,
+
+        /// Can the user access intelligence data
+        #[serde(skip_serializing_if = "Option::is_none")]
+        intelligence: Option<bool>,
+
+        /// Can the user access private scanning
+        #[serde(skip_serializing_if = "Option::is_none")]
+        private_scanning: Option<bool>,
+
+        /// Can the user access retrohunt
+        #[serde(skip_serializing_if = "Option::is_none")]
+        retrohunt: Option<bool>,
+
+        /// Can the user access livehunt
+        #[serde(skip_serializing_if = "Option::is_none")]
+        livehunt: Option<bool>,
+
+        /// Additional privileges
+        #[serde(flatten)]
+        additional: HashMap<String, serde_json::Value>,
+    },
+}
+
+impl UserPrivileges {
+    /// Check if user has download_file privilege
+    pub fn download_file(&self) -> Option<bool> {
+        match self {
+            Self::Detailed(map) => map.get("download_file").map(|p| p.granted),
+            Self::Simple { download_file, .. } => *download_file,
+        }
+    }
+
+    /// Check if user has intelligence privilege
+    pub fn intelligence(&self) -> Option<bool> {
+        match self {
+            Self::Detailed(map) => map.get("intelligence").map(|p| p.granted),
+            Self::Simple { intelligence, .. } => *intelligence,
+        }
+    }
+
+    /// Check if user has private_scanning privilege
+    pub fn private_scanning(&self) -> Option<bool> {
+        match self {
+            Self::Detailed(map) => map.get("private_scanning").map(|p| p.granted),
+            Self::Simple {
+                private_scanning, ..
+            } => *private_scanning,
+        }
+    }
+}
+
+/// User quotas (legacy structure - kept for backward compatibility)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserQuotas {
     /// API requests per day
@@ -384,6 +489,11 @@ pub struct UserUpdateAttributes {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub country: Option<String>,
 
+    /// Profile phrase (preferred over bio)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub profile_phrase: Option<String>,
+
+    /// Legacy bio field (use profile_phrase instead)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bio: Option<String>,
 

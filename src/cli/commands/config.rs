@@ -1,4 +1,5 @@
 use crate::cli::config::{init_config, load_config, Config};
+use crate::cli::utils::{format_encrypted_api_key, display_encryption_instructions, prompt_for_input};
 use anyhow::{Context, Result};
 use clap::{Args, Subcommand};
 use std::path::PathBuf;
@@ -21,6 +22,8 @@ pub enum ConfigCommands {
     Get(GetArgs),
     /// Show configuration file path
     Path,
+    /// Encrypt an API key for secure storage
+    EncryptKey(EncryptKeyArgs),
 }
 
 #[derive(Args, Debug)]
@@ -37,6 +40,13 @@ pub struct GetArgs {
     pub key: String,
 }
 
+#[derive(Args, Debug)]
+pub struct EncryptKeyArgs {
+    /// API key to encrypt (will prompt if not provided)
+    #[arg(value_name = "API_KEY")]
+    pub api_key: Option<String>,
+}
+
 pub async fn execute(
     args: ConfigArgs,
     config_path: Option<PathBuf>,
@@ -49,6 +59,7 @@ pub async fn execute(
         ConfigCommands::Set(set_args) => handle_set(set_args, config_path, dry_run).await,
         ConfigCommands::Get(get_args) => handle_get(get_args, config_path).await,
         ConfigCommands::Path => handle_path(config_path, verbose),
+        ConfigCommands::EncryptKey(encrypt_args) => handle_encrypt_key(encrypt_args).await,
     }
 }
 
@@ -353,4 +364,33 @@ impl Default for crate::cli::config::RateLimitConfig {
             retry_attempts: Some(3),
         }
     }
+}
+
+async fn handle_encrypt_key(args: EncryptKeyArgs) -> Result<()> {
+    // Get API key
+    let api_key = if let Some(key) = args.api_key {
+        key
+    } else {
+        // Try from environment first
+        if let Ok(key) = std::env::var("VTI_API_KEY") {
+            if !key.starts_with("ENCRYPTED:") {
+                println!("Using API key from VTI_API_KEY environment variable");
+                key
+            } else {
+                // Prompt for API key
+                prompt_for_input("Enter API key to encrypt")?
+            }
+        } else {
+            // Prompt for API key
+            prompt_for_input("Enter API key to encrypt")?
+        }
+    };
+    
+    // Encrypt the API key using FluxEncrypt
+    let encrypted_value = format_encrypted_api_key(&api_key)?;
+    
+    // Display instructions
+    display_encryption_instructions(&encrypted_value);
+    
+    Ok(())
 }

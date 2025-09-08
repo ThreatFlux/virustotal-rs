@@ -34,6 +34,10 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub dry_run: bool,
 
+    /// Allow plaintext API keys (disables encryption warnings)
+    #[arg(long, global = true)]
+    pub insecure: bool,
+
     #[command(subcommand)]
     pub command: Commands,
 }
@@ -42,6 +46,11 @@ pub struct Cli {
 pub enum Commands {
     /// Download files and/or reports from VirusTotal
     Download(commands::download::DownloadArgs),
+    /// Manage user accounts and profiles
+    User(commands::user::UserCommand),
+    /// Run MCP (Model Context Protocol) server
+    #[cfg(feature = "mcp")]
+    Mcp(commands::mcp::McpCommand),
     // /// Index reports to Elasticsearch
     // Index(commands::index::IndexArgs),
     // /// Get report for a hash

@@ -39,6 +39,9 @@ base64 = "0.22.1"
 sha2 = "0.10.9"
 urlencoding = "2.1.3"
 
+# Security dependencies
+fluxencrypt = "0.3.8"
+
 # MCP feature dependencies (optional)
 axum = { version = "0.8", optional = true }
 tokio-util = { version = "0.7", features = ["io"], optional = true }
@@ -58,7 +61,7 @@ axum-extra = { version = "0.10", features = ["typed-header"], optional = true }
 
 # OAuth 2.1 authentication dependencies (optional)
 oauth2 = { version = "4.4", default-features = false, features = ["reqwest", "rustls-tls"], optional = true }
-rand = { version = "0.9", optional = true }
+rand = "0.8"
 
 # CLI dependencies (optional)
 clap = { version = "4.5", features = ["derive", "env"], optional = true }
@@ -74,7 +77,10 @@ default = []
 cli = ["clap", "colored", "indicatif", "dirs", "toml", "elasticsearch", "futures", "anyhow", "regex"]
 mcp = ["axum", "tokio-util", "anyhow", "regex", "lazy_static", "tracing", "tracing-subscriber"]
 mcp-jwt = ["mcp", "jsonwebtoken", "serde_with", "uuid", "tower", "tower-http", "axum-extra"]
-mcp-oauth = ["mcp", "oauth2", "rand", "uuid", "tower", "tower-http", "axum-extra"]
+mcp-oauth = ["mcp", "oauth2", "uuid", "tower", "tower-http", "axum-extra"]
+cli-mcp = ["cli", "mcp"]
+cli-mcp-jwt = ["cli", "mcp-jwt"]
+cli-mcp-oauth = ["cli", "mcp-oauth"]
 
 [dev-dependencies]
 tokio-test = "0.4.4"

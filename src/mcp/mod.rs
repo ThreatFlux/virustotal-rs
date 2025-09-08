@@ -78,6 +78,7 @@ pub fn convert_vt_error(err: crate::Error) -> anyhow::Error {
             anyhow::anyhow!("Validation error: {}", message)
         }
         crate::Error::Io { message } => anyhow::anyhow!("IO error: {}", message),
+        crate::Error::CryptoError(msg) => anyhow::anyhow!("Crypto error: {}", msg),
     }
 }
 
