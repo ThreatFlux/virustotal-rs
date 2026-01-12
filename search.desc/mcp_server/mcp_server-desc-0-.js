@@ -1,1 +1,0 @@
-searchState.loadedDescShard("mcp_server", 0, "<code>VirusTotal</code> MCP Server Binary")

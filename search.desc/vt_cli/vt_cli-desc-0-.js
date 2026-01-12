@@ -1,1 +1,0 @@
-searchState.loadedDescShard("vt_cli", 0, "")
