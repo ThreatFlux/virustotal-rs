@@ -8,6 +8,7 @@ pub mod collections;
 pub mod comments;
 pub mod common;
 pub mod crowdsourced_yara_rules;
+pub mod crypto;
 pub mod display;
 pub mod domains;
 pub mod error;
@@ -72,6 +73,9 @@ pub use comments::{
 };
 pub use crowdsourced_yara_rules::{
     CrowdsourcedYaraRule, CrowdsourcedYaraRulesClient, YaraRuleMeta, YaraRuleOrder,
+};
+pub use crypto::{
+    decrypt_api_key, encrypt_api_key, EncryptedApiKey, FLUX_PRIVATE_KEY_ENV, FLUX_PUBLIC_KEY_ENV,
 };
 pub use display::{
     display_options, format_file_size, format_list, format_reputation, format_table,
@@ -144,8 +148,8 @@ pub use url_utils::{
 };
 pub use urls::{Url, UrlClient};
 pub use users::{
-    ApiQuota, User, UserAttributes, UserPrivileges, UserQuotas, UserResponse, UserUpdate,
-    UserUpdateAttributes, UserUpdateRequest, UsersClient,
+    ApiQuota, PrivilegeInfo, User, UserAttributes, UserPrivileges, UserQuotas, UserResponse,
+    UserUpdate, UserUpdateAttributes, UserUpdateRequest, UsersClient,
 };
 pub use votes::{Vote, VoteVerdict};
 pub use yara_rulesets::{YaraRuleset, YaraRulesetResponse, YaraRulesetsClient};

@@ -99,20 +99,14 @@ fn display_user_basic_info(attrs: &virustotal_rs::users::UserAttributes) {
 fn display_user_privileges(attrs: &virustotal_rs::users::UserAttributes) {
     if let Some(privileges) = &attrs.privileges {
         println!("\n  Privileges:");
-        if let Some(download) = privileges.download_file {
+        if let Some(download) = privileges.download_file() {
             println!("    Download files: {}", download);
         }
-        if let Some(intel) = privileges.intelligence {
+        if let Some(intel) = privileges.intelligence() {
             println!("    Intelligence: {}", intel);
         }
-        if let Some(private_scan) = privileges.private_scanning {
+        if let Some(private_scan) = privileges.private_scanning() {
             println!("    Private scanning: {}", private_scan);
-        }
-        if let Some(retrohunt) = privileges.retrohunt {
-            println!("    Retrohunt: {}", retrohunt);
-        }
-        if let Some(livehunt) = privileges.livehunt {
-            println!("    Livehunt: {}", livehunt);
         }
     }
 }

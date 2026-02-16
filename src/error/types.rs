@@ -78,6 +78,9 @@ pub enum Error {
 
     #[error("IO error: {message}")]
     Io { message: String },
+
+    #[error("Crypto error: {0}")]
+    CryptoError(String),
 }
 
 #[derive(Debug, Deserialize, Serialize)]
