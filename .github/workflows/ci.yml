@@ -22,7 +22,7 @@ jobs:
         rust: [stable, beta]
         include:
           - os: ubuntu-latest
-            rust: 1.85.0  # MSRV
+            rust: 1.88.0  # MSRV
     runs-on: ${{ matrix.os }}
     
     steps:
