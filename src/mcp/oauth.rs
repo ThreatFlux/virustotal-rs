@@ -11,9 +11,10 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use oauth2::{
-    basic::BasicClient, AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken,
+    basic::BasicClient, AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, EndpointNotSet,
+    EndpointSet, TokenResponse,
     EmptyExtraTokenFields, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, RefreshToken, Scope,
-    StandardTokenResponse, TokenResponse, TokenUrl,
+    StandardTokenResponse, TokenUrl,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -181,7 +182,7 @@ pub struct OAuthSession {
 #[derive(Clone)]
 pub struct OAuthState {
     config: OAuthConfig,
-    client: BasicClient,
+    client: BasicClient<EndpointSet, EndpointNotSet, EndpointNotSet, EndpointNotSet, EndpointSet>,
     sessions: Arc<RwLock<HashMap<String, OAuthSession>>>,
     credentials: Arc<RwLock<Option<OAuthCredentials>>>,
 }
@@ -204,16 +205,14 @@ impl OAuthState {
         let redirect_url = RedirectUrl::new(config.redirect_uri.clone())
             .map_err(|e| anyhow!("Invalid redirect URL: {}", e))?;
 
-        let client = BasicClient::new(
-            ClientId::new(config.client_id.clone()),
-            config
-                .client_secret
-                .as_ref()
-                .map(|s| ClientSecret::new(s.clone())),
-            auth_url,
-            Some(token_url),
-        )
-        .set_redirect_uri(redirect_url);
+        let mut client = BasicClient::new(ClientId::new(config.client_id.clone()));
+        if let Some(secret) = config.client_secret.as_ref() {
+            client = client.set_client_secret(ClientSecret::new(secret.clone()));
+        }
+        let client = client
+            .set_auth_uri(auth_url)
+            .set_token_uri(token_url)
+            .set_redirect_uri(redirect_url);
 
         Ok(Self {
             config,
@@ -307,11 +306,12 @@ impl OAuthState {
                 token_request.set_pkce_verifier(PkceCodeVerifier::new(verifier.clone()));
         }
 
+        let http_client = oauth2::reqwest::Client::new();
         let token_response: StandardTokenResponse<
             EmptyExtraTokenFields,
             oauth2::basic::BasicTokenType,
         > = token_request
-            .request_async(oauth2::reqwest::async_http_client)
+            .request_async(&http_client)
             .await
             .map_err(|e| anyhow!("Token exchange failed: {}", e))?;
 
@@ -373,7 +373,7 @@ impl OAuthState {
         let token_response = self
             .client
             .exchange_refresh_token(&RefreshToken::new(refresh_token))
-            .request_async(oauth2::reqwest::async_http_client)
+            .request_async(&oauth2::reqwest::Client::new())
             .await
             .map_err(|e| anyhow!("Token refresh failed: {}", e))?;
         let mut credentials = Self::build_credentials(token_response);
