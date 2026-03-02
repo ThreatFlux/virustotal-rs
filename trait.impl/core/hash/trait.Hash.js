@@ -1,5 +1,5 @@
 (function() {
-    var implementors = Object.fromEntries([["virustotal_rs",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.92.0/core/hash/trait.Hash.html\" title=\"trait core::hash::Hash\">Hash</a> for <a class=\"enum\" href=\"virustotal_rs/threat_actors/enum.RelationshipOrder.html\" title=\"enum virustotal_rs::threat_actors::RelationshipOrder\">RelationshipOrder</a>"]]]]);
+    var implementors = Object.fromEntries([["virustotal_rs",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.93.1/core/hash/trait.Hash.html\" title=\"trait core::hash::Hash\">Hash</a> for <a class=\"enum\" href=\"virustotal_rs/threat_actors/enum.RelationshipOrder.html\" title=\"enum virustotal_rs::threat_actors::RelationshipOrder\">RelationshipOrder</a>"]]]]);
     if (window.register_implementors) {
         window.register_implementors(implementors);
     } else {
