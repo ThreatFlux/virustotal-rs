@@ -6,7 +6,11 @@ pub struct TestEnvironment;
 impl TestEnvironment {
     /// Setup consistent test environment
     pub fn setup() {
-        std::env::set_var("RUST_LOG", "debug");
+        // SAFETY: This is only called in single-threaded test setup before any
+        // threads are spawned, so modifying the environment is safe.
+        unsafe {
+            std::env::set_var("RUST_LOG", "debug");
+        }
         // Initialize other test environment variables if needed
     }
 
@@ -39,7 +43,6 @@ impl TestEnvironment {
             .write_all(content)
             .expect("Failed to write to temp file");
         let path = temp_file.path().to_path_buf();
-        let result = test(path).await;
-        result
+        test(path).await
     }
 }

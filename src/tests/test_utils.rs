@@ -130,10 +130,10 @@ macro_rules! test_mock_response {
         #[tokio::test]
         async fn $test_name() {
             use wiremock::{
-                matchers::{header, method, path},
                 Mock,
+                matchers::{header, method, path},
             };
-            use $crate::tests::mock_data::{sample_error_response, MockResponseBuilder};
+            use $crate::tests::mock_data::{MockResponseBuilder, sample_error_response};
             use $crate::tests::test_utils::TestUtils;
 
             let mock_server = TestUtils::create_mock_server().await;
@@ -185,8 +185,8 @@ macro_rules! test_success_response {
         #[tokio::test]
         async fn $test_name() {
             use wiremock::{
-                matchers::{header, method, path},
                 Mock,
+                matchers::{header, method, path},
             };
             use $crate::tests::mock_data::MockResponseBuilder;
             use $crate::tests::test_utils::TestUtils;
@@ -228,10 +228,10 @@ macro_rules! test_collection_response {
         #[tokio::test]
         async fn $test_name() {
             use wiremock::{
-                matchers::{header, method, path},
                 Mock,
+                matchers::{header, method, path},
             };
-            use $crate::tests::mock_data::{sample_collection_data, MockResponseBuilder};
+            use $crate::tests::mock_data::{MockResponseBuilder, sample_collection_data};
             use $crate::tests::test_utils::TestUtils;
 
             let mock_server = TestUtils::create_mock_server().await;
@@ -265,10 +265,10 @@ macro_rules! test_collection_response {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::mock_data::{sample_file_data, MockResponseBuilder};
+    use crate::tests::mock_data::{MockResponseBuilder, sample_file_data};
     use wiremock::{
-        matchers::{header, method, path},
         Mock,
+        matchers::{header, method, path},
     };
 
     #[tokio::test]

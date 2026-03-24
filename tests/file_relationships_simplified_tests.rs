@@ -55,9 +55,11 @@ mod file_behavior_tests {
 
         assert_eq!(behaviours.data.len(), 1);
         // Just verify the structure exists without accessing specific fields
-        assert!(serde_json::to_string(&behaviours.data[0])
-            .unwrap()
-            .contains("sandbox-1234"));
+        assert!(
+            serde_json::to_string(&behaviours.data[0])
+                .unwrap()
+                .contains("sandbox-1234")
+        );
     }
 }
 
@@ -96,9 +98,11 @@ mod file_network_tests {
             .unwrap();
 
         assert_eq!(domains.data.len(), 1);
-        assert!(serde_json::to_string(&domains.data[0])
-            .unwrap()
-            .contains("malicious.example.com"));
+        assert!(
+            serde_json::to_string(&domains.data[0])
+                .unwrap()
+                .contains("malicious.example.com")
+        );
     }
 
     #[tokio::test]
@@ -129,9 +133,11 @@ mod file_network_tests {
             .unwrap();
 
         assert_eq!(ips.data.len(), 1);
-        assert!(serde_json::to_string(&ips.data[0])
-            .unwrap()
-            .contains("192.168.1.1"));
+        assert!(
+            serde_json::to_string(&ips.data[0])
+                .unwrap()
+                .contains("192.168.1.1")
+        );
     }
 }
 
@@ -168,9 +174,11 @@ mod file_analysis_tests {
             .unwrap();
 
         assert_eq!(dropped_files.data.len(), 1);
-        assert!(serde_json::to_string(&dropped_files.data[0])
-            .unwrap()
-            .contains("dropped_file_hash_1234"));
+        assert!(
+            serde_json::to_string(&dropped_files.data[0])
+                .unwrap()
+                .contains("dropped_file_hash_1234")
+        );
     }
 
     #[tokio::test]
@@ -201,8 +209,10 @@ mod file_analysis_tests {
             .unwrap();
 
         assert_eq!(similar_files.data.len(), 1);
-        assert!(serde_json::to_string(&similar_files.data[0])
-            .unwrap()
-            .contains("similar_file_hash_5678"));
+        assert!(
+            serde_json::to_string(&similar_files.data[0])
+                .unwrap()
+                .contains("similar_file_hash_5678")
+        );
     }
 }

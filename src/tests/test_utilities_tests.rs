@@ -24,12 +24,16 @@ mod test_utilities_tests {
 
         // Test that hashes are hexadecimal
         assert!(constants::SAMPLE_MD5.chars().all(|c| c.is_ascii_hexdigit()));
-        assert!(constants::SAMPLE_SHA1
-            .chars()
-            .all(|c| c.is_ascii_hexdigit()));
-        assert!(constants::SAMPLE_SHA256
-            .chars()
-            .all(|c| c.is_ascii_hexdigit()));
+        assert!(
+            constants::SAMPLE_SHA1
+                .chars()
+                .all(|c| c.is_ascii_hexdigit())
+        );
+        assert!(
+            constants::SAMPLE_SHA256
+                .chars()
+                .all(|c| c.is_ascii_hexdigit())
+        );
     }
 
     #[test]
@@ -224,10 +228,12 @@ mod test_utilities_tests {
 
         // Test with cursor
         let collection_with_cursor = ResponseFactory::collection_response(items, Some("next-123"));
-        assert!(collection_with_cursor["links"]["next"]
-            .as_str()
-            .unwrap()
-            .contains("next-123"));
+        assert!(
+            collection_with_cursor["links"]["next"]
+                .as_str()
+                .unwrap()
+                .contains("next-123")
+        );
     }
 
     #[test]

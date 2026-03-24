@@ -181,7 +181,7 @@ impl<'a> PrivateFilesClient<'a> {
         poll_interval_seconds: u64,
         max_wait_minutes: u64,
     ) -> Result<PrivateZipFile> {
-        use tokio::time::{sleep, Duration, Instant};
+        use tokio::time::{Duration, Instant, sleep};
 
         let start_time = Instant::now();
         let max_duration = Duration::from_secs(max_wait_minutes * 60);

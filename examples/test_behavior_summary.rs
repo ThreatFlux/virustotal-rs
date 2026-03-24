@@ -76,39 +76,39 @@ fn display_file_operations(data: &FileBehaviorSummary) {
 
 /// Display files opened
 fn display_files_opened(files_opened: &Option<Vec<String>>) {
-    if let Some(files) = files_opened {
-        if !files.is_empty() {
-            println!("\n📁 Files Opened ({}):", files.len());
-            for file in files.iter().take(5) {
-                println!("  • {}", file);
-            }
-            if files.len() > 5 {
-                println!("  ... and {} more", files.len() - 5);
-            }
+    if let Some(files) = files_opened
+        && !files.is_empty()
+    {
+        println!("\n📁 Files Opened ({}):", files.len());
+        for file in files.iter().take(5) {
+            println!("  • {}", file);
+        }
+        if files.len() > 5 {
+            println!("  ... and {} more", files.len() - 5);
         }
     }
 }
 
 /// Display processes created
 fn display_processes_created(processes_created: &Option<Vec<String>>) {
-    if let Some(processes) = processes_created {
-        if !processes.is_empty() {
-            println!("\n🚀 Processes Created ({}):", processes.len());
-            for process in processes.iter().take(5) {
-                println!("  • {}", process);
-            }
+    if let Some(processes) = processes_created
+        && !processes.is_empty()
+    {
+        println!("\n🚀 Processes Created ({}):", processes.len());
+        for process in processes.iter().take(5) {
+            println!("  • {}", process);
         }
     }
 }
 
 /// Display process tree
 fn display_process_tree(processes_tree: &Option<Vec<virustotal_rs::files::ProcessTreeNode>>) {
-    if let Some(tree) = processes_tree {
-        if !tree.is_empty() {
-            println!("\n🌲 Process Tree:");
-            for node in tree.iter().take(3) {
-                display_process_node(node);
-            }
+    if let Some(tree) = processes_tree
+        && !tree.is_empty()
+    {
+        println!("\n🌲 Process Tree:");
+        for node in tree.iter().take(3) {
+            display_process_node(node);
         }
     }
 }
@@ -129,12 +129,12 @@ fn display_process_operations(data: &FileBehaviorSummary) {
 
 /// Display mutexes created
 fn display_mutexes_created(mutexes: &Option<Vec<String>>) {
-    if let Some(mutexes) = mutexes {
-        if !mutexes.is_empty() {
-            println!("\n🔒 Mutexes Created ({}):", mutexes.len());
-            for mutex in mutexes.iter().take(3) {
-                println!("  • {}", mutex);
-            }
+    if let Some(mutexes) = mutexes
+        && !mutexes.is_empty()
+    {
+        println!("\n🔒 Mutexes Created ({}):", mutexes.len());
+        for mutex in mutexes.iter().take(3) {
+            println!("  • {}", mutex);
         }
     }
 }
@@ -146,15 +146,15 @@ fn display_registry_operations(data: &FileBehaviorSummary) {
 
 /// Display registry keys opened
 fn display_registry_keys_opened(registry_keys: &Option<Vec<String>>) {
-    if let Some(keys) = registry_keys {
-        if !keys.is_empty() {
-            println!("\n🔑 Registry Keys Accessed ({}):", keys.len());
-            for key in keys.iter().take(5) {
-                println!("  • {}", key);
-            }
-            if keys.len() > 5 {
-                println!("  ... and {} more", keys.len() - 5);
-            }
+    if let Some(keys) = registry_keys
+        && !keys.is_empty()
+    {
+        println!("\n🔑 Registry Keys Accessed ({}):", keys.len());
+        for key in keys.iter().take(5) {
+            println!("  • {}", key);
+        }
+        if keys.len() > 5 {
+            println!("  ... and {} more", keys.len() - 5);
         }
     }
 }
@@ -168,12 +168,12 @@ fn display_network_operations(data: &FileBehaviorSummary) {
 
 /// Display DNS lookups
 fn display_dns_lookups(dns_lookups: &Option<Vec<DnsLookup>>) {
-    if let Some(lookups) = dns_lookups {
-        if !lookups.is_empty() {
-            println!("\n🌐 DNS Lookups ({}):", lookups.len());
-            for lookup in lookups {
-                display_dns_lookup(lookup);
-            }
+    if let Some(lookups) = dns_lookups
+        && !lookups.is_empty()
+    {
+        println!("\n🌐 DNS Lookups ({}):", lookups.len());
+        for lookup in lookups {
+            display_dns_lookup(lookup);
         }
     }
 }
@@ -192,12 +192,12 @@ fn display_dns_lookup(lookup: &DnsLookup) {
 
 /// Display IP traffic
 fn display_ip_traffic(ip_traffic: &Option<Vec<IpTraffic>>) {
-    if let Some(traffic) = ip_traffic {
-        if !traffic.is_empty() {
-            println!("\n📡 Network Traffic ({} connections):", traffic.len());
-            for connection in traffic.iter().take(5) {
-                display_ip_connection(connection);
-            }
+    if let Some(traffic) = ip_traffic
+        && !traffic.is_empty()
+    {
+        println!("\n📡 Network Traffic ({} connections):", traffic.len());
+        for connection in traffic.iter().take(5) {
+            display_ip_connection(connection);
         }
     }
 }
@@ -217,12 +217,12 @@ fn display_ip_connection(traffic: &IpTraffic) {
 
 /// Display HTTP conversations
 fn display_http_conversations(http_convos: &Option<Vec<HttpConversation>>) {
-    if let Some(conversations) = http_convos {
-        if !conversations.is_empty() {
-            println!("\n🌐 HTTP Conversations ({}):", conversations.len());
-            for convo in conversations.iter().take(3) {
-                display_http_conversation(convo);
-            }
+    if let Some(conversations) = http_convos
+        && !conversations.is_empty()
+    {
+        println!("\n🌐 HTTP Conversations ({}):", conversations.len());
+        for convo in conversations.iter().take(3) {
+            display_http_conversation(convo);
         }
     }
 }
@@ -243,12 +243,12 @@ fn display_http_conversation(convo: &HttpConversation) {
 
 /// Display command executions
 fn display_command_executions(data: &FileBehaviorSummary) {
-    if let Some(commands) = &data.command_executions {
-        if !commands.is_empty() {
-            println!("\n💻 Commands Executed ({}):", commands.len());
-            for cmd in commands.iter().take(5) {
-                println!("  • {}", cmd);
-            }
+    if let Some(commands) = &data.command_executions
+        && !commands.is_empty()
+    {
+        println!("\n💻 Commands Executed ({}):", commands.len());
+        for cmd in commands.iter().take(5) {
+            println!("  • {}", cmd);
         }
     }
 }
@@ -262,24 +262,24 @@ fn display_behavioral_indicators(data: &FileBehaviorSummary) {
 
 /// Display behavioral tags
 fn display_behavioral_tags(tags: &Option<Vec<String>>) {
-    if let Some(tags) = tags {
-        if !tags.is_empty() {
-            println!("\n🏷️ Behavioral Tags:");
-            for tag in tags {
-                println!("  • {}", tag);
-            }
+    if let Some(tags) = tags
+        && !tags.is_empty()
+    {
+        println!("\n🏷️ Behavioral Tags:");
+        for tag in tags {
+            println!("  • {}", tag);
         }
     }
 }
 
 /// Display MITRE ATT&CK techniques
 fn display_mitre_techniques(techniques: &Option<Vec<MitreAttackTechnique>>) {
-    if let Some(techniques) = techniques {
-        if !techniques.is_empty() {
-            println!("\n⚔️ MITRE ATT&CK Techniques:");
-            for technique in techniques.iter().take(5) {
-                display_mitre_technique(technique);
-            }
+    if let Some(techniques) = techniques
+        && !techniques.is_empty()
+    {
+        println!("\n⚔️ MITRE ATT&CK Techniques:");
+        for technique in techniques.iter().take(5) {
+            display_mitre_technique(technique);
         }
     }
 }

@@ -21,7 +21,7 @@ pub mod test_utilities {
     pub use super::constants;
     pub use super::environment::TestEnvironment;
     pub use super::mock_client::MockApiClient;
-    pub use super::responses::{create_json_response, create_mock_response, ResponseFactory};
+    pub use super::responses::{ResponseFactory, create_json_response, create_mock_response};
 }
 
 #[cfg(test)]
@@ -32,8 +32,8 @@ mod tests {
         assert_in_range,
     };
     use wiremock::{
-        matchers::{header, method, path},
         Mock,
+        matchers::{header, method, path},
     };
 
     #[tokio::test]
@@ -85,10 +85,12 @@ mod tests {
         let collection =
             ResponseFactory::collection_response(vec![data.clone()], Some("cursor123"));
         assert_eq!(collection["data"][0], data);
-        assert!(collection["links"]["next"]
-            .as_str()
-            .unwrap()
-            .contains("cursor123"));
+        assert!(
+            collection["links"]["next"]
+                .as_str()
+                .unwrap()
+                .contains("cursor123")
+        );
 
         let (status, error) = ResponseFactory::rate_limit_error();
         assert_eq!(status, 429);

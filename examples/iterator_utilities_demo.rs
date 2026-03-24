@@ -1,7 +1,7 @@
 use std::time::Duration;
 use virustotal_rs::{
-    iterator_utils::{Collectable, EnhancedCollectionIterator, IteratorExt, ProgressTracker},
     ApiTier, Client, Comment, Result,
+    iterator_utils::{Collectable, EnhancedCollectionIterator, IteratorExt, ProgressTracker},
 };
 
 /// Initialize the demo client

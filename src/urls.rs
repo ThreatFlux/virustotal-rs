@@ -7,7 +7,7 @@ use crate::objects::{Collection, CollectionIterator, Object, ObjectOperations, O
 use crate::url_utils::Endpoints;
 use crate::votes::{Vote, VoteRequest, VoteVerdict};
 use crate::{Client, Result};
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;

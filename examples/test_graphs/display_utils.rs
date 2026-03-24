@@ -3,13 +3,13 @@ use virustotal_rs::graphs::{Graph, GraphAttributes, GraphOwner, GraphRelationshi
 use virustotal_rs::objects::CollectionMeta;
 
 pub fn display_pagination_info(meta: &Option<CollectionMeta>) {
-    if let Some(meta) = meta {
-        if let Some(cursor) = &meta.cursor {
-            println!(
-                "   - Cursor for pagination: {}",
-                &cursor[..20.min(cursor.len())]
-            );
-        }
+    if let Some(meta) = meta
+        && let Some(cursor) = &meta.cursor
+    {
+        println!(
+            "   - Cursor for pagination: {}",
+            &cursor[..20.min(cursor.len())]
+        );
     }
 }
 
@@ -77,10 +77,10 @@ pub fn display_graph_details(attributes: &GraphAttributes) {
     if let Some(visibility) = &attributes.visibility {
         println!("   - Visibility: {}", visibility);
     }
-    if let Some(tags) = &attributes.tags {
-        if !tags.is_empty() {
-            println!("   - Tags: {}", tags.join(", "));
-        }
+    if let Some(tags) = &attributes.tags
+        && !tags.is_empty()
+    {
+        println!("   - Tags: {}", tags.join(", "));
     }
 }
 
@@ -144,10 +144,10 @@ pub fn display_viewer_descriptors(descriptors: &[GraphRelationshipDescriptor]) {
 pub fn display_owner_info(owner: &GraphOwner) {
     println!("   - User ID: {}", owner.object.id);
 
-    if let Some(first_name) = &owner.object.attributes.first_name {
-        if let Some(last_name) = &owner.object.attributes.last_name {
-            println!("   - Name: {} {}", first_name, last_name);
-        }
+    if let Some(first_name) = &owner.object.attributes.first_name
+        && let Some(last_name) = &owner.object.attributes.last_name
+    {
+        println!("   - Name: {} {}", first_name, last_name);
     }
 
     if let Some(status) = &owner.object.attributes.status {

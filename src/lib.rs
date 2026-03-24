@@ -58,9 +58,9 @@ pub use attack_techniques::{AttackTechnique, AttackTechniqueClient};
 pub use auth::{ApiKey, ApiTier};
 pub use client::{Client, ClientBuilder};
 pub use client_utils::{
-    detect_api_tier, ClientUtils, EnhancedClientBuilder, HeaderUtils, RateLimitStatus, RateLimiter,
-    RetryConfig, TokenBucketLimiter, COMMON_API_KEY_VARS, DEFAULT_RETRY_ATTEMPTS,
-    DEFAULT_RETRY_DELAY, DEFAULT_TIMEOUT, PRIVATE_API_KEY_VARS,
+    COMMON_API_KEY_VARS, ClientUtils, DEFAULT_RETRY_ATTEMPTS, DEFAULT_RETRY_DELAY, DEFAULT_TIMEOUT,
+    EnhancedClientBuilder, HeaderUtils, PRIVATE_API_KEY_VARS, RateLimitStatus, RateLimiter,
+    RetryConfig, TokenBucketLimiter, detect_api_tier,
 };
 pub use collections::{
     Collection as IocCollection, CollectionAttributes, CollectionItemsRequest, CollectionOrder,
@@ -74,9 +74,9 @@ pub use crowdsourced_yara_rules::{
     CrowdsourcedYaraRule, CrowdsourcedYaraRulesClient, YaraRuleMeta, YaraRuleOrder,
 };
 pub use display::{
+    DisplayDetails, DisplayOptions, DisplayStats, DisplayVotes, ThreatLevel, VoteConsensus,
     display_options, format_file_size, format_list, format_reputation, format_table,
     format_timestamp, format_timestamp_relative, pretty_print_json, truncate_hash, truncate_text,
-    DisplayDetails, DisplayOptions, DisplayStats, DisplayVotes, ThreatLevel, VoteConsensus,
 };
 pub use domains::{Domain, DomainClient};
 pub use error::{Error, Result};
@@ -139,8 +139,8 @@ pub use search::{FileSearchResult, SearchClient, SearchOrder, SearchResult, Snip
 pub use sigma_rules::{SigmaRule, SigmaRuleResponse, SigmaRulesClient};
 pub use threat_actors::{RelationshipOrder, ThreatActor, ThreatActorOrder, ThreatActorsClient};
 pub use url_utils::{
+    EndpointBuilder, Endpoints, QueryBuilder, VT_API_BASE, VirusTotalUrlBuilder,
     build_query_string, encode_path_segment, validate_domain, validate_hash, validate_ip,
-    EndpointBuilder, Endpoints, QueryBuilder, VirusTotalUrlBuilder, VT_API_BASE,
 };
 pub use urls::{Url, UrlClient};
 pub use users::{
@@ -153,8 +153,8 @@ pub use zip_files::{CreateZipFileRequest, ZipFile, ZipFileStatus, ZipFilesClient
 
 #[cfg(feature = "mcp")]
 pub use mcp::{
-    detect_indicator_type, run_http_server, run_stdio_server, vti_search, DetectionSummary,
-    IndicatorType, McpResult, ThreatContext, ThreatIntelligence, VtMcpServer,
+    DetectionSummary, IndicatorType, McpResult, ThreatContext, ThreatIntelligence, VtMcpServer,
+    detect_indicator_type, run_http_server, run_stdio_server, vti_search,
 };
 
 #[cfg(test)]

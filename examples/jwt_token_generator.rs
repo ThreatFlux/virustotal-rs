@@ -547,7 +547,9 @@ fn validate_permission_characters(permission: &str) {
         .chars()
         .all(|c| c.is_alphanumeric() || matches!(c, ':' | '_' | '-'))
     {
-        eprintln!("Error: Permissions can only contain alphanumeric characters, colons, underscores, and hyphens.");
+        eprintln!(
+            "Error: Permissions can only contain alphanumeric characters, colons, underscores, and hyphens."
+        );
         std::process::exit(1);
     }
 }

@@ -48,31 +48,31 @@ impl AnalysisStats {
 
     /// Append optional detection categories to the result string
     fn append_optional_detections(&self, result: &mut String, total: u32) {
-        if let Some(failure) = self.failure {
-            if failure > 0 {
-                let pct = (failure as f64 / total as f64) * 100.0;
-                result.push_str(&format!("  💥 Failure: {} ({:.1}%)\n", failure, pct));
-            }
+        if let Some(failure) = self.failure
+            && failure > 0
+        {
+            let pct = (failure as f64 / total as f64) * 100.0;
+            result.push_str(&format!("  💥 Failure: {} ({:.1}%)\n", failure, pct));
         }
 
-        if let Some(confirmed_timeout) = self.confirmed_timeout {
-            if confirmed_timeout > 0 {
-                let pct = (confirmed_timeout as f64 / total as f64) * 100.0;
-                result.push_str(&format!(
-                    "  ⏲️  Confirmed Timeout: {} ({:.1}%)\n",
-                    confirmed_timeout, pct
-                ));
-            }
+        if let Some(confirmed_timeout) = self.confirmed_timeout
+            && confirmed_timeout > 0
+        {
+            let pct = (confirmed_timeout as f64 / total as f64) * 100.0;
+            result.push_str(&format!(
+                "  ⏲️  Confirmed Timeout: {} ({:.1}%)\n",
+                confirmed_timeout, pct
+            ));
         }
 
-        if let Some(type_unsupported) = self.type_unsupported {
-            if type_unsupported > 0 {
-                let pct = (type_unsupported as f64 / total as f64) * 100.0;
-                result.push_str(&format!(
-                    "  🚫 Unsupported: {} ({:.1}%)\n",
-                    type_unsupported, pct
-                ));
-            }
+        if let Some(type_unsupported) = self.type_unsupported
+            && type_unsupported > 0
+        {
+            let pct = (type_unsupported as f64 / total as f64) * 100.0;
+            result.push_str(&format!(
+                "  🚫 Unsupported: {} ({:.1}%)\n",
+                type_unsupported, pct
+            ));
         }
     }
 

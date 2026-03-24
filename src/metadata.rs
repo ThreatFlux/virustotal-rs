@@ -131,10 +131,10 @@ impl Metadata {
         let mut result = Vec::new();
         if let Some(engines) = &self.engines {
             for (name, info) in engines {
-                if let Some(eng_category) = &info.category {
-                    if eng_category == category {
-                        result.push(name.clone());
-                    }
+                if let Some(eng_category) = &info.category
+                    && eng_category == category
+                {
+                    result.push(name.clone());
                 }
             }
         }

@@ -183,7 +183,7 @@ match client.files().get_file_info("invalid-hash").await {
 
 ### Prerequisites
 
-- **Rust** 1.82.0 or later
+- **Rust** 1.94.0 or later
 - **VirusTotal API Key** (get from [VirusTotal](https://www.virustotal.com/gui/join-us))
 
 ### Building from Source

@@ -71,13 +71,13 @@ async fn fetch_yara_rules(
 
 /// Display YARA pagination info
 fn display_yara_pagination(meta: &Option<CollectionMeta>) {
-    if let Some(meta) = meta {
-        if let Some(cursor) = &meta.cursor {
-            println!(
-                "   - Cursor available for pagination: {}",
-                &cursor[..20.min(cursor.len())]
-            );
-        }
+    if let Some(meta) = meta
+        && let Some(cursor) = &meta.cursor
+    {
+        println!(
+            "   - Cursor available for pagination: {}",
+            &cursor[..20.min(cursor.len())]
+        );
     }
 }
 
@@ -102,10 +102,10 @@ fn display_yara_rule_info(rule: &CrowdsourcedYaraRule, name: &str) {
     }
     println!();
 
-    if let Some(tags) = &rule.object.attributes.tags {
-        if !tags.is_empty() {
-            println!("     Tags: {}", tags.join(", "));
-        }
+    if let Some(tags) = &rule.object.attributes.tags
+        && !tags.is_empty()
+    {
+        println!("     Tags: {}", tags.join(", "));
     }
 }
 
@@ -244,13 +244,13 @@ async fn fetch_ioc_stream(
 
 /// Display IoC stream info
 fn display_ioc_stream_info(stream: &virustotal_rs::Collection<IocStreamObject>) {
-    if let Some(meta) = &stream.meta {
-        if let Some(cursor) = &meta.cursor {
-            println!(
-                "   - Cursor for pagination: {}",
-                &cursor[..20.min(cursor.len())]
-            );
-        }
+    if let Some(meta) = &stream.meta
+        && let Some(cursor) = &meta.cursor
+    {
+        println!(
+            "   - Cursor for pagination: {}",
+            &cursor[..20.min(cursor.len())]
+        );
     }
     println!("   - Found {} objects", stream.data.len());
 }
@@ -301,10 +301,10 @@ fn display_source_info(source: &NotificationSource) {
 
 /// Display tags info
 fn display_tags_info(tags: &Option<Vec<String>>) {
-    if let Some(tags) = tags {
-        if !tags.is_empty() {
-            println!("      Tags: {}", tags.join(", "));
-        }
+    if let Some(tags) = tags
+        && !tags.is_empty()
+    {
+        println!("      Tags: {}", tags.join(", "));
     }
 }
 
@@ -384,10 +384,10 @@ fn display_notification_details(notification: &IocStreamNotification) {
     if let Some(origin) = &attrs.origin {
         println!("   - Origin: {}", origin);
     }
-    if let Some(tags) = &attrs.tags {
-        if !tags.is_empty() {
-            println!("   - Tags: {}", tags.join(", "));
-        }
+    if let Some(tags) = &attrs.tags
+        && !tags.is_empty()
+    {
+        println!("   - Tags: {}", tags.join(", "));
     }
 }
 

@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod unit_tests {
     #![allow(dead_code)]
-    use crate::iterator_utils::traits::*;
     use crate::Error;
+    use crate::iterator_utils::traits::*;
     use std::collections::VecDeque;
 
     // Mock iterator for testing
@@ -33,12 +33,12 @@ mod unit_tests {
         type Error = Error;
 
         async fn next_batch(&mut self) -> std::result::Result<Vec<i32>, Error> {
-            if let Some(error_batch) = self.error_on_batch {
-                if self.current_batch == error_batch {
-                    return Err(Error::Io {
-                        message: "Mock error".to_string(),
-                    });
-                }
+            if let Some(error_batch) = self.error_on_batch
+                && self.current_batch == error_batch
+            {
+                return Err(Error::Io {
+                    message: "Mock error".to_string(),
+                });
             }
 
             self.current_batch += 1;

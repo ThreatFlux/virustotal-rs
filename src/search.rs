@@ -1,6 +1,6 @@
 use crate::objects::{Collection, CollectionIterator};
 use crate::url_utils::EndpointBuilder;
-use crate::{impl_enum_to_string, Client, Result};
+use crate::{Client, Result, impl_enum_to_string};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

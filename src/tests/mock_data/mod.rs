@@ -1,8 +1,8 @@
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashMap;
 use wiremock::{
-    matchers::{header, method, path, query_param},
     Mock, MockBuilder, ResponseTemplate,
+    matchers::{header, method, path, query_param},
 };
 
 /// A builder for creating mock `VirusTotal` API responses

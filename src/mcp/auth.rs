@@ -1,16 +1,16 @@
-use anyhow::{anyhow, Result as AnyhowResult};
+use anyhow::{Result as AnyhowResult, anyhow};
 use axum::{
+    RequestPartsExt,
     extract::FromRequestParts,
     http::request::Parts,
     response::{IntoResponse, Response},
-    RequestPartsExt,
 };
 use axum_extra::{
-    headers::{authorization::Bearer, Authorization},
     TypedHeader,
+    headers::{Authorization, authorization::Bearer},
 };
 use base64::Engine;
-use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
+use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use uuid::Uuid;

@@ -39,13 +39,13 @@ fn calculate_time_range() -> ExampleResult<(i64, i64)> {
 
 /// Display pagination cursor if available
 fn display_pagination_cursor(meta: &Option<virustotal_rs::objects::CollectionMeta>) {
-    if let Some(meta) = meta {
-        if let Some(cursor) = &meta.cursor {
-            println!(
-                "   - Cursor for pagination: {}",
-                truncate_string(cursor, 20)
-            );
-        }
+    if let Some(meta) = meta
+        && let Some(cursor) = &meta.cursor
+    {
+        println!(
+            "   - Cursor for pagination: {}",
+            truncate_string(cursor, 20)
+        );
     }
 }
 

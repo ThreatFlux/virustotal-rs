@@ -1,5 +1,5 @@
 use std::env;
-use tokio::time::{sleep, Duration, Instant};
+use tokio::time::{Duration, Instant, sleep};
 use virustotal_rs::{ApiTier, Client, ClientBuilder, VoteVerdict};
 
 /// Helper to enforce public API rate limit (4 requests per minute)

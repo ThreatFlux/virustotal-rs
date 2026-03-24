@@ -6,9 +6,7 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 
 // Test utility macros (defined in src/tests/test_macros.rs but not exported)
 macro_rules! setup_test_client {
-    () => {{
-        setup_test_client!("test_key", virustotal_rs::ApiTier::Public)
-    }};
+    () => {{ setup_test_client!("test_key", virustotal_rs::ApiTier::Public) }};
     ($api_key:expr, $tier:expr) => {{
         let mock_server = MockServer::start().await;
         let client = ClientBuilder::new()

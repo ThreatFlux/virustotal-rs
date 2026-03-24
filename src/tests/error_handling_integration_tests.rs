@@ -1,6 +1,6 @@
 // Integration tests focused on error handling scenarios
 use crate::error::Error;
-use crate::tests::mock_data::{mock_get, sample_error_response, with_api_key, MockResponseBuilder};
+use crate::tests::mock_data::{MockResponseBuilder, mock_get, sample_error_response, with_api_key};
 use crate::tests::test_utils::TestUtils;
 use serde_json::Value;
 

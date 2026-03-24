@@ -74,7 +74,7 @@ mod file_metadata_tests {
 
         // Test that the file client was created successfully
         // This is a basic smoke test
-        assert!(std::ptr::addr_of!(file_client) != std::ptr::null());
+        assert!(!std::ptr::addr_of!(file_client).is_null());
     }
 
     #[tokio::test]

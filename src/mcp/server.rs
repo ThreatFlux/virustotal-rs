@@ -2,11 +2,11 @@
 //!
 //! This module provides a simple MCP server for threat intelligence queries.
 
-use crate::mcp::search::vti_search;
-use crate::mcp::{convert_vt_error, McpResult};
 use crate::Client;
+use crate::mcp::search::vti_search;
+use crate::mcp::{McpResult, convert_vt_error};
 use serde::Serialize;
-use serde_json::{json, Map, Value as JsonValue};
+use serde_json::{Map, Value as JsonValue, json};
 use std::future::Future;
 
 /// `VirusTotal` MCP Server implementation
@@ -156,7 +156,7 @@ impl VtMcpServer {
     /// Handle get_url_report tool call
     async fn handle_get_url_report(&self, arguments: &JsonValue) -> McpResult<JsonValue> {
         self.fetch_report(arguments, "url", |c, url| async move {
-            use base64::{engine::general_purpose, Engine as _};
+            use base64::{Engine as _, engine::general_purpose};
             let url_id = general_purpose::STANDARD.encode(&url);
             c.urls().get(&url_id).await.map_err(convert_vt_error)
         })

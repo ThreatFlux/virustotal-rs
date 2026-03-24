@@ -19,14 +19,14 @@ pub mod server;
 pub mod transport;
 
 #[cfg(feature = "mcp")]
-pub use search::{vti_search, DetectionSummary, ThreatContext, ThreatIntelligence};
+pub use search::{DetectionSummary, ThreatContext, ThreatIntelligence, vti_search};
 #[cfg(feature = "mcp")]
 pub use server::VtMcpServer;
 #[cfg(feature = "mcp")]
 pub use transport::{run_http_server, run_stdio_server};
 
 #[cfg(feature = "mcp")]
-pub use indicators::{detect_indicator_type, IndicatorType};
+pub use indicators::{IndicatorType, detect_indicator_type};
 
 #[cfg(feature = "mcp-jwt")]
 pub use auth::{AuthError, JwtAuthLayer, JwtClaims, JwtConfig, JwtManager};

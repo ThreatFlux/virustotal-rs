@@ -14,18 +14,18 @@ fn display_threat_actors_list(
     actors: &virustotal_rs::objects::Collection<virustotal_rs::ThreatActor>,
 ) {
     println!("   ✓ Retrieved threat actors");
-    if let Some(meta) = &actors.meta {
-        if let Some(count) = meta.count {
-            println!("   - Total threat actors: {}", count);
-        }
+    if let Some(meta) = &actors.meta
+        && let Some(count) = meta.count
+    {
+        println!("   - Total threat actors: {}", count);
     }
     for actor in actors.data.iter().take(5) {
         if let Some(name) = &actor.object.attributes.name {
             print!("   - {}", name);
-            if let Some(aliases) = &actor.object.attributes.aliases {
-                if !aliases.is_empty() {
-                    print!(" (aka: {})", aliases.join(", "));
-                }
+            if let Some(aliases) = &actor.object.attributes.aliases
+                && !aliases.is_empty()
+            {
+                print!(" (aka: {})", aliases.join(", "));
             }
             println!();
         }
@@ -109,10 +109,10 @@ async fn test_threat_actors_api(
     {
         Ok(files) => {
             println!("   ✓ Retrieved related files");
-            if let Some(meta) = &files.meta {
-                if let Some(count) = meta.count {
-                    println!("   - Total related files: {}", count);
-                }
+            if let Some(meta) = &files.meta
+                && let Some(count) = meta.count
+            {
+                println!("   - Total related files: {}", count);
             }
         }
         Err(e) => println!("   ✗ Error getting related files: {}", e),

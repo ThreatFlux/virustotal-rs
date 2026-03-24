@@ -99,19 +99,27 @@ mod coverage_improvement_tests {
     fn test_error_display_messages() {
         // Test all error variants display messages
         assert!(Error::NotAvailableYet.to_string().contains("not available"));
-        assert!(Error::UnselectiveContentQuery
-            .to_string()
-            .contains("not selective"));
-        assert!(Error::UnsupportedContentQuery
-            .to_string()
-            .contains("Unsupported"));
-        assert!(Error::AuthenticationRequired
-            .to_string()
-            .contains("Authentication"));
+        assert!(
+            Error::UnselectiveContentQuery
+                .to_string()
+                .contains("not selective")
+        );
+        assert!(
+            Error::UnsupportedContentQuery
+                .to_string()
+                .contains("Unsupported")
+        );
+        assert!(
+            Error::AuthenticationRequired
+                .to_string()
+                .contains("Authentication")
+        );
         assert!(Error::UserNotActive.to_string().contains("not active"));
-        assert!(Error::WrongCredentials
-            .to_string()
-            .contains("Wrong credentials"));
+        assert!(
+            Error::WrongCredentials
+                .to_string()
+                .contains("Wrong credentials")
+        );
         assert!(Error::Forbidden.to_string().contains("Forbidden"));
         assert!(Error::NotFound.to_string().contains("not found"));
         assert!(Error::AlreadyExists.to_string().contains("already exists"));

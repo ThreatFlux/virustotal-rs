@@ -1,11 +1,11 @@
 use chrono::Utc;
 use clap::Parser;
-use elasticsearch::{http::transport::Transport, BulkParts, Elasticsearch};
+use elasticsearch::{BulkParts, Elasticsearch, http::transport::Transport};
 use futures::stream::{self, StreamExt};
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::fs;
 use uuid::Uuid;
 use virustotal_rs::{ApiKey, ApiTier, Client};
@@ -190,24 +190,24 @@ async fn process_json_directory(
 
     while let Some(entry) = entries.next_entry().await? {
         let path = entry.path();
-        if path.extension().is_some_and(|ext| ext == "json") {
-            if let Some(file_name) = path.file_stem().and_then(|n| n.to_str()) {
-                if args.verbose {
-                    println!("Processing {}", path.display());
-                }
+        if path.extension().is_some_and(|ext| ext == "json")
+            && let Some(file_name) = path.file_stem().and_then(|n| n.to_str())
+        {
+            if args.verbose {
+                println!("Processing {}", path.display());
+            }
 
-                let content = fs::read_to_string(&path).await?;
-                match serde_json::from_str::<Value>(&content) {
-                    Ok(json_data) => {
-                        let report = process_vt_report(file_name, &json_data, args)?;
-                        reports.push(report);
-                    }
-                    Err(e) => {
-                        if args.skip_errors {
-                            eprintln!("Warning: Failed to parse {}: {}", path.display(), e);
-                        } else {
-                            return Err(format!("Failed to parse {}: {}", path.display(), e).into());
-                        }
+            let content = fs::read_to_string(&path).await?;
+            match serde_json::from_str::<Value>(&content) {
+                Ok(json_data) => {
+                    let report = process_vt_report(file_name, &json_data, args)?;
+                    reports.push(report);
+                }
+                Err(e) => {
+                    if args.skip_errors {
+                        eprintln!("Warning: Failed to parse {}: {}", path.display(), e);
+                    } else {
+                        return Err(format!("Failed to parse {}: {}", path.display(), e).into());
                     }
                 }
             }
@@ -1123,12 +1123,12 @@ async fn handle_bulk_response(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let response_body: Value = response.json().await?;
 
-    if let Some(errors) = response_body.get("errors") {
-        if errors.as_bool() == Some(true) {
-            eprintln!("Some documents failed to index: {}", response_body);
-            if !args.skip_errors {
-                return Err("Bulk indexing had errors".into());
-            }
+    if let Some(errors) = response_body.get("errors")
+        && errors.as_bool() == Some(true)
+    {
+        eprintln!("Some documents failed to index: {}", response_body);
+        if !args.skip_errors {
+            return Err("Bulk indexing had errors".into());
         }
     }
 

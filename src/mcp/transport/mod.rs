@@ -7,7 +7,7 @@ pub mod config;
 pub mod http;
 pub mod stdio;
 
-pub use config::{run_server_from_env, run_server_simple, ServerConfig};
+pub use config::{ServerConfig, run_server_from_env, run_server_simple};
 #[cfg(feature = "mcp-oauth")]
 pub use http::run_http_server_with_oauth;
 pub use http::{run_http_server, run_http_server_with_config};

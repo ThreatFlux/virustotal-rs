@@ -1,6 +1,6 @@
 use clap::Parser;
-use elasticsearch::{http::transport::Transport, Elasticsearch, SearchParts};
-use serde_json::{json, Value};
+use elasticsearch::{Elasticsearch, SearchParts, http::transport::Transport};
+use serde_json::{Value, json};
 
 #[derive(Parser, Debug)]
 #[command(name = "vt-es-query")]
@@ -200,23 +200,22 @@ async fn query_engine_stats(client: &Elasticsearch) -> Result<(), Box<dyn std::e
         .await?;
 
     let body: Value = response.json().await?;
-    if let Some(aggs) = body.get("aggregations") {
-        if let Some(engines) = aggs
+    if let Some(aggs) = body.get("aggregations")
+        && let Some(engines) = aggs
             .get("engines")
             .and_then(|e| e.get("buckets"))
             .and_then(|b| b.as_array())
-        {
-            for bucket in engines {
-                let engine = bucket
-                    .get("key")
-                    .and_then(|k| k.as_str())
-                    .unwrap_or("unknown");
-                let count = bucket
-                    .get("doc_count")
-                    .and_then(|c| c.as_u64())
-                    .unwrap_or(0);
-                println!("{:<20} {:>6} malicious detections", engine, count);
-            }
+    {
+        for bucket in engines {
+            let engine = bucket
+                .get("key")
+                .and_then(|k| k.as_str())
+                .unwrap_or("unknown");
+            let count = bucket
+                .get("doc_count")
+                .and_then(|c| c.as_u64())
+                .unwrap_or(0);
+            println!("{:<20} {:>6} malicious detections", engine, count);
         }
     }
 
@@ -268,17 +267,15 @@ fn process_main_report(body: Value) -> Result<Option<(String, Value)>, Box<dyn s
         .get("hits")
         .and_then(|h| h.get("hits"))
         .and_then(|h| h.as_array())
+        && let Some(hit) = hits.first()
+        && let Some(source) = hit.get("_source")
     {
-        if let Some(hit) = hits.first() {
-            if let Some(source) = hit.get("_source") {
-                let report_uuid = source
-                    .get("report_uuid")
-                    .and_then(|u| u.as_str())
-                    .unwrap_or("unknown")
-                    .to_string();
-                return Ok(Some((report_uuid, source.clone())));
-            }
-        }
+        let report_uuid = source
+            .get("report_uuid")
+            .and_then(|u| u.as_str())
+            .unwrap_or("unknown")
+            .to_string();
+        return Ok(Some((report_uuid, source.clone())));
     }
     Ok(None)
 }
@@ -354,13 +351,12 @@ fn display_malicious_detections(mal_body: &Value) {
         .get("hits")
         .and_then(|h| h.get("hits"))
         .and_then(|h| h.as_array())
+        && !mal_hits.is_empty()
     {
-        if !mal_hits.is_empty() {
-            println!("\nMalicious Detections:");
-            for hit in mal_hits {
-                if let Some(source) = hit.get("_source") {
-                    print_detection_result(source);
-                }
+        println!("\nMalicious Detections:");
+        for hit in mal_hits {
+            if let Some(source) = hit.get("_source") {
+                print_detection_result(source);
             }
         }
     }

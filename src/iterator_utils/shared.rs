@@ -1,7 +1,7 @@
 //! Shared iterator patterns and utilities to reduce code duplication
 
-use crate::objects::{CollectionIterator, ObjectOperations};
 use crate::Client;
+use crate::objects::{CollectionIterator, ObjectOperations};
 use serde::de::DeserializeOwned;
 
 /// Common iterator creation utilities for API relationships

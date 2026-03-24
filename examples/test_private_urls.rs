@@ -6,8 +6,8 @@
 
 mod common;
 
-use base64::{engine::general_purpose, Engine as _};
-use common::{create_client_from_env, print_header, print_test_header, ExampleResult};
+use base64::{Engine as _, engine::general_purpose};
+use common::{ExampleResult, create_client_from_env, print_header, print_test_header};
 use virustotal_rs::{ApiTier, PrivateUrlAttributes, PrivateUrlScanParams, PrivateUrlsClient};
 
 /// Test URLs for various scenarios
@@ -189,12 +189,12 @@ fn display_analysis_stats(attrs: &PrivateUrlAttributes) {
 
 /// Display URL categories
 fn display_url_categories(attrs: &PrivateUrlAttributes) {
-    if let Some(categories) = &attrs.categories {
-        if !categories.is_empty() {
-            println!("  Categories:");
-            for (source, category) in categories.iter().take(3) {
-                println!("    - {}: {}", source, category);
-            }
+    if let Some(categories) = &attrs.categories
+        && !categories.is_empty()
+    {
+        println!("  Categories:");
+        for (source, category) in categories.iter().take(3) {
+            println!("    - {}: {}", source, category);
         }
     }
 }
@@ -204,10 +204,10 @@ fn display_response_info(attrs: &PrivateUrlAttributes) {
     if let Some(response_code) = &attrs.last_http_response_code {
         println!("  Last HTTP response: {}", response_code);
     }
-    if let Some(chain) = &attrs.redirection_chain {
-        if !chain.is_empty() {
-            println!("  Redirection chain: {} redirects", chain.len());
-        }
+    if let Some(chain) = &attrs.redirection_chain
+        && !chain.is_empty()
+    {
+        println!("  Redirection chain: {} redirects", chain.len());
     }
 }
 
@@ -233,18 +233,18 @@ async fn test_malicious_url_analysis(private_urls: &PrivateUrlsClient) {
 
 /// Display malicious analysis results
 fn display_malicious_analysis(attrs: &PrivateUrlAttributes) {
-    if let Some(stats) = &attrs.last_analysis_stats {
-        if let Some(malicious) = stats.malicious {
-            println!("  Malicious detections: {}", malicious);
-        }
+    if let Some(stats) = &attrs.last_analysis_stats
+        && let Some(malicious) = stats.malicious
+    {
+        println!("  Malicious detections: {}", malicious);
     }
 
-    if let Some(threat_names) = &attrs.threat_names {
-        if !threat_names.is_empty() {
-            println!("  Threat names:");
-            for name in threat_names.iter().take(5) {
-                println!("    - {}", name);
-            }
+    if let Some(threat_names) = &attrs.threat_names
+        && !threat_names.is_empty()
+    {
+        println!("  Threat names:");
+        for name in threat_names.iter().take(5) {
+            println!("    - {}", name);
         }
     }
 
@@ -364,10 +364,10 @@ async fn test_serving_ip_relationship(private_urls: &PrivateUrlsClient, url_id: 
         Ok(ips) => {
             if !ips.data.is_empty() {
                 println!("✓ Last serving IP found");
-                if let Some(ip) = ips.data.first() {
-                    if let Some(id) = ip.get("id") {
-                        println!("  IP: {}", id);
-                    }
+                if let Some(ip) = ips.data.first()
+                    && let Some(id) = ip.get("id")
+                {
+                    println!("  IP: {}", id);
                 }
             }
         }

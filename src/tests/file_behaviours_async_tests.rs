@@ -248,26 +248,36 @@ mod file_behaviour_convenience_tests {
         let behaviour_client = mock_client.client().file_behaviours();
 
         // Test all convenience methods
-        assert!(behaviour_client
-            .get_contacted_ips("test_sandbox_id")
-            .await
-            .is_ok());
-        assert!(behaviour_client
-            .get_dropped_files("test_sandbox_id")
-            .await
-            .is_ok());
-        assert!(behaviour_client
-            .get_contacted_urls("test_sandbox_id")
-            .await
-            .is_ok());
-        assert!(behaviour_client
-            .get_attack_techniques("test_sandbox_id")
-            .await
-            .is_ok());
-        assert!(behaviour_client
-            .get_sigma_analysis("test_sandbox_id")
-            .await
-            .is_ok());
+        assert!(
+            behaviour_client
+                .get_contacted_ips("test_sandbox_id")
+                .await
+                .is_ok()
+        );
+        assert!(
+            behaviour_client
+                .get_dropped_files("test_sandbox_id")
+                .await
+                .is_ok()
+        );
+        assert!(
+            behaviour_client
+                .get_contacted_urls("test_sandbox_id")
+                .await
+                .is_ok()
+        );
+        assert!(
+            behaviour_client
+                .get_attack_techniques("test_sandbox_id")
+                .await
+                .is_ok()
+        );
+        assert!(
+            behaviour_client
+                .get_sigma_analysis("test_sandbox_id")
+                .await
+                .is_ok()
+        );
     }
 
     #[tokio::test]

@@ -1,9 +1,9 @@
 use anyhow::Result;
 use virustotal_rs::cli::{
-    commands::{download /*, index, report, search, scan, config*/},
     // config::load_config,
     Cli,
     Commands,
+    commands::{download /*, index, report, search, scan, config*/},
 };
 
 #[tokio::main]

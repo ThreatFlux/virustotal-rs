@@ -2,8 +2,8 @@
 use crate::assert_api_success;
 use crate::test_utils::test_utilities::*;
 use serde_json::json;
-use wiremock::matchers::{header, method, path};
 use wiremock::Mock;
+use wiremock::matchers::{header, method, path};
 
 /// Test IP address client basic operations
 #[cfg(test)]

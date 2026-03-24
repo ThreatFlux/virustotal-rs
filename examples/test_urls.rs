@@ -102,10 +102,10 @@ async fn test_get_comments(url_client: &UrlClient<'_>, base64_id: &str) {
         url_client.get_comments(base64_id).await,
         |comments| {
             print_success("Successfully retrieved comments");
-            if let Some(meta) = &comments.meta {
-                if let Some(count) = meta.count {
-                    println!("   - Total comments: {}", count);
-                }
+            if let Some(meta) = &comments.meta
+                && let Some(count) = meta.count
+            {
+                println!("   - Total comments: {}", count);
             }
             for comment in comments.data.iter().take(3) {
                 let truncated = truncate_comment(&comment.object.attributes.text);
@@ -142,10 +142,10 @@ async fn test_get_votes(url_client: &UrlClient<'_>, base64_id: &str) {
         url_client.get_votes(base64_id).await,
         |votes| {
             print_success("Successfully retrieved votes");
-            if let Some(meta) = &votes.meta {
-                if let Some(count) = meta.count {
-                    println!("   - Total votes: {}", count);
-                }
+            if let Some(meta) = &votes.meta
+                && let Some(count) = meta.count
+            {
+                println!("   - Total votes: {}", count);
             }
         },
         "Failed to get votes",
@@ -179,10 +179,10 @@ async fn get_url_analyses(url_client: &UrlClient<'_>, base64_id: &str) {
         url_client.get_analyses(base64_id).await,
         |analyses| {
             print_success("Retrieved analyses");
-            if let Some(meta) = &analyses.meta {
-                if let Some(count) = meta.count {
-                    println!("   - Number of analyses: {}", count);
-                }
+            if let Some(meta) = &analyses.meta
+                && let Some(count) = meta.count
+            {
+                println!("   - Number of analyses: {}", count);
             }
         },
         "Error getting analyses",
@@ -195,10 +195,10 @@ async fn get_url_downloaded_files(url_client: &UrlClient<'_>, base64_id: &str) {
         url_client.get_downloaded_files(base64_id).await,
         |files| {
             print_success("Retrieved downloaded files");
-            if let Some(meta) = &files.meta {
-                if let Some(count) = meta.count {
-                    println!("   - Number of downloaded files: {}", count);
-                }
+            if let Some(meta) = &files.meta
+                && let Some(count) = meta.count
+            {
+                println!("   - Number of downloaded files: {}", count);
             }
         },
         "Error getting downloaded files",
@@ -211,10 +211,10 @@ async fn get_url_redirecting_urls(url_client: &UrlClient<'_>, base64_id: &str) {
         url_client.get_redirecting_urls(base64_id).await,
         |urls| {
             print_success("Retrieved redirecting URLs");
-            if let Some(meta) = &urls.meta {
-                if let Some(count) = meta.count {
-                    println!("   - Number of redirecting URLs: {}", count);
-                }
+            if let Some(meta) = &urls.meta
+                && let Some(count) = meta.count
+            {
+                println!("   - Number of redirecting URLs: {}", count);
             }
         },
         "Error getting redirecting URLs",

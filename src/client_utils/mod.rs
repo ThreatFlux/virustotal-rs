@@ -58,7 +58,7 @@ pub use builder::{ClientUtils, EnhancedClientBuilder};
 pub use constants::*;
 pub use rate_limiting::{RateLimitStatus, RateLimiter, TokenBucketLimiter};
 pub use retry::{RetryConfig, RetryUtils};
-pub use utils::{detect_api_tier, HeaderUtils};
+pub use utils::{HeaderUtils, detect_api_tier};
 
 #[cfg(test)]
 mod tests {

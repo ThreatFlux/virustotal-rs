@@ -4,9 +4,9 @@ use super::constants::{COMMON_API_KEY_VARS, PRIVATE_API_KEY_VARS};
 use super::rate_limiting::TokenBucketLimiter;
 use super::retry::RetryConfig;
 use super::utils::detect_api_tier;
+use crate::Client;
 use crate::auth::{ApiKey, ApiTier};
 use crate::error::{Error, Result};
-use crate::Client;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use std::time::Duration;
 

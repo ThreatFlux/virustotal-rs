@@ -399,17 +399,17 @@ where
         }
 
         // Fetch and cache new batch
-        if let Some(ref mut inner) = self.inner {
-            if !self.finished_caching {
-                let batch = inner.next_batch().await?;
-                if batch.is_empty() && !inner.has_more() {
-                    self.finished_caching = true;
-                    self.inner = None;
-                } else {
-                    self.cache.push(batch.clone());
-                    self.cache_index += 1;
-                    return Ok(batch);
-                }
+        if let Some(ref mut inner) = self.inner
+            && !self.finished_caching
+        {
+            let batch = inner.next_batch().await?;
+            if batch.is_empty() && !inner.has_more() {
+                self.finished_caching = true;
+                self.inner = None;
+            } else {
+                self.cache.push(batch.clone());
+                self.cache_index += 1;
+                return Ok(batch);
             }
         }
 

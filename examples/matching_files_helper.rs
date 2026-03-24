@@ -51,10 +51,10 @@ fn display_match_snippet(context: &virustotal_rs::MatchingFileContext) {
 
 /// Display whether the match was in a subfile
 fn display_subfile_status(context: &virustotal_rs::MatchingFileContext) {
-    if let Some(in_subfile) = &context.match_in_subfile {
-        if *in_subfile {
-            println!("   - Match in subfile: yes");
-        }
+    if let Some(in_subfile) = &context.match_in_subfile
+        && *in_subfile
+    {
+        println!("   - Match in subfile: yes");
     }
 }
 
@@ -74,10 +74,10 @@ pub fn display_matching_files_batch(batch: &[RetrohuntMatchingFile]) {
 
 /// Display rule information for a file in a batch
 fn display_batch_file_rule(file: &RetrohuntMatchingFile) {
-    if let Some(context) = &file.context_attributes {
-        if let Some(rule) = &context.rule_name {
-            println!("   - Matched by rule: {}", rule);
-        }
+    if let Some(context) = &file.context_attributes
+        && let Some(rule) = &context.rule_name
+    {
+        println!("   - Matched by rule: {}", rule);
     }
 }
 

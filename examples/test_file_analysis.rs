@@ -3,7 +3,7 @@ use tokio::time::sleep;
 use virustotal_rs::{ApiTier, Client};
 #[path = "common/mod.rs"]
 mod common;
-use common::{build_client_from_env, print_analysis_stats, SAMPLE_FILE_HASH};
+use common::{SAMPLE_FILE_HASH, build_client_from_env, print_analysis_stats};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

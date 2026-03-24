@@ -57,10 +57,10 @@ pub fn display_behavior_summary(summary: &virustotal_rs::FileBehaviorSummary) {
     if let Some(files) = &summary.files_written {
         println!("  Files written: {}", files.len());
     }
-    if let Some(tags) = &summary.tags {
-        if !tags.is_empty() {
-            println!("  Tags: {}", tags.join(", "));
-        }
+    if let Some(tags) = &summary.tags
+        && !tags.is_empty()
+    {
+        println!("  Tags: {}", tags.join(", "));
     }
 }
 
