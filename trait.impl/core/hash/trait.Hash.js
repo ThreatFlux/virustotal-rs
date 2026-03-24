@@ -1,9 +1,9 @@
 (function() {
-    var implementors = Object.fromEntries([["virustotal_rs",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.93.1/core/hash/trait.Hash.html\" title=\"trait core::hash::Hash\">Hash</a> for <a class=\"enum\" href=\"virustotal_rs/threat_actors/enum.RelationshipOrder.html\" title=\"enum virustotal_rs::threat_actors::RelationshipOrder\">RelationshipOrder</a>"]]]]);
+    const implementors = Object.fromEntries([["virustotal_rs",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.94.0/core/hash/trait.Hash.html\" title=\"trait core::hash::Hash\">Hash</a> for <a class=\"enum\" href=\"virustotal_rs/threat_actors/enum.RelationshipOrder.html\" title=\"enum virustotal_rs::threat_actors::RelationshipOrder\">RelationshipOrder</a>",0]]]]);
     if (window.register_implementors) {
         window.register_implementors(implementors);
     } else {
         window.pending_implementors = implementors;
     }
 })()
-//{"start":57,"fragment_lengths":[329]}
+//{"start":59,"fragment_lengths":[331]}

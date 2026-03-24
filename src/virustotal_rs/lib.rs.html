@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/lib.rs`."><title>lib.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-ca0dd0c4.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="virustotal_rs" data-themes="" data-resource-suffix="" data-rustdoc-version="1.93.1 (01f6ddf75 2026-02-11)" data-channel="1.93.1" data-search-js="search-9e2438ea.js" data-stringdex-js="stringdex-a3946164.js" data-settings-js="settings-c38705f0.js" ><script src="../../static.files/storage-e2aeef58.js"></script><script defer src="../../static.files/src-script-813739b1.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-a410ff4d.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-263c88ec.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">virustotal_rs/</div>lib.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">pub mod </span>analysis;
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `src/lib.rs`."><title>lib.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-77263533.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="virustotal_rs" data-themes="" data-resource-suffix="" data-rustdoc-version="1.94.0 (4a4ef493e 2026-03-02)" data-channel="1.94.0" data-search-js="search-9e2438ea.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-c38705f0.js" ><script src="../../static.files/storage-e2aeef58.js"></script><script defer src="../../static.files/src-script-813739b1.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-7bab91a1.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-ffcac47a.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content"><div class="main-heading"><h1><div class="sub-heading">virustotal_rs/</div>lib.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">pub mod </span>analysis;
 <a href=#2 id=2 data-nosnippet>2</a><span class="kw">pub mod </span>attack_tactics;
 <a href=#3 id=3 data-nosnippet>3</a><span class="kw">pub mod </span>attack_techniques;
 <a href=#4 id=4 data-nosnippet>4</a><span class="kw">pub mod </span>auth;
@@ -58,9 +58,9 @@
 <a href=#58 id=58 data-nosnippet>58</a><span class="kw">pub use </span>auth::{ApiKey, ApiTier};
 <a href=#59 id=59 data-nosnippet>59</a><span class="kw">pub use </span>client::{Client, ClientBuilder};
 <a href=#60 id=60 data-nosnippet>60</a><span class="kw">pub use </span>client_utils::{
-<a href=#61 id=61 data-nosnippet>61</a>    detect_api_tier, ClientUtils, EnhancedClientBuilder, HeaderUtils, RateLimitStatus, RateLimiter,
-<a href=#62 id=62 data-nosnippet>62</a>    RetryConfig, TokenBucketLimiter, COMMON_API_KEY_VARS, DEFAULT_RETRY_ATTEMPTS,
-<a href=#63 id=63 data-nosnippet>63</a>    DEFAULT_RETRY_DELAY, DEFAULT_TIMEOUT, PRIVATE_API_KEY_VARS,
+<a href=#61 id=61 data-nosnippet>61</a>    COMMON_API_KEY_VARS, ClientUtils, DEFAULT_RETRY_ATTEMPTS, DEFAULT_RETRY_DELAY, DEFAULT_TIMEOUT,
+<a href=#62 id=62 data-nosnippet>62</a>    EnhancedClientBuilder, HeaderUtils, PRIVATE_API_KEY_VARS, RateLimitStatus, RateLimiter,
+<a href=#63 id=63 data-nosnippet>63</a>    RetryConfig, TokenBucketLimiter, detect_api_tier,
 <a href=#64 id=64 data-nosnippet>64</a>};
 <a href=#65 id=65 data-nosnippet>65</a><span class="kw">pub use </span>collections::{
 <a href=#66 id=66 data-nosnippet>66</a>    Collection <span class="kw">as </span>IocCollection, CollectionAttributes, CollectionItemsRequest, CollectionOrder,
@@ -74,9 +74,9 @@
 <a href=#74 id=74 data-nosnippet>74</a>    CrowdsourcedYaraRule, CrowdsourcedYaraRulesClient, YaraRuleMeta, YaraRuleOrder,
 <a href=#75 id=75 data-nosnippet>75</a>};
 <a href=#76 id=76 data-nosnippet>76</a><span class="kw">pub use </span>display::{
-<a href=#77 id=77 data-nosnippet>77</a>    display_options, format_file_size, format_list, format_reputation, format_table,
-<a href=#78 id=78 data-nosnippet>78</a>    format_timestamp, format_timestamp_relative, pretty_print_json, truncate_hash, truncate_text,
-<a href=#79 id=79 data-nosnippet>79</a>    DisplayDetails, DisplayOptions, DisplayStats, DisplayVotes, ThreatLevel, VoteConsensus,
+<a href=#77 id=77 data-nosnippet>77</a>    DisplayDetails, DisplayOptions, DisplayStats, DisplayVotes, ThreatLevel, VoteConsensus,
+<a href=#78 id=78 data-nosnippet>78</a>    display_options, format_file_size, format_list, format_reputation, format_table,
+<a href=#79 id=79 data-nosnippet>79</a>    format_timestamp, format_timestamp_relative, pretty_print_json, truncate_hash, truncate_text,
 <a href=#80 id=80 data-nosnippet>80</a>};
 <a href=#81 id=81 data-nosnippet>81</a><span class="kw">pub use </span>domains::{Domain, DomainClient};
 <a href=#82 id=82 data-nosnippet>82</a><span class="kw">pub use </span>error::{Error, <span class="prelude-ty">Result</span>};
@@ -139,8 +139,8 @@
 <a href=#139 id=139 data-nosnippet>139</a><span class="kw">pub use </span>sigma_rules::{SigmaRule, SigmaRuleResponse, SigmaRulesClient};
 <a href=#140 id=140 data-nosnippet>140</a><span class="kw">pub use </span>threat_actors::{RelationshipOrder, ThreatActor, ThreatActorOrder, ThreatActorsClient};
 <a href=#141 id=141 data-nosnippet>141</a><span class="kw">pub use </span>url_utils::{
-<a href=#142 id=142 data-nosnippet>142</a>    build_query_string, encode_path_segment, validate_domain, validate_hash, validate_ip,
-<a href=#143 id=143 data-nosnippet>143</a>    EndpointBuilder, Endpoints, QueryBuilder, VirusTotalUrlBuilder, VT_API_BASE,
+<a href=#142 id=142 data-nosnippet>142</a>    EndpointBuilder, Endpoints, QueryBuilder, VT_API_BASE, VirusTotalUrlBuilder,
+<a href=#143 id=143 data-nosnippet>143</a>    build_query_string, encode_path_segment, validate_domain, validate_hash, validate_ip,
 <a href=#144 id=144 data-nosnippet>144</a>};
 <a href=#145 id=145 data-nosnippet>145</a><span class="kw">pub use </span>urls::{Url, UrlClient};
 <a href=#146 id=146 data-nosnippet>146</a><span class="kw">pub use </span>users::{
@@ -153,13 +153,13 @@
 <a href=#153 id=153 data-nosnippet>153</a>
 <a href=#154 id=154 data-nosnippet>154</a><span class="attr">#[cfg(feature = <span class="string">"mcp"</span>)]
 <a href=#155 id=155 data-nosnippet>155</a></span><span class="kw">pub use </span>mcp::{
-<a href=#156 id=156 data-nosnippet>156</a>    detect_indicator_type, run_http_server, run_stdio_server, vti_search, DetectionSummary,
-<a href=#157 id=157 data-nosnippet>157</a>    IndicatorType, McpResult, ThreatContext, ThreatIntelligence, VtMcpServer,
+<a href=#156 id=156 data-nosnippet>156</a>    DetectionSummary, IndicatorType, McpResult, ThreatContext, ThreatIntelligence, VtMcpServer,
+<a href=#157 id=157 data-nosnippet>157</a>    detect_indicator_type, run_http_server, run_stdio_server, vti_search,
 <a href=#158 id=158 data-nosnippet>158</a>};
 <a href=#159 id=159 data-nosnippet>159</a>
 <a href=#160 id=160 data-nosnippet>160</a><span class="attr">#[cfg(test)]
 <a href=#161 id=161 data-nosnippet>161</a></span><span class="kw">mod </span>integration_tests {
-<a href=#162 id=162 data-nosnippet>162</a>    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+<a href=#162 id=162 data-nosnippet>162</a>    <span class="kw">use </span>super::<span class="kw-2">*</span>;
 <a href=#163 id=163 data-nosnippet>163</a>
 <a href=#164 id=164 data-nosnippet>164</a>    <span class="attr">#[test]
 <a href=#165 id=165 data-nosnippet>165</a>    </span><span class="kw">fn </span>test_library_exports() {
