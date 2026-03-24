@@ -85,10 +85,10 @@ async fn list_collections(collections_client: &virustotal_rs::CollectionsClient<
     {
         Ok(collections) => {
             print_success("Retrieved collections");
-            if let Some(meta) = &collections.meta {
-                if let Some(count) = meta.count {
-                    println!("   - Total collections: {}", count);
-                }
+            if let Some(meta) = &collections.meta
+                && let Some(count) = meta.count
+            {
+                println!("   - Total collections: {}", count);
             }
             for collection in collections.data.iter().take(5) {
                 if let Some(name) = &collection.object.attributes.name {
@@ -237,10 +237,10 @@ async fn retrieve_collection_comments(
     match client.get_comments(collection_id).await {
         Ok(comments) => {
             print_success("Retrieved comments");
-            if let Some(meta) = &comments.meta {
-                if let Some(count) = meta.count {
-                    println!("   - Total comments: {}", count);
-                }
+            if let Some(meta) = &comments.meta
+                && let Some(count) = meta.count
+            {
+                println!("   - Total comments: {}", count);
             }
         }
         Err(e) => print_error(&format!("Error getting comments: {}", e)),
@@ -281,10 +281,10 @@ async fn retrieve_relationship_data(
     {
         Ok(data) => {
             print_success(success_message);
-            if let Some(meta) = &data.meta {
-                if let Some(count) = meta.count {
-                    println!("   - {}: {}", count_label, count);
-                }
+            if let Some(meta) = &data.meta
+                && let Some(count) = meta.count
+            {
+                println!("   - {}: {}", count_label, count);
             }
         }
         Err(e) => print_error(&format!("Error getting {}: {}", relationship_type, e)),
@@ -355,10 +355,10 @@ async fn test_collection_search(
     {
         Ok(results) => {
             print_success("Search completed");
-            if let Some(meta) = &results.meta {
-                if let Some(count) = meta.count {
-                    println!("   - Results found: {}", count);
-                }
+            if let Some(meta) = &results.meta
+                && let Some(count) = meta.count
+            {
+                println!("   - Results found: {}", count);
             }
         }
         Err(e) => {

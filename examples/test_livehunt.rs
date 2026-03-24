@@ -26,13 +26,13 @@ rule TestMalware {
 
 /// Display pagination cursor for rulesets
 fn display_rulesets_pagination_cursor(meta: &Option<virustotal_rs::objects::CollectionMeta>) {
-    if let Some(meta) = meta {
-        if let Some(cursor) = &meta.cursor {
-            println!(
-                "   - Cursor for pagination: {}",
-                truncate_string(cursor, 20)
-            );
-        }
+    if let Some(meta) = meta
+        && let Some(cursor) = &meta.cursor
+    {
+        println!(
+            "   - Cursor for pagination: {}",
+            truncate_string(cursor, 20)
+        );
     }
 }
 
@@ -270,10 +270,10 @@ async fn execute_list_notifications_api_call(
 fn display_notifications_metadata(
     notifications: &virustotal_rs::Collection<virustotal_rs::LivehuntNotification>,
 ) {
-    if let Some(meta) = &notifications.meta {
-        if let Some(count) = meta.count {
-            println!("   - Total notifications: {}", count);
-        }
+    if let Some(meta) = &notifications.meta
+        && let Some(count) = meta.count
+    {
+        println!("   - Total notifications: {}", count);
     }
 }
 

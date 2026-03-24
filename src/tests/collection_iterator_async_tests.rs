@@ -2,8 +2,8 @@
 use crate::objects::CollectionIterator;
 use crate::test_utils::test_utilities::*;
 use serde_json::json;
-use wiremock::matchers::{header, method, path, query_param};
 use wiremock::Mock;
+use wiremock::matchers::{header, method, path, query_param};
 
 /// Test collection iterator basic functionality
 #[cfg(test)]

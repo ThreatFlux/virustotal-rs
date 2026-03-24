@@ -115,36 +115,36 @@ fn display_file_activities(attrs: &FileBehaviorAttributes) {
 
 /// Display files opened
 fn display_files_opened(files: &Option<Vec<String>>) {
-    if let Some(files) = files {
-        if !files.is_empty() {
-            println!("\n📂 Files Opened ({}):", files.len());
-            for file in files.iter().take(5) {
-                println!("  • {}", file);
-            }
+    if let Some(files) = files
+        && !files.is_empty()
+    {
+        println!("\n📂 Files Opened ({}):", files.len());
+        for file in files.iter().take(5) {
+            println!("  • {}", file);
         }
     }
 }
 
 /// Display files written
 fn display_files_written(files: &Option<Vec<String>>) {
-    if let Some(files) = files {
-        if !files.is_empty() {
-            println!("\n✏️ Files Written ({}):", files.len());
-            for file in files.iter().take(5) {
-                println!("  • {}", file);
-            }
+    if let Some(files) = files
+        && !files.is_empty()
+    {
+        println!("\n✏️ Files Written ({}):", files.len());
+        for file in files.iter().take(5) {
+            println!("  • {}", file);
         }
     }
 }
 
 /// Display files dropped
 fn display_files_dropped(files: &Option<Vec<virustotal_rs::files::FileDrop>>) {
-    if let Some(files) = files {
-        if !files.is_empty() {
-            println!("\n📦 Files Dropped ({}):", files.len());
-            for file_drop in files.iter().take(3) {
-                display_dropped_file(file_drop);
-            }
+    if let Some(files) = files
+        && !files.is_empty()
+    {
+        println!("\n📦 Files Dropped ({}):", files.len());
+        for file_drop in files.iter().take(3) {
+            display_dropped_file(file_drop);
         }
     }
 }
@@ -168,24 +168,24 @@ fn display_process_activities(attrs: &FileBehaviorAttributes) {
 
 /// Display processes created
 fn display_processes_created(procs: &Option<Vec<String>>) {
-    if let Some(procs) = procs {
-        if !procs.is_empty() {
-            println!("\n🚀 Processes Created ({}):", procs.len());
-            for proc in procs.iter().take(5) {
-                println!("  • {}", proc);
-            }
+    if let Some(procs) = procs
+        && !procs.is_empty()
+    {
+        println!("\n🚀 Processes Created ({}):", procs.len());
+        for proc in procs.iter().take(5) {
+            println!("  • {}", proc);
         }
     }
 }
 
 /// Display command executions
 fn display_command_executions(commands: &Option<Vec<String>>) {
-    if let Some(commands) = commands {
-        if !commands.is_empty() {
-            println!("\n💻 Commands Executed ({}):", commands.len());
-            for cmd in commands.iter().take(5) {
-                println!("  • {}", cmd);
-            }
+    if let Some(commands) = commands
+        && !commands.is_empty()
+    {
+        println!("\n💻 Commands Executed ({}):", commands.len());
+        for cmd in commands.iter().take(5) {
+            println!("  • {}", cmd);
         }
     }
 }
@@ -198,16 +198,16 @@ fn display_network_activities(attrs: &FileBehaviorAttributes) {
 
 /// Display DNS lookups
 fn display_dns_lookups(dns: &Option<Vec<DnsLookup>>) {
-    if let Some(dns) = dns {
-        if !dns.is_empty() {
-            println!("\n🌐 DNS Lookups ({}):", dns.len());
-            for lookup in dns.iter().take(5) {
-                if let Some(hostname) = &lookup.hostname {
-                    println!("  • {}", hostname);
-                    if let Some(ips) = &lookup.resolved_ips {
-                        for ip in ips.iter().take(2) {
-                            println!("    → {}", ip);
-                        }
+    if let Some(dns) = dns
+        && !dns.is_empty()
+    {
+        println!("\n🌐 DNS Lookups ({}):", dns.len());
+        for lookup in dns.iter().take(5) {
+            if let Some(hostname) = &lookup.hostname {
+                println!("  • {}", hostname);
+                if let Some(ips) = &lookup.resolved_ips {
+                    for ip in ips.iter().take(2) {
+                        println!("    → {}", ip);
                     }
                 }
             }
@@ -217,17 +217,17 @@ fn display_dns_lookups(dns: &Option<Vec<DnsLookup>>) {
 
 /// Display IP traffic
 fn display_ip_traffic(traffic: &Option<Vec<IpTraffic>>) {
-    if let Some(traffic) = traffic {
-        if !traffic.is_empty() {
-            println!("\n📡 IP Traffic ({} connections):", traffic.len());
-            for conn in traffic.iter().take(5) {
-                if let (Some(ip), Some(port)) = (&conn.destination_ip, conn.destination_port) {
-                    print!("  • {}:{}", ip, port);
-                    if let Some(proto) = &conn.protocol {
-                        print!(" ({})", proto);
-                    }
-                    println!();
+    if let Some(traffic) = traffic
+        && !traffic.is_empty()
+    {
+        println!("\n📡 IP Traffic ({} connections):", traffic.len());
+        for conn in traffic.iter().take(5) {
+            if let (Some(ip), Some(port)) = (&conn.destination_ip, conn.destination_port) {
+                print!("  • {}:{}", ip, port);
+                if let Some(proto) = &conn.protocol {
+                    print!(" ({})", proto);
                 }
+                println!();
             }
         }
     }
@@ -241,29 +241,29 @@ fn display_registry_activities(attrs: &FileBehaviorAttributes) {
 
 /// Display registry keys opened
 fn display_registry_keys_opened(keys: &Option<Vec<String>>) {
-    if let Some(keys) = keys {
-        if !keys.is_empty() {
-            println!("\n🔑 Registry Keys Opened ({}):", keys.len());
-            for key in keys.iter().take(3) {
-                println!("  • {}", key);
-            }
+    if let Some(keys) = keys
+        && !keys.is_empty()
+    {
+        println!("\n🔑 Registry Keys Opened ({}):", keys.len());
+        for key in keys.iter().take(3) {
+            println!("  • {}", key);
         }
     }
 }
 
 /// Display registry keys set
 fn display_registry_keys_set(keys: &Option<Vec<RegistryKeySet>>) {
-    if let Some(keys) = keys {
-        if !keys.is_empty() {
-            println!("\n📝 Registry Keys Set ({}):", keys.len());
-            for key_set in keys.iter().take(3) {
-                if let Some(key) = &key_set.key {
-                    print!("  • {}", key);
-                    if let Some(value) = &key_set.value {
-                        print!(" = {}", value);
-                    }
-                    println!();
+    if let Some(keys) = keys
+        && !keys.is_empty()
+    {
+        println!("\n📝 Registry Keys Set ({}):", keys.len());
+        for key_set in keys.iter().take(3) {
+            if let Some(key) = &key_set.key {
+                print!("  • {}", key);
+                if let Some(value) = &key_set.value {
+                    print!(" = {}", value);
                 }
+                println!();
             }
         }
     }
@@ -277,12 +277,12 @@ fn display_system_activities(attrs: &FileBehaviorAttributes) {
 
 /// Display mutexes created
 fn display_mutexes_created(mutexes: &Option<Vec<String>>) {
-    if let Some(mutexes) = mutexes {
-        if !mutexes.is_empty() {
-            println!("\n🔒 Mutexes Created ({}):", mutexes.len());
-            for mutex in mutexes.iter().take(3) {
-                println!("  • {}", mutex);
-            }
+    if let Some(mutexes) = mutexes
+        && !mutexes.is_empty()
+    {
+        println!("\n🔒 Mutexes Created ({}):", mutexes.len());
+        for mutex in mutexes.iter().take(3) {
+            println!("  • {}", mutex);
         }
     }
 }
@@ -343,19 +343,19 @@ fn display_analysis_results(attrs: &FileBehaviorAttributes) {
 
 /// Display verdicts
 fn display_verdicts(verdicts: &Option<Vec<String>>) {
-    if let Some(verdicts) = verdicts {
-        if !verdicts.is_empty() {
-            println!("\n⚖️ Verdicts: {}", verdicts.join(", "));
-        }
+    if let Some(verdicts) = verdicts
+        && !verdicts.is_empty()
+    {
+        println!("\n⚖️ Verdicts: {}", verdicts.join(", "));
     }
 }
 
 /// Display behavioral tags
 fn display_tags(tags: &Option<Vec<String>>) {
-    if let Some(tags) = tags {
-        if !tags.is_empty() {
-            println!("\n🏷️ Behavioral Tags: {}", tags.join(", "));
-        }
+    if let Some(tags) = tags
+        && !tags.is_empty()
+    {
+        println!("\n🏷️ Behavioral Tags: {}", tags.join(", "));
     }
 }
 

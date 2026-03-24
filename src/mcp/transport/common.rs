@@ -1,5 +1,5 @@
 use crate::mcp::server::VtMcpServer;
-use serde_json::{json, Value as JsonValue};
+use serde_json::{Value as JsonValue, json};
 
 /// Handle an MCP request
 pub async fn handle_request(server: &VtMcpServer, request: JsonValue) -> JsonValue {

@@ -262,10 +262,10 @@ fn display_severity_counts(stats: &SummaryStats) {
 
 /// Display API links if available
 fn display_api_links(mitre_trees: &virustotal_rs::MitreTrees) {
-    if let Some(links) = &mitre_trees.links {
-        if let Some(self_link) = &links.self_link {
-            println!("\n  📎 API Link: {}", self_link);
-        }
+    if let Some(links) = &mitre_trees.links
+        && let Some(self_link) = &links.self_link
+    {
+        println!("\n  📎 API Link: {}", self_link);
     }
 }
 

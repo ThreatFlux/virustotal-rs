@@ -232,10 +232,10 @@ fn display_artifact_tokens(item: &BehaviorFeedItem) {
 
 /// Extract and display token from URL
 fn extract_and_display_token(url: &Option<String>, artifact_type: &str) {
-    if let Some(url) = url {
-        if let Some(token) = BehaviorFeedItem::extract_token(url) {
-            println!("  {} token: {}", artifact_type, token);
-        }
+    if let Some(url) = url
+        && let Some(token) = BehaviorFeedItem::extract_token(url)
+    {
+        println!("  {} token: {}", artifact_type, token);
     }
 }
 

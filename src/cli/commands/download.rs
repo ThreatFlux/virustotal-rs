@@ -1,15 +1,15 @@
 use crate::cli::utils::{
-    create_progress_tracker, detect_input_type, format_file_size, format_json_output,
-    handle_dry_run_check, handle_vt_error, read_hashes_from_file, read_hashes_from_json_export,
-    setup_client_arc, truncate_hash, validate_hash, InputType, ProgressTracker,
+    InputType, ProgressTracker, create_progress_tracker, detect_input_type, format_file_size,
+    format_json_output, handle_dry_run_check, handle_vt_error, read_hashes_from_file,
+    read_hashes_from_json_export, setup_client_arc, truncate_hash, validate_hash,
 };
 use crate::{ApiTier, Client};
 use anyhow::{Context, Result};
 use clap::Args;
 use futures::stream::{self, StreamExt};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 use tokio::fs;
 use tokio::time::sleep;
@@ -752,40 +752,38 @@ fn apply_file_filters(
 
     // Size filters
     if let Some(size) = attributes.size {
-        if let Some(min_size) = args.min_size {
-            if size < min_size {
-                return Err(crate::Error::Unknown("File too small".to_string()));
-            }
+        if let Some(min_size) = args.min_size
+            && size < min_size
+        {
+            return Err(crate::Error::Unknown("File too small".to_string()));
         }
-        if let Some(max_size) = args.max_size {
-            if size > max_size {
-                return Err(crate::Error::Unknown("File too large".to_string()));
-            }
+        if let Some(max_size) = args.max_size
+            && size > max_size
+        {
+            return Err(crate::Error::Unknown("File too large".to_string()));
         }
     }
 
     // Detection count filter
-    if let Some(min_detections) = args.min_detections {
-        if let Some(stats) = &attributes.last_analysis_stats {
-            let detected = stats.malicious + stats.suspicious;
-            if detected < min_detections {
-                return Err(crate::Error::Unknown("Not enough detections".to_string()));
-            }
+    if let Some(min_detections) = args.min_detections
+        && let Some(stats) = &attributes.last_analysis_stats
+    {
+        let detected = stats.malicious + stats.suspicious;
+        if detected < min_detections {
+            return Err(crate::Error::Unknown("Not enough detections".to_string()));
         }
     }
 
     // File type filter
-    if let Some(ref filter_type) = args.file_type {
-        if let Some(ref type_description) = attributes.type_description {
-            if !type_description
-                .to_lowercase()
-                .contains(&filter_type.to_lowercase())
-            {
-                return Err(crate::Error::Unknown(
-                    "File type doesn't match filter".to_string(),
-                ));
-            }
-        }
+    if let Some(ref filter_type) = args.file_type
+        && let Some(ref type_description) = attributes.type_description
+        && !type_description
+            .to_lowercase()
+            .contains(&filter_type.to_lowercase())
+    {
+        return Err(crate::Error::Unknown(
+            "File type doesn't match filter".to_string(),
+        ));
     }
 
     Ok(())
@@ -1035,18 +1033,18 @@ fn handle_manual_tier_and_concurrency(
     manual_tier: &str,
     manual_concurrency: Option<usize>,
 ) -> Option<(ApiTier, usize)> {
-    if let Some(concurrency_val) = manual_concurrency {
-        if manual_tier.to_lowercase() != "public" {
-            let api_tier = match manual_tier.to_lowercase().as_str() {
-                "premium" | "private" => ApiTier::Premium,
-                _ => ApiTier::Public,
-            };
-            let concurrency = match api_tier {
-                ApiTier::Premium => concurrency_val.clamp(1, 200), // Allow up to 200 for premium
-                ApiTier::Public => 1,                              // Public is always sequential
-            };
-            return Some((api_tier, concurrency));
-        }
+    if let Some(concurrency_val) = manual_concurrency
+        && manual_tier.to_lowercase() != "public"
+    {
+        let api_tier = match manual_tier.to_lowercase().as_str() {
+            "premium" | "private" => ApiTier::Premium,
+            _ => ApiTier::Public,
+        };
+        let concurrency = match api_tier {
+            ApiTier::Premium => concurrency_val.clamp(1, 200), // Allow up to 200 for premium
+            ApiTier::Public => 1,                              // Public is always sequential
+        };
+        return Some((api_tier, concurrency));
     }
     None
 }

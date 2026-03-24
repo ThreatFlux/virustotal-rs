@@ -1,5 +1,5 @@
 use std::env;
-use tokio::time::{sleep, Duration};
+use tokio::time::{Duration, sleep};
 use virustotal_rs::common::{AnalysisStats, VoteStats};
 use virustotal_rs::{ApiTier, Client, ClientBuilder};
 

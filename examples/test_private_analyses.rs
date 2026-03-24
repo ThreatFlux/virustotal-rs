@@ -93,14 +93,14 @@ fn display_analysis_details(attributes: &PrivateAnalysisAttributes) {
 }
 
 fn display_analysis_stats(stats: &Option<AnalysisStats>) {
-    if let Some(stats) = stats {
-        if let Some(malicious_count) = stats.malicious {
-            print!("    Detections: {}", malicious_count);
-            if let Some(total) = stats.undetected {
-                println!(" / {}", malicious_count + total);
-            } else {
-                println!();
-            }
+    if let Some(stats) = stats
+        && let Some(malicious_count) = stats.malicious
+    {
+        print!("    Detections: {}", malicious_count);
+        if let Some(total) = stats.undetected {
+            println!(" / {}", malicious_count + total);
+        } else {
+            println!();
         }
     }
 }
@@ -132,11 +132,11 @@ fn display_single_analysis_info(response: &PrivateAnalysisResponse) {
 }
 
 fn display_file_info_from_meta(meta: &Option<PrivateAnalysisMeta>) {
-    if let Some(meta) = meta {
-        if let Some(file_info) = &meta.file_info {
-            println!("  File Information:");
-            display_file_details(file_info);
-        }
+    if let Some(meta) = meta
+        && let Some(file_info) = &meta.file_info
+    {
+        println!("  File Information:");
+        display_file_details(file_info);
     }
 }
 
@@ -278,29 +278,29 @@ fn display_behavior_details(attributes: &PrivateFileBehaviorAttributes) {
 }
 
 fn display_highlighted_calls(calls: &Option<Vec<String>>) {
-    if let Some(calls) = calls {
-        if !calls.is_empty() {
-            println!("  Highlighted API Calls: {}", calls.len());
-            for call in calls.iter().take(3) {
-                println!("    - {}", call);
-            }
+    if let Some(calls) = calls
+        && !calls.is_empty()
+    {
+        println!("  Highlighted API Calls: {}", calls.len());
+        for call in calls.iter().take(3) {
+            println!("    - {}", call);
         }
     }
 }
 
 fn display_process_tree(processes: &Option<Vec<ProcessInfo>>) {
-    if let Some(processes) = processes {
-        if !processes.is_empty() {
-            println!("  Process Tree: {} processes", processes.len());
-        }
+    if let Some(processes) = processes
+        && !processes.is_empty()
+    {
+        println!("  Process Tree: {} processes", processes.len());
     }
 }
 
 fn display_behavior_tags(tags: &Option<Vec<String>>) {
-    if let Some(tags) = tags {
-        if !tags.is_empty() {
-            println!("  Tags: {}", tags.join(", "));
-        }
+    if let Some(tags) = tags
+        && !tags.is_empty()
+    {
+        println!("  Tags: {}", tags.join(", "));
     }
 }
 

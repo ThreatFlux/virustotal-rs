@@ -42,17 +42,17 @@ pub fn display_file_list(files: &virustotal_rs::Collection<virustotal_rs::Privat
         let attrs_json = serde_json::to_value(&file.object.attributes).unwrap_or_default();
         print_file_info(&attrs_json, "    ");
 
-        if let Some(tags) = &file.object.attributes.tags {
-            if !tags.is_empty() {
-                println!("    Tags: {}", tags.join(", "));
-            }
+        if let Some(tags) = &file.object.attributes.tags
+            && !tags.is_empty()
+        {
+            println!("    Tags: {}", tags.join(", "));
         }
     }
 
-    if let Some(meta) = &files.meta {
-        if let Some(cursor) = &meta.cursor {
-            println!("\n  Cursor for pagination: {}", truncate_string(cursor, 20));
-        }
+    if let Some(meta) = &files.meta
+        && let Some(cursor) = &meta.cursor
+    {
+        println!("\n  Cursor for pagination: {}", truncate_string(cursor, 20));
     }
 }
 

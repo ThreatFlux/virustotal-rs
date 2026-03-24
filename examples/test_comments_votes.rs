@@ -1,5 +1,5 @@
 use std::env;
-use tokio::time::{sleep, Duration};
+use tokio::time::{Duration, sleep};
 use virustotal_rs::{ApiTier, ClientBuilder, VoteVerdict};
 
 /// Resource type for operations

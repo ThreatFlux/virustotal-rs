@@ -18,12 +18,8 @@ macro_rules! setup_mock_get {
 /// Creates a client and mock server with custom configuration
 #[macro_export]
 macro_rules! setup_test_client {
-    () => {{
-        setup_test_client!("test_key", ApiTier::Public)
-    }};
-    ($api_key:expr) => {{
-        setup_test_client!($api_key, ApiTier::Public)
-    }};
+    () => {{ setup_test_client!("test_key", ApiTier::Public) }};
+    ($api_key:expr) => {{ setup_test_client!($api_key, ApiTier::Public) }};
     ($api_key:expr, $tier:expr) => {{
         use std::time::Duration;
         use wiremock::MockServer;

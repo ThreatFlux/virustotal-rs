@@ -9,8 +9,8 @@ mod example_tests {
         assert_in_range,
     };
     use wiremock::{
-        matchers::{header, method, path},
         Mock,
+        matchers::{header, method, path},
     };
 
     #[tokio::test]

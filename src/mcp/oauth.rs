@@ -4,16 +4,16 @@
 //! automatic token refresh, and authorization server metadata discovery
 //! following the MCP 2025-03-26 Authorization Specification.
 
-use anyhow::{anyhow, Result as AnyhowResult};
+use anyhow::{Result as AnyhowResult, anyhow};
 use axum::{
     extract::FromRequestParts,
     http::request::Parts,
     response::{IntoResponse, Response},
 };
 use oauth2::{
-    basic::BasicClient, AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken,
-    EmptyExtraTokenFields, EndpointNotSet, EndpointSet, PkceCodeChallenge, PkceCodeVerifier,
-    RedirectUrl, RefreshToken, Scope, StandardTokenResponse, TokenResponse, TokenUrl,
+    AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, EmptyExtraTokenFields,
+    EndpointNotSet, EndpointSet, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, RefreshToken,
+    Scope, StandardTokenResponse, TokenResponse, TokenUrl, basic::BasicClient,
 };
 use serde::{Deserialize, Serialize};
 use std::{

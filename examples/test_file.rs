@@ -1,7 +1,7 @@
 use virustotal_rs::{ApiTier, Client};
 #[path = "common/mod.rs"]
 mod common;
-use common::{console, error_handling, file_info, workflow, SAMPLE_FILE_HASH};
+use common::{SAMPLE_FILE_HASH, console, error_handling, file_info, workflow};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

@@ -7,7 +7,7 @@
 #![allow(dead_code)] // Utility functions may not be used in all examples
 
 use std::env;
-use tokio::time::{sleep, Duration};
+use tokio::time::{Duration, sleep};
 use virustotal_rs::common::AnalysisStats;
 use virustotal_rs::{ApiTier, Client, ClientUtils};
 
@@ -567,7 +567,7 @@ pub fn print_analysis_stats_detailed(label: &str, stats: &AnalysisStats) {
 /// }
 /// ```
 pub fn print_vote_stats(label: &str, harmless: i32, malicious: i32) {
-    use virustotal_rs::{common::VoteStats, DisplayVotes};
+    use virustotal_rs::{DisplayVotes, common::VoteStats};
     let votes = VoteStats {
         harmless: harmless as u32,
         malicious: malicious as u32,
@@ -827,8 +827,8 @@ pub mod error_handling {
 
 /// Enhanced file information display patterns
 pub mod file_info {
-    use virustotal_rs::files::FileAttributes;
     use virustotal_rs::File;
+    use virustotal_rs::files::FileAttributes;
 
     /// Standard file information display pattern used across examples
     ///
@@ -870,10 +870,10 @@ pub mod file_info {
 
     /// Print file names
     fn print_file_names(attrs: &FileAttributes) {
-        if let Some(names) = &attrs.names {
-            if !names.is_empty() {
-                println!("  Names: {:?}", names);
-            }
+        if let Some(names) = &attrs.names
+            && !names.is_empty()
+        {
+            println!("  Names: {:?}", names);
         }
 
         if let Some(meaningful_name) = &attrs.meaningful_name {
@@ -980,7 +980,7 @@ pub mod workflow {
 /// Enhanced relationship testing patterns
 pub mod relationships {
     use serde_json::Value;
-    use virustotal_rs::{error::Result, Client};
+    use virustotal_rs::{Client, error::Result};
 
     /// Standard relationship testing pattern used across examples
     pub async fn test_standard_relationships(

@@ -3,10 +3,10 @@
 //! This module provides the main search function that automatically detects
 //! indicator types and performs appropriate `VirusTotal` API queries.
 
-use crate::common::AnalysisStats;
-use crate::mcp::indicators::{detect_indicator_type, IndicatorType};
-use crate::mcp::{convert_vt_error, McpResult};
 use crate::Client;
+use crate::common::AnalysisStats;
+use crate::mcp::indicators::{IndicatorType, detect_indicator_type};
+use crate::mcp::{McpResult, convert_vt_error};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -79,24 +79,17 @@ pub async fn vti_search(client: &Client, indicator: String) -> McpResult<ThreatI
     let indicator_type = detect_indicator_type(&indicator);
 
     match indicator_type {
-        IndicatorType::Hash { hash_type: _, value } => {
-            search_file_hash(client, &value).await
-        }
-        IndicatorType::IpAddress(ip) => {
-            search_ip_address(client, &ip).await
-        }
-        IndicatorType::Domain(domain) => {
-            search_domain(client, &domain).await
-        }
-        IndicatorType::Url(url) => {
-            search_url(client, &url).await
-        }
-        IndicatorType::Unknown(_) => {
-            Err(anyhow::anyhow!(
-                "Unable to determine indicator type for: {}. Supported types: file hashes (MD5/SHA1/SHA256/SHA512), IP addresses, domains, and URLs.",
-                indicator
-            ))
-        }
+        IndicatorType::Hash {
+            hash_type: _,
+            value,
+        } => search_file_hash(client, &value).await,
+        IndicatorType::IpAddress(ip) => search_ip_address(client, &ip).await,
+        IndicatorType::Domain(domain) => search_domain(client, &domain).await,
+        IndicatorType::Url(url) => search_url(client, &url).await,
+        IndicatorType::Unknown(_) => Err(anyhow::anyhow!(
+            "Unable to determine indicator type for: {}. Supported types: file hashes (MD5/SHA1/SHA256/SHA512), IP addresses, domains, and URLs.",
+            indicator
+        )),
     }
 }
 
@@ -138,15 +131,15 @@ fn extract_threat_categories<T>(
 ) -> Vec<String> {
     let mut threat_categories = Vec::new();
 
-    if let Some(ref results) = results {
+    if let Some(results) = results {
         for (_, result) in results.iter() {
             let (category, result_name) = category_extractor(result);
-            if category == "malicious" || category == "suspicious" {
-                if let Some(name) = result_name {
-                    if !threat_categories.contains(name) && threat_categories.len() < 10 {
-                        threat_categories.push(name.clone());
-                    }
-                }
+            if (category == "malicious" || category == "suspicious")
+                && let Some(name) = result_name
+                && !threat_categories.contains(name)
+                && threat_categories.len() < 10
+            {
+                threat_categories.push(name.clone());
             }
         }
     }
@@ -358,7 +351,7 @@ async fn search_domain(client: &Client, domain: &str) -> McpResult<ThreatIntelli
 
 /// Search for URL information
 async fn search_url(client: &Client, url: &str) -> McpResult<ThreatIntelligence> {
-    use base64::{engine::general_purpose, Engine as _};
+    use base64::{Engine as _, engine::general_purpose};
     let url_id = general_purpose::STANDARD.encode(url);
     let url_info = client.urls().get(&url_id).await.map_err(convert_vt_error)?;
 

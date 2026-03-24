@@ -49,8 +49,8 @@
 use std::{env, net::SocketAddr};
 #[cfg(feature = "mcp-oauth")]
 use virustotal_rs::{
-    mcp::{oauth::OAuthConfig, transport::ServerConfig},
     ApiTier,
+    mcp::{oauth::OAuthConfig, transport::ServerConfig},
 };
 
 #[tokio::main]

@@ -1,8 +1,8 @@
 use clap::Parser;
 use futures::stream::{self, StreamExt};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::fs;
 use virustotal_rs::{ApiKey, ApiTier, Client};
 

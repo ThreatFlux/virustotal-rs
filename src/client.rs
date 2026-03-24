@@ -2,7 +2,7 @@ use crate::auth::{ApiKey, ApiTier};
 use crate::error::{ApiErrorResponse, Error, Result};
 use crate::rate_limit::RateLimiter;
 use reqwest::{Client as ReqwestClient, Method, RequestBuilder, Response};
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 use std::time::Duration;
 use url::Url;
 

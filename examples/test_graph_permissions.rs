@@ -213,16 +213,16 @@ fn display_full_editor_info(editors: &[GraphOwner]) {
 }
 
 fn display_detailed_user_info(attributes: &GraphOwnerAttributes) {
-    if let Some(first) = &attributes.first_name {
-        if let Some(last) = &attributes.last_name {
-            println!("  - Full Name: {} {}", first, last);
-        }
+    if let Some(first) = &attributes.first_name
+        && let Some(last) = &attributes.last_name
+    {
+        println!("  - Full Name: {} {}", first, last);
     }
 
-    if let Some(phrase) = &attributes.profile_phrase {
-        if !phrase.is_empty() {
-            println!("  - Profile: {}", phrase);
-        }
+    if let Some(phrase) = &attributes.profile_phrase
+        && !phrase.is_empty()
+    {
+        println!("  - Profile: {}", phrase);
     }
 
     if let Some(reputation) = &attributes.reputation {
@@ -461,10 +461,10 @@ async fn get_graph_owner_info(graph_client: &GraphClient<'_>, graph_id: &str) {
 fn display_owner_information(owner: &GraphOwner) {
     println!("  Owner ID: {}", owner.object.id);
 
-    if let Some(first) = &owner.object.attributes.first_name {
-        if let Some(last) = &owner.object.attributes.last_name {
-            println!("  Name: {} {}", first, last);
-        }
+    if let Some(first) = &owner.object.attributes.first_name
+        && let Some(last) = &owner.object.attributes.last_name
+    {
+        println!("  Name: {} {}", first, last);
     }
 
     if let Some(status) = &owner.object.attributes.status {

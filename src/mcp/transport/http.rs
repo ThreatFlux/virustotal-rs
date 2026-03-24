@@ -1,6 +1,6 @@
-use crate::mcp::server::VtMcpServer;
-use crate::mcp::McpResult;
 use crate::Client;
+use crate::mcp::McpResult;
+use crate::mcp::server::VtMcpServer;
 use serde_json::Value as JsonValue;
 use std::net::SocketAddr;
 
@@ -13,8 +13,8 @@ use tower_http::cors::CorsLayer;
 
 #[cfg(feature = "axum")]
 use axum::{
-    routing::{get, post},
     Router,
+    routing::{get, post},
 };
 
 use super::common::handle_request;

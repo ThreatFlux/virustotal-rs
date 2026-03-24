@@ -37,7 +37,7 @@
 #[cfg(feature = "mcp-jwt")]
 use anyhow::Result;
 #[cfg(feature = "mcp-jwt")]
-use virustotal_rs::mcp::{transport::ServerConfig, JwtConfig};
+use virustotal_rs::mcp::{JwtConfig, transport::ServerConfig};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -118,11 +118,11 @@ fn create_jwt_config() -> JwtConfig {
 /// Configure JWT token expiry
 #[cfg(feature = "mcp-jwt")]
 fn configure_jwt_expiry(jwt_config: JwtConfig) -> JwtConfig {
-    if let Ok(expiry_str) = std::env::var("JWT_EXPIRY_SECONDS") {
-        if let Ok(expiry) = expiry_str.parse::<u64>() {
-            println!("JWT tokens will expire in {} seconds", expiry);
-            return jwt_config.with_expiration(expiry);
-        }
+    if let Ok(expiry_str) = std::env::var("JWT_EXPIRY_SECONDS")
+        && let Ok(expiry) = expiry_str.parse::<u64>()
+    {
+        println!("JWT tokens will expire in {} seconds", expiry);
+        return jwt_config.with_expiration(expiry);
     }
     println!("JWT tokens will expire in 24 hours (default)");
     jwt_config

@@ -3,11 +3,11 @@ use super::http::run_http_server_with_config;
 #[cfg(feature = "mcp-oauth")]
 use super::http::run_http_server_with_oauth;
 use super::{http::run_http_server, stdio::run_stdio_server};
+use crate::mcp::McpResult;
 #[cfg(feature = "mcp-jwt")]
 use crate::mcp::auth::{JwtConfig, JwtManager};
 #[cfg(feature = "mcp-oauth")]
 use crate::mcp::oauth::OAuthConfig;
-use crate::mcp::McpResult;
 use std::net::SocketAddr;
 
 /// Configuration for the MCP server
@@ -237,7 +237,7 @@ impl ServerConfig {
 
     /// Initialize tracing/logging
     fn init_logging(&self) {
-        use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+        use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
         let level = if self.debug {
             tracing::Level::DEBUG
@@ -351,10 +351,10 @@ fn apply_jwt_from_env(mut config: ServerConfig) -> ServerConfig {
             .map(JwtConfig::new)
             .unwrap_or_else(|_| JwtConfig::default());
 
-        if let Ok(exp_str) = std::env::var("JWT_EXPIRY_SECONDS") {
-            if let Ok(exp) = exp_str.parse::<u64>() {
-                jwt_config = jwt_config.with_expiration(exp);
-            }
+        if let Ok(exp_str) = std::env::var("JWT_EXPIRY_SECONDS")
+            && let Ok(exp) = exp_str.parse::<u64>()
+        {
+            jwt_config = jwt_config.with_expiration(exp);
         }
 
         config = config.with_jwt(jwt_config);

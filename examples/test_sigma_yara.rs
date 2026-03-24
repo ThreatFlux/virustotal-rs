@@ -1,7 +1,7 @@
 use virustotal_rs::{
+    ApiTier,
     sigma_rules::{SigmaRuleAttributes, SigmaRuleResponse},
     yara_rulesets::{YaraRule, YaraRulesetAttributes, YaraRulesetResponse},
-    ApiTier,
 };
 
 mod common;
@@ -69,10 +69,10 @@ fn display_ruleset_info(attributes: &SigmaRuleAttributes) {
 
 /// Display threat hunting flag if applicable
 fn display_threat_hunting_flag(attributes: &SigmaRuleAttributes) {
-    if let Some(is_threat_hunting) = &attributes.threat_hunting_ruleset {
-        if *is_threat_hunting {
-            println!("  🎯 This is a threat hunting ruleset!");
-        }
+    if let Some(is_threat_hunting) = &attributes.threat_hunting_ruleset
+        && *is_threat_hunting
+    {
+        println!("  🎯 This is a threat hunting ruleset!");
     }
 }
 
@@ -85,10 +85,10 @@ fn print_optional_field(label: &str, value: &Option<String>) {
 
 /// Display Sigma rule statistics
 fn display_sigma_rule_statistics(attributes: &SigmaRuleAttributes) {
-    if let Some(stats) = &attributes.stats {
-        if let Some(matches) = stats.rule_matches {
-            println!("  Matches: {}", matches);
-        }
+    if let Some(stats) = &attributes.stats
+        && let Some(matches) = stats.rule_matches
+    {
+        println!("  Matches: {}", matches);
     }
 }
 

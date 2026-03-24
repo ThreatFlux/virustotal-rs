@@ -228,10 +228,10 @@ async fn test_get_dropped_files(
 
 /// Display relationship count from metadata
 fn display_relationship_count(meta: &Option<CollectionMeta>, relationship_type: &str) {
-    if let Some(meta) = meta {
-        if let Some(count) = meta.count {
-            println!("   - Number of {}: {}", relationship_type, count);
-        }
+    if let Some(meta) = meta
+        && let Some(count) = meta.count
+    {
+        println!("   - Number of {}: {}", relationship_type, count);
     }
 }
 

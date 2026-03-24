@@ -1,6 +1,6 @@
-use super::{types::*, LivehuntClient};
-use crate::objects::{Collection, CollectionIterator};
+use super::{LivehuntClient, types::*};
 use crate::Result;
+use crate::objects::{Collection, CollectionIterator};
 
 /// Helper function to build query URL with common parameters
 fn build_query_url(base: &str, params: &[(Option<&str>, &str)]) -> String {

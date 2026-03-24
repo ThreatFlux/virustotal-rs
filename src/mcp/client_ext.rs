@@ -1,8 +1,8 @@
 //! Client extensions for MCP functionality
 
+use crate::Client;
 use crate::mcp::server::VtMcpServer;
 use crate::mcp::transport::ServerConfig;
-use crate::Client;
 
 #[cfg(feature = "mcp")]
 impl Client {

@@ -1,8 +1,8 @@
 // Async file tests focused on file-related API operations
 use crate::test_utils::test_utilities::*;
 use serde_json::json;
-use wiremock::matchers::{header, method, path};
 use wiremock::Mock;
+use wiremock::matchers::{header, method, path};
 
 /// Test file client basic operations
 #[cfg(test)]

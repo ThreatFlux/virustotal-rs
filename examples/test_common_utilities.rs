@@ -4,7 +4,7 @@
 //! and serves as both a test and documentation for the shared functionality.
 
 use std::env;
-use virustotal_rs::{common::AnalysisStats, ApiTier};
+use virustotal_rs::{ApiTier, common::AnalysisStats};
 
 #[path = "common/mod.rs"]
 mod common;
@@ -19,20 +19,24 @@ async fn test_api_key_utilities() -> ExampleResult<()> {
     let original_vti_key = env::var("VTI_API_KEY").ok();
 
     // Test get_api_key with fallback
-    env::set_var("VT_API_KEY", "test_api_key_12345");
+    // SAFETY: This example runs single-threaded, so modifying env vars is safe.
+    unsafe { env::set_var("VT_API_KEY", "test_api_key_12345") };
     let api_key = get_api_key("VT_API_KEY");
     assert_eq!(api_key, "test_api_key_12345");
     print_success("get_api_key works with primary variable");
 
     // Test fallback behavior
-    env::remove_var("VT_API_KEY");
-    env::set_var("VTI_API_KEY", "fallback_key_67890");
+    // SAFETY: This example runs single-threaded, so modifying env vars is safe.
+    unsafe { env::remove_var("VT_API_KEY") };
+    // SAFETY: This example runs single-threaded, so modifying env vars is safe.
+    unsafe { env::set_var("VTI_API_KEY", "fallback_key_67890") };
     let api_key = get_api_key("VT_API_KEY");
     assert_eq!(api_key, "fallback_key_67890");
     print_success("get_api_key works with fallback variable");
 
     // Test private API key retrieval
-    env::set_var("VT_PRIVATE_API_KEY", "private_key_xyz");
+    // SAFETY: This example runs single-threaded, so modifying env vars is safe.
+    unsafe { env::set_var("VT_PRIVATE_API_KEY", "private_key_xyz") };
     let private_key = get_private_api_key("VT_PRIVATE_API_KEY");
     assert_eq!(private_key, "private_key_xyz");
     print_success("get_private_api_key works with private key");
@@ -46,7 +50,8 @@ async fn test_api_key_utilities() -> ExampleResult<()> {
 async fn test_client_creation_utilities() -> ExampleResult<()> {
     print_test_header("Client Creation Utilities");
 
-    env::set_var("VT_API_KEY", "demo_key_for_client");
+    // SAFETY: This example runs single-threaded, so modifying env vars is safe.
+    unsafe { env::set_var("VT_API_KEY", "demo_key_for_client") };
     let client_result = create_client_from_env("VT_API_KEY", ApiTier::Public);
     match client_result {
         Ok(_) => print_success("create_client_from_env works"),
@@ -203,19 +208,17 @@ async fn test_constants() -> ExampleResult<()> {
 
 /// Restores the original environment state after testing
 fn restore_environment_state(original_vt_key: Option<String>, original_vti_key: Option<String>) {
+    // SAFETY: This example runs single-threaded, so modifying env vars is safe.
     match original_vt_key {
-        Some(key) => env::set_var("VT_API_KEY", key),
-        None => {
-            env::remove_var("VT_API_KEY");
-        }
+        Some(key) => unsafe { env::set_var("VT_API_KEY", key) },
+        None => unsafe { env::remove_var("VT_API_KEY") },
     }
     match original_vti_key {
-        Some(key) => env::set_var("VTI_API_KEY", key),
-        None => {
-            env::remove_var("VTI_API_KEY");
-        }
+        Some(key) => unsafe { env::set_var("VTI_API_KEY", key) },
+        None => unsafe { env::remove_var("VTI_API_KEY") },
     }
-    env::remove_var("VT_PRIVATE_API_KEY");
+    // SAFETY: This example runs single-threaded, so modifying env vars is safe.
+    unsafe { env::remove_var("VT_PRIVATE_API_KEY") };
 }
 
 /// Runs core utility tests (API key, client creation, string utilities)

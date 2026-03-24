@@ -1,7 +1,8 @@
 use virustotal_rs::{
+    DisplayStats, DisplayVotes,
     common::{AnalysisStats, VoteStats},
     format_file_size, format_reputation, format_timestamp, pretty_print_json, truncate_hash,
-    truncate_text, DisplayStats, DisplayVotes,
+    truncate_text,
 };
 
 fn main() {

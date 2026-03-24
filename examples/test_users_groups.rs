@@ -6,7 +6,7 @@
 
 mod common;
 
-use common::{create_client_from_env, print_header, print_test_header, ExampleResult};
+use common::{ExampleResult, create_client_from_env, print_header, print_test_header};
 use virustotal_rs::{
     ApiTier, GroupUpdateAttributes, GroupsClient, UserUpdate, UserUpdateAttributes,
     UserUpdateRequest, UsersClient,

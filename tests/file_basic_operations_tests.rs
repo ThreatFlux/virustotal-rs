@@ -86,10 +86,12 @@ mod file_retrieval_tests {
             .unwrap();
 
         assert_eq!(analysis.data.object_type, "analysis");
-        assert!(analysis
-            .data
-            .id
-            .contains("275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f"));
+        assert!(
+            analysis
+                .data
+                .id
+                .contains("275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f")
+        );
     }
 }
 

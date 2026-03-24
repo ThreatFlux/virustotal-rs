@@ -46,10 +46,10 @@ fn display_techniques_header(tactic_id: &str) {
 
 /// Display techniques metadata information
 fn display_techniques_metadata(techniques: &virustotal_rs::Collection<serde_json::Value>) {
-    if let Some(meta) = &techniques.meta {
-        if let Some(count) = meta.count {
-            println!("   - Number of techniques: {}", count);
-        }
+    if let Some(meta) = &techniques.meta
+        && let Some(count) = meta.count
+    {
+        println!("   - Number of techniques: {}", count);
     }
 }
 
@@ -125,10 +125,10 @@ async fn test_subtechniques(
     match techniques_client.get_subtechniques(technique_id).await {
         Ok(subtechniques) => {
             print_success("Retrieved sub-techniques");
-            if let Some(meta) = &subtechniques.meta {
-                if let Some(count) = meta.count {
-                    println!("   - Number of sub-techniques: {}", count);
-                }
+            if let Some(meta) = &subtechniques.meta
+                && let Some(count) = meta.count
+            {
+                println!("   - Number of sub-techniques: {}", count);
             }
         }
         Err(e) => print_error(&format!("Error: {}", e)),
@@ -177,10 +177,10 @@ async fn test_technique_files(
     match techniques_client.get_files(technique_id).await {
         Ok(files) => {
             print_success("Retrieved associated files");
-            if let Some(meta) = &files.meta {
-                if let Some(count) = meta.count {
-                    println!("   - Number of files: {}", count);
-                }
+            if let Some(meta) = &files.meta
+                && let Some(count) = meta.count
+            {
+                println!("   - Number of files: {}", count);
             }
         }
         Err(e) => print_error(&format!("Error: {}", e)),
@@ -196,10 +196,10 @@ async fn test_technique_threat_actors(
     match techniques_client.get_threat_actors(technique_id).await {
         Ok(actors) => {
             print_success("Retrieved threat actors");
-            if let Some(meta) = &actors.meta {
-                if let Some(count) = meta.count {
-                    println!("   - Number of threat actors: {}", count);
-                }
+            if let Some(meta) = &actors.meta
+                && let Some(count) = meta.count
+            {
+                println!("   - Number of threat actors: {}", count);
             }
         }
         Err(e) => print_error(&format!("Error: {}", e)),

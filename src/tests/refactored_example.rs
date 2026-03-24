@@ -6,8 +6,8 @@ mod refactored_tests {
     use crate::{assert_analysis_clean, assert_analysis_malicious};
     use serde_json::json;
     use wiremock::{
-        matchers::{header, method, path},
         Mock,
+        matchers::{header, method, path},
     };
 
     // BEFORE: Lots of repetitive boilerplate
@@ -182,10 +182,12 @@ mod refactored_tests {
         let response_data = result.unwrap();
         assert_eq!(response_data["data"].as_array().unwrap().len(), 2);
         assert_eq!(response_data["meta"]["count"], 2);
-        assert!(response_data["links"]["next"]
-            .as_str()
-            .unwrap()
-            .contains("next123"));
+        assert!(
+            response_data["links"]["next"]
+                .as_str()
+                .unwrap()
+                .contains("next123")
+        );
     }
 
     // Simplified helper function for manual collection response
@@ -250,10 +252,12 @@ mod refactored_tests {
         let response_data = result.unwrap();
         assert_eq!(response_data["data"].as_array().unwrap().len(), 2);
         assert_eq!(response_data["meta"]["count"], 2);
-        assert!(response_data["links"]["next"]
-            .as_str()
-            .unwrap()
-            .contains("next123"));
+        assert!(
+            response_data["links"]["next"]
+                .as_str()
+                .unwrap()
+                .contains("next123")
+        );
     }
 
     // Consolidated test helper function for different analysis scenarios

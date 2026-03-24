@@ -1,11 +1,11 @@
 // Integration tests focused on HTTP client operations
 use crate::error::Error;
 use crate::tests::mock_data::{
-    mock_delete, mock_get, mock_post, mock_put, sample_analysis_data, sample_file_data,
-    sample_vote_data, with_api_key, MockResponseBuilder,
+    MockResponseBuilder, mock_delete, mock_get, mock_post, mock_put, sample_analysis_data,
+    sample_file_data, sample_vote_data, with_api_key,
 };
 use crate::tests::test_utils::TestUtils;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use wiremock::matchers::body_json;
 
 /// Core client HTTP method tests

@@ -1,7 +1,7 @@
 use crate::client::Client;
 use crate::error::Result;
 use crate::objects::{Collection, CollectionIterator, Object};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::collections::HashMap;
 
 /// Client for `VirusTotal` Private URL Scanning API
@@ -453,7 +453,7 @@ mod tests {
 
     #[test]
     fn test_base64_url_encoding() {
-        use base64::{engine::general_purpose, Engine as _};
+        use base64::{Engine as _, engine::general_purpose};
 
         let url = "http://www.example.com/path";
         let url_id = general_purpose::URL_SAFE_NO_PAD.encode(url.as_bytes());
@@ -513,7 +513,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_url_report() {
         use crate::{ApiTier, ClientBuilder};
-        use base64::{engine::general_purpose, Engine as _};
+        use base64::{Engine as _, engine::general_purpose};
 
         let client = ClientBuilder::new()
             .api_key("test_key")
@@ -536,7 +536,7 @@ mod tests {
     #[tokio::test]
     async fn test_url_relationships() {
         use crate::{ApiTier, ClientBuilder};
-        use base64::{engine::general_purpose, Engine as _};
+        use base64::{Engine as _, engine::general_purpose};
 
         let client = ClientBuilder::new()
             .api_key("test_key")
@@ -607,7 +607,7 @@ mod tests {
 
     #[test]
     fn test_url_id_generation_various_urls() {
-        use base64::{engine::general_purpose, Engine as _};
+        use base64::{Engine as _, engine::general_purpose};
 
         let test_urls = vec![
             "https://www.google.com",
