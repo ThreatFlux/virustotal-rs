@@ -37,6 +37,7 @@ jobs:
     name: Prepare Release
     runs-on: ubuntu-latest
     outputs:
+      publish_crate: ${{ steps.publish_gate.outputs.publish_crate }}
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.release_ref.outputs.tag }}
       source_ref: ${{ steps.release_ref.outputs.source_ref }}
@@ -94,6 +95,18 @@ jobs:
             echo "prerelease=true" >> "$GITHUB_OUTPUT"
           else
             echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Detect crates.io token availability
+        id: publish_gate
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+        run: |
+          if [[ -n "${CARGO_REGISTRY_TOKEN}" || -n "${CRATES_IO_TOKEN}" ]]; then
+            echo "publish_crate=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish_crate=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Ensure release tag
@@ -204,7 +217,7 @@ jobs:
   publish-crate:
     name: Publish to crates.io
     needs: [prepare, build]
-    if: secrets.CARGO_REGISTRY_TOKEN != '' || secrets.CRATES_IO_TOKEN != ''
+    if: needs.prepare.outputs.publish_crate == 'true'
     runs-on: ubuntu-latest
     env:
       CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN || secrets.CRATES_IO_TOKEN }}
