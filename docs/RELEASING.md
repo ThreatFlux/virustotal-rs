@@ -4,13 +4,14 @@
 
 Routine releases are driven by [Conventional Commits](https://www.conventionalcommits.org/).
 
-When both `CI` and `Security` succeed on `main`, `auto-release.yml`:
+On its weekly schedule, or when triggered manually, `auto-release.yml`:
 
 1. Looks at commits since the last tag
 2. Chooses a patch, minor, or major bump
-3. Updates `Cargo.toml` and `Cargo.lock`
-4. Commits the version bump
-5. Creates and pushes a new `v*` tag
+3. Verifies the latest `CI` and `Security` runs for the target `main` commit succeeded
+4. Updates `Cargo.toml` and `Cargo.lock`
+5. Commits the version bump
+6. Creates and pushes a new `v*` tag
 
 That tag triggers `release.yml`, which:
 

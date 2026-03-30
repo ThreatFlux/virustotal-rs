@@ -154,7 +154,7 @@ Examples that exercise premium endpoints may require a premium VirusTotal accoun
 The repository follows [Conventional Commits](https://www.conventionalcommits.org/).
 
 - `CI` and `Security` run on pushes and pull requests
-- `auto-release.yml` bumps the version on `main` when there are releasable `feat`, `fix`, or breaking commits
+- `auto-release.yml` performs a scheduled release sweep on `main` and can also be triggered manually when you want to cut a release
 - `release.yml` builds `vt-cli` and `mcp_server`, creates the GitHub Release, and publishes the crate when a registry token is configured
 
 Maintainer runbook: [docs/RELEASING.md](docs/RELEASING.md)
