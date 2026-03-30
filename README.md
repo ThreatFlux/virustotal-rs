@@ -1,463 +1,187 @@
-# VirusTotal Rust SDK 🦀
+<div align="center">
 
+# virustotal-rs
+
+[![CI](https://github.com/ThreatFlux/virustotal-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/ThreatFlux/virustotal-rs/actions/workflows/ci.yml)
+[![Security](https://github.com/ThreatFlux/virustotal-rs/actions/workflows/security.yml/badge.svg)](https://github.com/ThreatFlux/virustotal-rs/actions/workflows/security.yml)
 [![Crates.io](https://img.shields.io/crates/v/virustotal-rs.svg)](https://crates.io/crates/virustotal-rs)
 [![Documentation](https://docs.rs/virustotal-rs/badge.svg)](https://docs.rs/virustotal-rs)
-[![Build Status](https://github.com/threatflux/virustotal-rs/workflows/CI/badge.svg)](https://github.com/threatflux/virustotal-rs/actions)
-[![Security Audit](https://github.com/threatflux/virustotal-rs/workflows/Security/badge.svg)](https://github.com/threatflux/virustotal-rs/actions)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Rust](https://img.shields.io/badge/rust-1.94%2B-orange.svg)](https://www.rust-lang.org)
 
-A comprehensive, async Rust SDK for the VirusTotal API v3 with advanced features including **Model Context Protocol (MCP) server** for AI/LLM integrations.
+**Async Rust SDK for the VirusTotal API v3, with optional CLI and MCP server support.**
 
-## ✨ Features
+[Quick Start](#quick-start) · [Feature Flags](#feature-flags) · [Development](#development) · [Docs](docs/) · [Contributing](CONTRIBUTING.md)
 
-### 🔧 Core SDK Features
-- **Full VirusTotal API v3 Coverage**: All endpoints including files, URLs, domains, IPs, analyses, and more
-- **Public & Premium API Support**: Built-in tier handling with appropriate rate limiting
-- **Robust Rate Limiting**: 
-  - Public API: 4 req/min, 500/day
-  - Premium API: Configurable based on your plan
-- **Comprehensive Error Handling**: Strongly-typed errors matching VirusTotal API responses
-- **Async/Await**: Built on Tokio for high-performance async operations
-- **Type Safety**: Strong Rust types throughout the API surface
-- **Retry Logic**: Automatic retry for transient failures
-- **Request/Response Validation**: Built-in validation and sanitization
+</div>
 
-### 🤖 MCP (Model Context Protocol) Integration
-- **AI/LLM Ready**: Native MCP server for Language Model integrations
-- **Multiple Transport Protocols**: HTTP and stdio support
-- **Authentication Options**:
-  - JWT authentication (`mcp-jwt` feature)
-  - OAuth 2.1 support (`mcp-oauth` feature)
-- **Real-time Threat Intelligence**: Provides structured threat data to AI models
-- **Docker Container**: Ready-to-deploy containerized MCP server
+## Table of Contents
 
-### 🚀 DevOps & Automation
-- **Automated Releases**: Auto-increment versioning based on conventional commits
-- **Multi-Platform Builds**: Linux, Windows, macOS support
-- **Continuous Integration**: Comprehensive CI/CD with testing, security audits, and documentation
-- **Container Registry**: Automatic Docker image publishing to GHCR
+- [Features](#features)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Feature Flags](#feature-flags)
+- [CLI and MCP Binaries](#cli-and-mcp-binaries)
+- [Development](#development)
+- [Release Automation](#release-automation)
+- [Documentation](#documentation)
+- [Contributing](#contributing)
+- [Security](#security)
+- [License](#license)
 
-## 📦 Installation
+## Features
 
-### As a Rust Dependency
+- Async VirusTotal API v3 client built on `reqwest` and `tokio`
+- Coverage for files, URLs, domains, IP addresses, comments, votes, search, collections, graphs, Livehunt, Retrohunt, private files, and private URLs
+- Optional Model Context Protocol server with plain MCP, JWT, and OAuth feature sets
+- Optional CLI binary for download-oriented workflows
+- Typed errors, rate limiting, validation helpers, iterators, and display utilities
+- Cross-platform CI, security scanning, CodeQL, docs deployment, and automated release tagging
 
-Add to your `Cargo.toml`:
+## Installation
 
 ```toml
 [dependencies]
-virustotal-rs = "0.1.0"
-
-# For MCP server functionality
-virustotal-rs = { version = "0.1.0", features = ["mcp"] }
-
-# For MCP with JWT authentication
-virustotal-rs = { version = "0.1.0", features = ["mcp-jwt"] }
-
-# For MCP with OAuth 2.1 authentication
-virustotal-rs = { version = "0.1.0", features = ["mcp-oauth"] }
+virustotal-rs = "0.4.4"
 ```
 
-### Docker Container (MCP Server)
+Optional feature flags:
 
-```bash
-# Pull the latest MCP server image (Docker Hub)
-docker pull threatflux/virustotal-rs-mcp:latest
-
-# Or from GitHub Container Registry
-docker pull ghcr.io/threatflux/virustotal-rs-mcp:latest
-
-# Run with your VirusTotal API key
-docker run -e VIRUSTOTAL_API_KEY=your_api_key -p 8080:8080 \
-  threatflux/virustotal-rs-mcp:latest
+```toml
+[dependencies]
+virustotal-rs = { version = "0.4.4", features = ["mcp"] }
+virustotal-rs = { version = "0.4.4", features = ["mcp-jwt"] }
+virustotal-rs = { version = "0.4.4", features = ["mcp-oauth"] }
+virustotal-rs = { version = "0.4.4", features = ["cli"] }
 ```
 
-### Pre-built Binaries
-
-Download from [GitHub Releases](https://github.com/threatflux/virustotal-rs/releases) for:
-- Linux (x86_64)
-- Windows (x86_64) 
-- macOS (x86_64, ARM64)
-
-## 🚀 Quick Start
-
-### Basic SDK Usage
+## Quick Start
 
 ```rust
-use virustotal_rs::{ClientBuilder, ApiTier};
+use virustotal_rs::{ApiTier, ClientBuilder};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Create a client for Public API
     let client = ClientBuilder::new()
-        .api_key("your-api-key")
+        .api_key(std::env::var("VIRUSTOTAL_API_KEY")?)
         .tier(ApiTier::Public)
         .build()?;
 
-    // Get file information
-    let file_hash = "44d88612fea8a8f36de82e1278abb02f";
-    let file_info = client.files().get_file_info(file_hash).await?;
-    
-    println!("File reputation: {:?}", file_info.data.attributes.reputation);
-    
-    // Get URL analysis
-    let url_id = client.urls().scan_url("https://example.com").await?;
-    let analysis = client.analyses().get_analysis(&url_id.data.id).await?;
-    
-    println!("URL analysis status: {:?}", analysis.data.attributes.status);
+    let file = client.files().get("44d88612fea8a8f36de82e1278abb02f").await?;
+    println!("file type: {:?}", file.object.attributes.type_description);
+
+    let analysis = client.urls().scan("https://example.com").await?;
+    println!("analysis id: {}", analysis.data.id);
 
     Ok(())
 }
 ```
 
-### MCP Server Usage
+The preferred environment variable is `VIRUSTOTAL_API_KEY`, but helper utilities also accept `VT_API_KEY` and `VTI_API_KEY`.
 
-#### HTTP Server Mode
+## Feature Flags
 
-```bash
-# Start MCP HTTP server
-VIRUSTOTAL_API_KEY=your_key cargo run --bin mcp_server --features mcp
+| Feature | Purpose |
+|---------|---------|
+| `cli` | Enables the `vt-cli` binary and related optional dependencies |
+| `mcp` | Enables the MCP server runtime and transport layers |
+| `mcp-jwt` | Adds JWT authentication support on top of `mcp` |
+| `mcp-oauth` | Adds OAuth 2.1 authentication support on top of `mcp` |
 
-# Or using Docker
-docker run -e VIRUSTOTAL_API_KEY=your_key -p 8080:8080 \
-  threatflux/virustotal-rs-mcp:latest
+## CLI and MCP Binaries
 
-# Connect with MCP Inspector
-npx @modelcontextprotocol/inspector http://localhost:8080
-```
+### `vt-cli`
 
-#### Stdio Server Mode (for direct MCP client integration)
-
-```bash
-SERVER_MODE=stdio VIRUSTOTAL_API_KEY=your_key cargo run --bin mcp_server --features mcp
-```
-
-#### Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `VIRUSTOTAL_API_KEY` | **Required** VirusTotal API key | - |
-| `SERVER_MODE` | Server mode: `http` or `stdio` | `http` |
-| `HTTP_ADDR` | HTTP server address | `127.0.0.1:8080` |
-| `VIRUSTOTAL_API_TIER` | API tier: `Public` or `Premium` | `Public` |
-| `LOG_LEVEL` | Log level: `error`, `warn`, `info`, `debug`, `trace` | `info` |
-
-## 📚 API Coverage
-
-### Supported Endpoints
-
-| Category | Endpoints | Status |
-|----------|-----------|--------|
-| **Files** | Upload, scan, get info, comments, votes, relationships | ✅ Complete |
-| **URLs** | Scan, get info, comments, votes | ✅ Complete |
-| **Domains** | Get info, comments, votes, relationships | ✅ Complete |
-| **IP Addresses** | Get info, comments, votes, relationships | ✅ Complete |
-| **Analyses** | Get analysis results, comments | ✅ Complete |
-| **Comments** | CRUD operations, votes | ✅ Complete |
-| **Collections** | IOC collections management | ✅ Complete |
-| **Livehunt** | Real-time hunting rules (Premium) | ✅ Complete |
-| **Retrohunt** | Historical hunting jobs (Premium) | ✅ Complete |
-| **Intelligence** | VT Intelligence searches (Premium) | ✅ Complete |
-| **Graphs** | Relationship graphs (Premium) | ✅ Complete |
-| **Private Scanning** | Private file/URL analysis (Premium) | ✅ Complete |
-
-### Error Handling
-
-All VirusTotal API errors are mapped to strongly-typed Rust errors:
-
-```rust
-use virustotal_rs::Error;
-
-match client.files().get_file_info("invalid-hash").await {
-    Ok(file) => println!("File info: {:?}", file),
-    Err(Error::NotFound) => println!("File not found in VirusTotal"),
-    Err(Error::QuotaExceeded(msg)) => println!("API quota exceeded: {}", msg),
-    Err(Error::RateLimit(msg)) => println!("Rate limited: {}", msg),
-    Err(e) if e.is_retryable() => {
-        println!("Retryable error (will auto-retry): {}", e);
-    },
-    Err(e) => println!("Permanent error: {}", e),
-}
-```
-
-## 🏗️ Development
-
-### Prerequisites
-
-- **Rust** 1.94.0 or later
-- **VirusTotal API Key** (get from [VirusTotal](https://www.virustotal.com/gui/join-us))
-
-### Building from Source
+The CLI is currently focused on download workflows.
 
 ```bash
-# Clone the repository
-git clone https://github.com/threatflux/virustotal-rs.git
-cd virustotal-rs
-
-# Build with all features
-cargo build --all-features
-
-# Run tests (requires VT_API_KEY environment variable)
-export VT_API_KEY=your_api_key
-cargo test --all-features
-
-# Build the MCP server
-cargo build --bin mcp_server --features mcp
+cargo run --locked --features cli --bin vt-cli -- --help
+cargo run --locked --features cli --bin vt-cli -- download --help
 ```
 
-### Development Commands
+### `mcp_server`
 
-The project includes a comprehensive Makefile for development:
+Start the MCP server over HTTP:
 
 ```bash
-# Quick development workflow
-make dev                # format + build + test
-
-# Full validation (used in CI)
-make all               # format + lint + build + test + doc + security
-
-# Individual commands
-make fmt               # Format code
-make clippy            # Run linting
-make test              # Run all tests
-make doc               # Generate documentation
-make security          # Security audits
-make examples          # Run examples (requires VT_API_KEY)
+VIRUSTOTAL_API_KEY=your_key \
+cargo run --locked --features mcp --bin mcp_server
 ```
 
-### Running Examples
+Start it over stdio:
 
 ```bash
-# Set your API key
-export VIRUSTOTAL_API_KEY=your_api_key
-
-# Run basic examples
-cargo run --example test_file --all-features
-cargo run --example test_url --all-features
-
-# Run MCP server examples
-cargo run --example mcp_http_server --features mcp
-cargo run --example mcp_stdio_server --features mcp
-
-# Run with JWT authentication
-cargo run --example mcp_http_server_jwt --features mcp-jwt
+SERVER_MODE=stdio VIRUSTOTAL_API_KEY=your_key \
+cargo run --locked --features mcp --bin mcp_server
 ```
 
-## 🤝 MCP (Model Context Protocol) Integration
-
-### What is MCP?
-
-The Model Context Protocol (MCP) enables AI models to securely access external data sources. This SDK includes a full MCP server implementation that provides threat intelligence tools to Language Models.
-
-### Available MCP Tools
-
-| Tool | Description | Parameters |
-|------|-------------|------------|
-| `vt_file_scan` | Analyze files by hash/upload | `hash` or `file_path` |
-| `vt_url_scan` | Analyze URLs | `url` |
-| `vt_domain_info` | Get domain information | `domain` |
-| `vt_ip_info` | Get IP address information | `ip_address` |
-| `vt_search` | VirusTotal Intelligence search (Premium) | `query` |
-| `vt_livehunt` | Manage hunting rules (Premium) | `rule_content` |
-
-### Authentication Options
-
-#### JWT Authentication (Recommended for Production)
+Optional auth layers:
 
 ```bash
-# Generate JWT configuration
-cargo run --example jwt_token_generator --features mcp-jwt
-
-# Start server with JWT
-JWT_SECRET=your_secret cargo run --bin mcp_server --features mcp-jwt
+cargo run --locked --features mcp-jwt --bin mcp_server
+cargo run --locked --features mcp-oauth --bin mcp_server
 ```
 
-#### OAuth 2.1 Authentication
+## Development
+
+### Baseline
+
+- Rust `1.94.0`
+- `rust-toolchain.toml` pins the maintained local toolchain
+- `Makefile` targets mirror the main CI checks
+
+### Common Commands
 
 ```bash
-# Configure OAuth settings
-export OAUTH_CLIENT_ID=your_client_id
-export OAUTH_CLIENT_SECRET=your_secret
-
-# Start server with OAuth
-cargo run --bin mcp_server --features mcp-oauth
-```
-
-### Docker Deployment
-
-```bash
-# Build custom image
-docker build -t my-vt-mcp-server .
-
-# Run with custom configuration
-docker run -d \
-  --name vt-mcp-server \
-  -e VIRUSTOTAL_API_KEY=your_key \
-  -e VIRUSTOTAL_API_TIER=Premium \
-  -e LOG_LEVEL=info \
-  -p 8080:8080 \
-  --restart unless-stopped \
-  threatflux/virustotal-rs-mcp:latest
-
-# Health check
-curl http://localhost:8080/health
-```
-
-## 🔄 Automated Releases
-
-This project uses an advanced automated release system:
-
-### Release Process
-
-1. **Automatic Triggering**: Every push to `main` after CI passes
-2. **Smart Version Bumping**: 
-   - 🔴 **Major**: Commits with `BREAKING CHANGE` or `!:`
-   - 🟡 **Minor**: Commits with `feat:` or `feature:`
-   - 🟢 **Patch**: All other changes (default)
-3. **Multi-Platform Release**:
-   - 📦 **Crates.io**: Rust package registry
-   - 🐳 **Docker Hub**: Public container registry
-   - 🐳 **GHCR**: GitHub container registry
-   - 📋 **GitHub**: Release with binaries and changelog
-   - 📚 **Docs**: Updated documentation site
-
-### Manual Release
-
-```bash
-# Trigger manual release via GitHub Actions
-gh workflow run auto-release.yml -f version_type=minor
-```
-
-### Version Bumping Examples
-
-```bash
-# Patch release (0.1.0 → 0.1.1)
-git commit -m "fix: resolve rate limiting edge case"
-
-# Minor release (0.1.0 → 0.2.0)  
-git commit -m "feat: add new MCP authentication method"
-
-# Major release (0.1.0 → 1.0.0)
-git commit -m "feat!: redesign API structure
-
-BREAKING CHANGE: Client initialization now requires explicit tier"
-```
-
-## 🔒 Security
-
-### Security Features
-
-- **Input Validation**: All inputs are validated and sanitized
-- **Rate Limiting**: Prevents API abuse and quota exhaustion
-- **Authentication**: Secure API key handling
-- **TLS**: All connections use HTTPS/TLS
-- **Container Security**: Non-root user, minimal attack surface
-
-### Security Auditing
-
-Regular security audits are performed automatically:
-
-```bash
-# Run security audit locally
-make security
-
-# Or individually
-cargo audit              # Known vulnerabilities
-cargo deny check         # License and source verification
-```
-
-### Reporting Security Issues
-
-Please report security vulnerabilities via [GitHub Security Advisories](https://github.com/threatflux/virustotal-rs/security/advisories).
-
-## 📊 Performance
-
-### Benchmarks
-
-| Operation | Public API | Premium API | Notes |
-|-----------|------------|-------------|-------|
-| File Hash Lookup | ~200ms | ~150ms | Cached results faster |
-| URL Scan | ~500ms | ~400ms | Depends on URL complexity |
-| Domain Info | ~300ms | ~250ms | WHOIS data included |
-| Batch Operations | 4/min | No limit* | *Based on your plan |
-
-### Optimization Tips
-
-```rust
-// Use connection pooling for multiple requests
-let client = ClientBuilder::new()
-    .api_key("key")
-    .tier(ApiTier::Premium)
-    .timeout(Duration::from_secs(30))
-    .build()?;
-
-// Batch requests when possible
-let hashes = vec!["hash1", "hash2", "hash3"];
-let futures: Vec<_> = hashes.iter()
-    .map(|hash| client.files().get_file_info(hash))
-    .collect();
-
-let results = futures::future::join_all(futures).await;
-```
-
-## 🤝 Contributing
-
-We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
-
-### Development Setup
-
-1. **Fork and Clone**
-```bash
-git clone https://github.com/your-username/virustotal-rs.git
-cd virustotal-rs
-```
-
-2. **Set up Environment**
-```bash
-# Install Rust toolchain
-rustup install stable
-rustup default stable
-
-# Install development tools
-make install-tools
-
-# Set API key for testing
-export VIRUSTOTAL_API_KEY=your_test_key
-```
-
-3. **Run Tests**
-```bash
+make fmt
+make clippy
 make test
-make examples  # Integration tests
+make ci-local
+make validate
 ```
 
-4. **Submit PR**
-- Write tests for new features
-- Update documentation
-- Follow conventional commit format
-- Ensure CI passes
+### Examples and Integration-Style Runs
 
-## 📋 Changelog
+```bash
+export VIRUSTOTAL_API_KEY=your_api_key
+make examples
+```
 
-See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
+Examples that exercise premium endpoints may require a premium VirusTotal account.
 
-## 📄 License
+## Release Automation
 
-- **MIT License** ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+The repository follows [Conventional Commits](https://www.conventionalcommits.org/).
 
-## 🙏 Acknowledgments
+- `CI` and `Security` run on pushes and pull requests
+- `auto-release.yml` bumps the version on `main` when there are releasable `feat`, `fix`, or breaking commits
+- `release.yml` builds `vt-cli` and `mcp_server`, creates the GitHub Release, and publishes the crate when a registry token is configured
 
-- **VirusTotal** for providing the comprehensive threat intelligence API
-- **Rust Community** for excellent async ecosystem and tooling
-- **MCP Contributors** for the Model Context Protocol specification
-- **Security Researchers** who help make threat intelligence accessible
+Maintainer runbook: [docs/RELEASING.md](docs/RELEASING.md)
 
-## 📞 Support
+## Documentation
 
-- **Documentation**: [docs.rs/virustotal-rs](https://docs.rs/virustotal-rs)
-- **Issues**: [GitHub Issues](https://github.com/threatflux/virustotal-rs/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/threatflux/virustotal-rs/discussions)
-- **Security**: [Security Advisories](https://github.com/threatflux/virustotal-rs/security)
+- API docs: [docs.rs/virustotal-rs](https://docs.rs/virustotal-rs)
+- Maintainer docs: [docs/README.md](docs/README.md)
+- Architecture overview: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- Changelog: [CHANGELOG.md](CHANGELOG.md)
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, validation, and pull request expectations.
+
+## Security
+
+See [SECURITY.md](SECURITY.md) for vulnerability reporting guidance.
+
+## License
+
+Licensed under [MIT OR Apache-2.0](LICENSE).
 
 ---
 
-**Built with ❤️ by the ThreatFlux team**# CI Status Check
+<div align="center">
+
+Built and maintained by [ThreatFlux](https://github.com/ThreatFlux)
+
+</div>

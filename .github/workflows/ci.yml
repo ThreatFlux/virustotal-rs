@@ -1,311 +1,269 @@
 name: CI
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
+  schedule:
+    - cron: "0 0 * * 0"
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
-  CARGO_HOME: ${{ github.workspace }}/.cargo
   CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  RUSTUP_MAX_RETRIES: 10
+  RUST_STABLE_VERSION: 1.94.0
 
 jobs:
-  test:
-    name: Test Suite
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        rust: [stable, beta]
-        include:
-          - os: ubuntu-latest
-            rust: 1.94.0  # MSRV
-    runs-on: ${{ matrix.os }}
-    
-    steps:
-    - name: Free disk space
-      if: runner.os == 'Linux'
-      run: |
-        echo "Disk space before cleanup:"
-        df -h
-        sudo rm -rf /usr/share/dotnet
-        sudo rm -rf /opt/ghc
-        sudo rm -rf "/usr/local/share/boost"
-        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-        sudo rm -rf /usr/local/lib/android
-        sudo rm -rf /usr/local/share/chromium
-        sudo rm -rf /usr/share/swift
-        sudo apt-get clean
-        echo "Disk space after cleanup:"
-        df -h
-        
-    - name: Checkout code
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-    - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
-      with:
-        toolchain: ${{ matrix.rust }}
-        components: rustfmt, clippy
-
-    - name: Cache cargo registry
-      uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
-      with:
-        path: |
-          ~/.cargo/bin/
-          ~/.cargo/registry/index/
-          ~/.cargo/registry/cache/
-          ~/.cargo/git/db/
-          target/debug/deps
-          target/debug/build
-        key: ${{ runner.os }}-cargo-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-${{ matrix.rust }}-
-          ${{ runner.os }}-cargo-
-
-    - name: Install system dependencies (Linux)
-      if: runner.os == 'Linux'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y pkg-config libssl-dev
-
-    - name: Install system dependencies (macOS)
-      if: runner.os == 'macOS'
-      run: |
-        brew install openssl pkg-config
-
-    - name: Check formatting
-      if: matrix.rust == 'stable' && matrix.os == 'ubuntu-latest'
-      run: cargo fmt --all -- --check
-
-    - name: Run clippy
-      if: matrix.rust == 'stable'
-      run: cargo clippy --all-features --all-targets -- -D warnings
-
-    - name: Build
-      run: |
-        if [[ "${{ matrix.rust }}" == "beta" ]]; then
-          echo "Using single-threaded build for beta toolchain to avoid memory issues"
-          cargo build --all-features --verbose -j 1
-        else
-          cargo build --all-features --verbose
-        fi
-      shell: bash
-
-    - name: Run tests
-      run: |
-        if [[ "${{ matrix.rust }}" == "beta" ]]; then
-          echo "Using single-threaded test build for beta toolchain to avoid memory issues"
-          cargo test --all-features --verbose -j 1
-        else
-          cargo test --all-features --verbose
-        fi
-      shell: bash
-
-    - name: Test without features
-      run: cargo test --no-default-features --verbose
-
-    - name: Debug environment
-      if: matrix.rust == 'stable' && matrix.os == 'ubuntu-latest'
-      run: |
-        echo "Environment Debug Information:"
-        echo "Rust version: $(rustc --version)"
-        echo "Cargo version: $(cargo --version)"
-        echo "Available disk space:"
-        df -h
-        echo "Memory info:"
-        free -h || true
-        echo "CPU info:"
-        nproc
-    
-    - name: Test with MCP features
-      run: |
-        echo "Testing MCP features individually..."
-        cargo test --features mcp --verbose
-        echo "Testing MCP JWT features..."
-        cargo test --features mcp-jwt --verbose
-        echo "Testing MCP OAuth features..."
-        cargo test --features mcp-oauth --verbose
-
-    - name: Build examples
-      run: |
-        if [[ "${{ matrix.rust }}" == "beta" ]]; then
-          echo "Using single-threaded build for beta toolchain to avoid memory issues"
-          cargo build --examples --all-features -j 1
-        else
-          cargo build --examples --all-features
-        fi
-      shell: bash
-        
-    - name: Test documentation
-      if: matrix.rust == 'stable' && matrix.os == 'ubuntu-latest'
-      run: cargo test --doc --all-features
-      
-    - name: Clean up build artifacts
-      if: always() && runner.os == 'Linux'
-      run: |
-        echo "Cleaning up build artifacts to save disk space..."
-        # Remove large intermediate files
-        find target -name "*.rlib" -type f -delete || true
-        find target -name "*.rmeta" -type f -delete || true
-        find target/debug -name "*.d" -type f -delete || true
-        # Clean doc builds
-        rm -rf target/doc || true
-        # Clean test executables (keep deps for cache)
-        find target/debug -maxdepth 1 -type f -executable -delete || true
-        echo "Disk space after cleanup:"
-        df -h
-
-  coverage:
-    name: Code Coverage
+  quick-check:
+    name: Quick Check
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    
     steps:
-    - name: Checkout code
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-    - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
-      with:
-        toolchain: stable
-        components: llvm-tools-preview
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: ${{ env.RUST_STABLE_VERSION }}
+          components: rustfmt, clippy
 
-    - name: Install cargo-llvm-cov
-      uses: taiki-e/install-action@7bc99eee1f1b8902a125006cf790a1f4c8461e63 # v2.69.8
-      with:
-        tool: cargo-llvm-cov
+      - name: Cache cargo registry
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-registry-
 
-    - name: Cache cargo registry
-      uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargo-coverage-${{ hashFiles('**/Cargo.lock') }}
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev pkg-config
 
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y pkg-config libssl-dev
+      - name: Check formatting
+        run: cargo fmt --all -- --check
 
-    - name: Generate coverage
-      run: cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
+      - name: Run clippy
+        run: cargo clippy --locked --all-features --all-targets -- -D warnings
 
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@1af58845a975a7985b0beb0cbe6fbbb71a41dbad # v5.5.3
-      with:
-        files: lcov.info
-        fail_ci_if_error: true
-        token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Build examples
+        run: cargo build --locked --all-features --examples --verbose
+
+  test:
+    name: Test (${{ matrix.os }} / ${{ matrix.rust }})
+    needs: quick-check
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: linux
+            runner: ubuntu-latest
+            rust: stable
+          - os: linux
+            runner: ubuntu-latest
+            rust: beta
+          - os: macos
+            runner: macos-latest
+            rust: stable
+          - os: windows
+            runner: windows-latest
+            rust: stable
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: ${{ matrix.rust }}
+
+      - name: Install dependencies (Ubuntu)
+        if: matrix.os == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev pkg-config
+
+      - name: Install dependencies (macOS)
+        if: matrix.os == 'macos'
+        run: |
+          brew install openssl@3 pkg-config
+          echo "OPENSSL_DIR=$(brew --prefix openssl@3)" >> "$GITHUB_ENV"
+
+      - name: Cache cargo
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-${{ matrix.rust }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.rust }}-cargo-
+
+      - name: Build
+        run: cargo build --locked --all-features --verbose
+
+      - name: Run tests
+        run: cargo test --locked --all-features --verbose
+
+  msrv:
+    name: MSRV Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: ${{ env.RUST_STABLE_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev pkg-config
+
+      - name: Cache cargo registry
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+          key: ${{ runner.os }}-msrv-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Check MSRV
+        run: cargo check --locked --all-features
+
+  features:
+    name: Feature Checks
+    needs: quick-check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: ${{ env.RUST_STABLE_VERSION }}
+
+      - name: Install cargo-hack
+        uses: taiki-e/install-action@e9e8e031bcd90cdbe8ac6bb1d376f8596e587fbf # v2.70.2
+        with:
+          tool: cargo-hack@0.6.44
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev pkg-config
+
+      - name: Cache cargo
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-features-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Check no default features
+        run: cargo check --locked --no-default-features
+
+      - name: Check all features
+        run: cargo check --locked --all-features
+
+      - name: Check feature combinations
+        run: cargo hack check --locked --feature-powerset --depth 2 --all-targets
 
   docs:
     name: Documentation
+    needs: quick-check
     runs-on: ubuntu-latest
-    
     steps:
-    - name: Checkout code
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-    - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
-      with:
-        toolchain: stable
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: ${{ env.RUST_STABLE_VERSION }}
 
-    - name: Cache cargo registry
-      uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargo-docs-${{ hashFiles('**/Cargo.lock') }}
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev pkg-config
 
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y pkg-config libssl-dev
+      - name: Build documentation
+        run: cargo doc --locked --all-features --no-deps --document-private-items
+        env:
+          RUSTDOCFLAGS: -D warnings
 
-    - name: Check documentation
-      run: |
-        # Create docs header for CI
-        cat > docs-header.html << 'EOF'
-        <style>
-          .sidebar { width: 250px; }
-          .content { margin-left: 250px; }
-        </style>
-        EOF
-        RUSTDOCFLAGS="-D warnings --html-in-header docs-header.html" cargo doc --all-features --no-deps --document-private-items
+      - name: Run doc tests
+        run: cargo test --locked --doc --all-features
 
-    - name: Test doc examples
-      run: cargo test --doc --all-features
-
-  feature-combinations:
-    name: Feature Combinations
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-    - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
-      with:
-        toolchain: stable
-
-    - name: Install cargo-hack
-      uses: taiki-e/install-action@7bc99eee1f1b8902a125006cf790a1f4c8461e63 # v2.69.8
-      with:
-        tool: cargo-hack
-
-    - name: Cache cargo registry
-      uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargo-hack-${{ hashFiles('**/Cargo.lock') }}
-
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y pkg-config libssl-dev
-
-    - name: Check feature combinations
-      run: cargo hack check --feature-powerset --depth 2 --all-targets
-
-  benchmark:
-    name: Benchmarks
-    runs-on: ubuntu-latest
+  coverage:
+    name: Code Coverage
+    needs: quick-check
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
-    - name: Checkout code
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-    - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
-      with:
-        toolchain: stable
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: ${{ env.RUST_STABLE_VERSION }}
+          components: llvm-tools-preview
 
-    - name: Cache cargo registry
-      uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargo-bench-${{ hashFiles('**/Cargo.lock') }}
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@e9e8e031bcd90cdbe8ac6bb1d376f8596e587fbf # v2.70.2
+        with:
+          tool: cargo-llvm-cov@0.8.5
 
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y pkg-config libssl-dev
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev pkg-config
 
-    - name: Run benchmarks
-      run: cargo bench --all-features || echo "No benchmarks found"
+      - name: Cache cargo
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-coverage-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Generate coverage
+        run: cargo llvm-cov --locked --all-features --workspace --lcov --output-path lcov.info
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@3f20e214133d0983f9a10f3d63b0faf9241a3daa # v6.0.0
+        with:
+          files: lcov.info
+          fail_ci_if_error: false
+          use_oidc: true

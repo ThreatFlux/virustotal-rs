@@ -46,24 +46,22 @@ mod file_metadata_tests {
         let client = create_test_client(&mock_server).await;
         let file_client = client.files();
 
-        // These would normally be tested with actual API calls, but we're just
-        // verifying the methods exist and can be called
+        // These would normally be tested with actual API calls, but here we only
+        // need to prove the methods exist and return futures with the expected
+        // signatures. Dropping the futures avoids waiting on network timeouts.
         let hash = "275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f";
 
-        // These calls will fail due to no mock setup, but they demonstrate
-        // that the methods exist and have correct signatures
-        let _ = file_client.get(hash).await;
-        let _ = file_client.analyse(hash).await;
-        let _ = file_client.get_comments(hash).await;
-        let _ = file_client.get_votes(hash).await;
-        let _ = file_client.get_behaviours(hash).await;
-        let _ = file_client.get_contacted_domains(hash).await;
-        let _ = file_client.get_contacted_ips(hash).await;
-        let _ = file_client.get_dropped_files(hash).await;
-        let _ = file_client.get_similar_files(hash).await;
+        std::mem::drop(file_client.get(hash));
+        std::mem::drop(file_client.analyse(hash));
+        std::mem::drop(file_client.get_comments(hash));
+        std::mem::drop(file_client.get_votes(hash));
+        std::mem::drop(file_client.get_behaviours(hash));
+        std::mem::drop(file_client.get_contacted_domains(hash));
+        std::mem::drop(file_client.get_contacted_ips(hash));
+        std::mem::drop(file_client.get_dropped_files(hash));
+        std::mem::drop(file_client.get_similar_files(hash));
 
-        // If we get here without compilation errors, the methods exist
-        // Test passed - methods are accessible
+        // If we get here without type errors, the methods are accessible.
     }
 
     #[tokio::test]

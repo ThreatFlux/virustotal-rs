@@ -150,7 +150,11 @@ impl<'a> UrlClient<'a> {
     pub fn generate_url_sha256(url: &str) -> String {
         let mut hasher = Sha256::new();
         hasher.update(url.as_bytes());
-        format!("{:x}", hasher.finalize())
+        hasher
+            .finalize()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect()
     }
 
     /// Scan a URL for analysis

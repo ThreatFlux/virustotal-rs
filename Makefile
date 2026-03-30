@@ -3,6 +3,8 @@
          deny outdated security-geiger security-supply-chain semver-check feature-test feature-test-full \
          msrv msrv-install security-enhanced ci-local validate analyze examples release-prep dev
 
+RUST_MSRV ?= 1.94.0
+
 # Default target
 all: install-tools fmt clippy build test test-no-features test-mcp-features build-examples test-doc doc-check doc-links audit security
 	@echo "✅ All checks passed!"
@@ -14,12 +16,12 @@ ci: fmt-check clippy build test test-no-features test-mcp-features build-example
 # Install required tools
 install-tools:
 	@echo "📦 Installing required tools..."
-	@command -v cargo-audit >/dev/null 2>&1 || cargo install cargo-audit
-	@command -v cargo-outdated >/dev/null 2>&1 || cargo install cargo-outdated
-	@command -v cargo-deny >/dev/null 2>&1 || cargo install cargo-deny
-	@command -v cargo-llvm-cov >/dev/null 2>&1 || cargo install cargo-llvm-cov
-	@command -v cargo-hack >/dev/null 2>&1 || cargo install cargo-hack
-	@command -v cargo-deadlinks >/dev/null 2>&1 || cargo install cargo-deadlinks
+	@command -v cargo-audit >/dev/null 2>&1 || cargo install cargo-audit --locked
+	@command -v cargo-outdated >/dev/null 2>&1 || cargo install cargo-outdated --locked
+	@command -v cargo-deny >/dev/null 2>&1 || cargo install cargo-deny --locked
+	@command -v cargo-llvm-cov >/dev/null 2>&1 || cargo install cargo-llvm-cov --locked
+	@command -v cargo-hack >/dev/null 2>&1 || cargo install cargo-hack --locked
+	@command -v cargo-deadlinks >/dev/null 2>&1 || cargo install cargo-deadlinks --locked
 	@command -v cargo-geiger >/dev/null 2>&1 || cargo install cargo-geiger --locked
 	@command -v cargo-supply-chain >/dev/null 2>&1 || cargo install cargo-supply-chain --locked
 	@command -v cargo-semver-checks >/dev/null 2>&1 || cargo install cargo-semver-checks --locked
@@ -40,58 +42,58 @@ fmt-check:
 # Run clippy linter
 clippy:
 	@echo "📎 Running clippy..."
-	@cargo clippy --all-features --all-targets -- -D warnings
+	@cargo clippy --locked --all-features --all-targets -- -D warnings
 	@echo "✅ Clippy passed"
 
 # Build the project
 build:
 	@echo "🔨 Building project..."
-	@cargo build --all-features --release
+	@cargo build --locked --all-features --release
 	@echo "✅ Build successful"
 
 # Run tests
 test:
 	@echo "🧪 Running tests..."
-	@cargo test --all-features
+	@cargo test --locked --all-features
 	@echo "✅ Tests passed"
 
 # Test without features
 test-no-features:
 	@echo "🧪 Running tests without features..."
-	@cargo test --no-default-features
+	@cargo test --locked --no-default-features
 	@echo "✅ Tests without features passed"
 
 # Test with individual MCP features
 test-mcp-features:
 	@echo "🧪 Testing MCP features..."
-	@cargo test --features mcp
-	@cargo test --features mcp-jwt
-	@cargo test --features mcp-oauth
+	@cargo test --locked --features mcp
+	@cargo test --locked --features mcp-jwt
+	@cargo test --locked --features mcp-oauth
 	@echo "✅ MCP feature tests passed"
 
 # Build examples
 build-examples:
 	@echo "🔨 Building examples..."
-	@cargo build --examples --all-features
+	@cargo build --locked --examples --all-features
 	@echo "✅ Examples built successfully"
 
 # Test documentation examples
 test-doc:
 	@echo "📚 Testing documentation examples..."
-	@cargo test --doc --all-features
+	@cargo test --locked --doc --all-features
 	@echo "✅ Doc tests passed"
 
 # Generate documentation
 doc:
 	@echo "📖 Generating documentation..."
-	@cargo doc --all-features --no-deps
+	@cargo doc --locked --all-features --no-deps
 	@echo "✅ Documentation generated"
 
 # Check documentation with warnings as errors
 doc-check:
 	@echo "📖 Checking documentation..."
 	@echo '<style>.sidebar { width: 250px; } .content { margin-left: 250px; }</style>' > docs-header.html
-	@RUSTDOCFLAGS="-D warnings --html-in-header docs-header.html" cargo doc --all-features --no-deps --document-private-items
+	@RUSTDOCFLAGS="-D warnings --html-in-header docs-header.html" cargo doc --locked --all-features --no-deps --document-private-items
 	@echo "✅ Documentation check passed"
 
 # Run security audit
@@ -109,7 +111,7 @@ deny:
 # Check outdated dependencies
 outdated:
 	@echo "📊 Checking for outdated dependencies..."
-	@cargo outdated || true
+	@cargo outdated -R || true
 	@echo "✅ Outdated check complete"
 
 # Security analysis with cargo-geiger (unsafe code detection)
@@ -127,7 +129,7 @@ security-supply-chain:
 # Check documentation links
 doc-links:
 	@echo "🔗 Checking documentation links..."
-	@cargo doc --all-features --no-deps --document-private-items
+	@cargo doc --locked --all-features --no-deps --document-private-items
 	@cargo deadlinks --dir target/doc || echo "⚠️ Some documentation links may be broken"
 	@echo "✅ Documentation link check complete"
 
@@ -144,7 +146,7 @@ security: audit deny outdated security-geiger security-supply-chain
 # Generate test coverage
 coverage:
 	@echo "📊 Generating test coverage..."
-	@cargo llvm-cov --all-features --html
+	@cargo llvm-cov --locked --all-features --html
 	@echo "✅ Coverage report generated at target/llvm-cov/html/index.html"
 
 # Run benchmarks
@@ -155,20 +157,20 @@ bench:
 
 # Check MSRV (Minimum Supported Rust Version)
 msrv:
-	@echo "🦀 Checking MSRV (1.94.0)..."
-	@if rustup toolchain list | grep -q "1.94.0"; then \
-		cargo +1.94.0 check --all-features; \
+	@echo "🦀 Checking MSRV ($(RUST_MSRV))..."
+	@if rustup toolchain list | grep -q "$(RUST_MSRV)"; then \
+		cargo +$(RUST_MSRV) check --locked --all-features; \
 	else \
-		echo "⚠️  MSRV toolchain 1.94.0 not installed. Installing..."; \
-		rustup toolchain install 1.94.0 --component rustfmt,clippy; \
-		cargo +1.94.0 check --all-features; \
+		echo "⚠️  MSRV toolchain $(RUST_MSRV) not installed. Installing..."; \
+		rustup toolchain install $(RUST_MSRV) --component rustfmt,clippy; \
+		cargo +$(RUST_MSRV) check --locked --all-features; \
 	fi
 	@echo "✅ MSRV check complete"
 
 # Install MSRV toolchain if not present
 msrv-install:
-	@echo "🦀 Installing MSRV toolchain (1.94.0)..."
-	@rustup toolchain install 1.94.0 --component rustfmt,clippy
+	@echo "🦀 Installing MSRV toolchain ($(RUST_MSRV))..."
+	@rustup toolchain install $(RUST_MSRV) --component rustfmt,clippy
 	@echo "✅ MSRV toolchain installed"
 
 # Test feature combinations
@@ -186,7 +188,7 @@ feature-test-full:
 # Quick check (faster than full build)
 check:
 	@echo "⚡ Quick check..."
-	@cargo check --all-features
+	@cargo check --locked --all-features
 	@echo "✅ Check passed"
 
 # Clean build artifacts
@@ -198,10 +200,10 @@ clean:
 # Run examples (requires VT_API_KEY)
 examples:
 	@echo "🎯 Running examples..."
-	@if [ -z "$$VT_API_KEY" ]; then \
-		echo "⚠️  VT_API_KEY not set, skipping examples"; \
+	@if [ -z "$$VIRUSTOTAL_API_KEY" ] && [ -z "$$VT_API_KEY" ]; then \
+		echo "⚠️  VIRUSTOTAL_API_KEY or VT_API_KEY not set, skipping examples"; \
 	else \
-		cargo run --example test_file && \
+		VIRUSTOTAL_API_KEY="$${VIRUSTOTAL_API_KEY:-$$VT_API_KEY}" cargo run --locked --example test_file && \
 		echo "✅ Examples ran successfully"; \
 	fi
 
@@ -275,10 +277,11 @@ help:
 	@echo "  make outdated     - Check for outdated dependencies"
 	@echo "  make bench        - Run benchmarks"
 	@echo "  make clean        - Clean build artifacts"
-	@echo "  make examples     - Run example programs (requires VT_API_KEY)"
+	@echo "  make examples     - Run example programs (requires VIRUSTOTAL_API_KEY or VT_API_KEY)"
 	@echo ""
 	@echo "📦 Tool installation:"
 	@echo "  make install-tools - Install required cargo tools"
 	@echo ""
 	@echo "🌍 Environment variables:"
-	@echo "  VT_API_KEY        - VirusTotal API key for running examples"
+	@echo "  VIRUSTOTAL_API_KEY - Preferred VirusTotal API key variable"
+	@echo "  VT_API_KEY         - Backward-compatible VirusTotal API key variable"

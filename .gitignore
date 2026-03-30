@@ -1,6 +1,8 @@
 /target
 .env
-docs/
+# Keep handwritten docs in version control while still ignoring generated site output.
+docs/*
+!docs/*.md
 .codacy/
 samples/
 samples_2/
