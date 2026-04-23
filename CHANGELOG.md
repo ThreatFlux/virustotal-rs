@@ -10,5 +10,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Modernized GitHub Actions to current SHA-pinned stable releases and removed deprecated release patterns.
+- Rolled up April 2026 Dependabot security and maintenance updates for `openssl`, `rustls-webpki`, `rand`, and the release/docs/security GitHub Actions workflows.
 - Updated direct dependencies and aligned local tooling with the maintained Rust 1.94.0 baseline.
 - Reworked repository documentation to match ThreatFlux project standards and reflect the actual SDK, CLI, and MCP surfaces.
