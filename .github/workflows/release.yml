@@ -200,7 +200,7 @@ jobs:
 
       - name: Upload release artifacts (Unix)
         if: runner.os != 'Windows'
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-${{ matrix.artifact }}
           path: "*.tar.gz"
@@ -208,7 +208,7 @@ jobs:
 
       - name: Upload release artifacts (Windows)
         if: runner.os == 'Windows'
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-${{ matrix.artifact }}
           path: "*.zip"
@@ -281,7 +281,7 @@ jobs:
           fi
 
       - name: Create GitHub release
-        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2.6.1
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
           body_path: release_notes.md
           draft: false
