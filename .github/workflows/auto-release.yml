@@ -24,7 +24,7 @@ permissions:
   contents: write
 
 env:
-  RUST_VERSION: 1.94.0
+  RUST_VERSION: 1.95.0
 
 jobs:
   check:

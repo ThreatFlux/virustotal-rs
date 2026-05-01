@@ -7,7 +7,7 @@
 [![Crates.io](https://img.shields.io/crates/v/virustotal-rs.svg)](https://crates.io/crates/virustotal-rs)
 [![Documentation](https://docs.rs/virustotal-rs/badge.svg)](https://docs.rs/virustotal-rs)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Rust](https://img.shields.io/badge/rust-1.94%2B-orange.svg)](https://www.rust-lang.org)
+[![Rust](https://img.shields.io/badge/rust-1.95.0%2B-orange.svg)](https://www.rust-lang.org)
 
 **Async Rust SDK for the VirusTotal API v3, with optional CLI and MCP server support.**
 
@@ -126,7 +126,7 @@ cargo run --locked --features mcp-oauth --bin mcp_server
 
 ### Baseline
 
-- Rust `1.94.0`
+- Rust `1.95.0`
 - `rust-toolchain.toml` pins the maintained local toolchain
 - `Makefile` targets mirror the main CI checks
 
