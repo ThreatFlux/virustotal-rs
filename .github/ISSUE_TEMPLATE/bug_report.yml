@@ -89,7 +89,7 @@ body:
     attributes:
       label: Rust Version
       description: What version of Rust are you using? (run `rustc --version`)
-      placeholder: "rustc 1.89.0"
+      placeholder: "rustc 1.95.0"
     validations:
       required: true
 
