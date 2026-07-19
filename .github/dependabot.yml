@@ -10,8 +10,6 @@ updates:
     open-pull-requests-limit: 10
     reviewers:
       - "ThreatFlux"
-    assignees:
-      - "ThreatFlux"
     commit-message:
       prefix: "deps"
       include: "scope"
@@ -58,8 +56,6 @@ updates:
       time: "02:00"
     open-pull-requests-limit: 5
     reviewers:
-      - "ThreatFlux"
-    assignees:
       - "ThreatFlux"
     commit-message:
       prefix: "ci"
