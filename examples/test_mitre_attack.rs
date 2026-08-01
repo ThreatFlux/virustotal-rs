@@ -101,7 +101,7 @@ fn display_tactic_info(tactic: &virustotal_rs::MitreTactic) {
 /// Create description preview with truncation
 fn create_description_preview(description: &str, max_len: usize) -> String {
     if description.len() > max_len {
-        format!("{}...", &description[..max_len].replace('\n', " "))
+        format!("{}...", description[..max_len].replace('\n', " "))
     } else {
         description.replace('\n', " ")
     }
