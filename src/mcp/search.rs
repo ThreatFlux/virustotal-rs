@@ -132,7 +132,7 @@ fn extract_threat_categories<T>(
     let mut threat_categories = Vec::new();
 
     if let Some(results) = results {
-        for (_, result) in results.iter() {
+        for result in results.values() {
             let (category, result_name) = category_extractor(result);
             if (category == "malicious" || category == "suspicious")
                 && let Some(name) = result_name

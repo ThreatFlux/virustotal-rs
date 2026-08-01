@@ -47,7 +47,7 @@ fn handle_collection_creation_result(
             if let Some(name) = &collection.object.attributes.name {
                 println!("   - Name: {}", name);
             }
-            println!("   - ID: {}", &collection.object.id);
+            println!("   - ID: {}", collection.object.id);
             Ok(collection.object.id)
         }
         Err(e) => {
@@ -223,7 +223,7 @@ async fn add_collection_comment(
     match client.add_comment(collection_id, comment_text).await {
         Ok(comment) => {
             print_success("Added comment to collection");
-            println!("   - Comment: {}", &comment.object.attributes.text);
+            println!("   - Comment: {}", comment.object.attributes.text);
         }
         Err(e) => print_error(&format!("Error adding comment: {}", e)),
     }
