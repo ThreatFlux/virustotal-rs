@@ -23,6 +23,7 @@ REQUIRED_FILES = (
     ROOT / "CONTRIBUTING.md",
     ROOT / "SECURITY.md",
     ROOT / "LICENSE",
+    ROOT / "LICENSE-APACHE",
 )
 MARKDOWN_FILES = (
     README,
@@ -124,6 +125,16 @@ def check_installation(readme: str) -> list[str]:
     return ["README must not pin a crates.io version that can drift from releases"]
 
 
+def check_license_contract(readme: str, expression: str) -> list[str]:
+    errors: list[str] = []
+    if expression != "MIT OR Apache-2.0":
+        errors.append("Cargo.toml package license must be 'MIT OR Apache-2.0'")
+    for link in ("[MIT License](LICENSE)", "[Apache License 2.0](LICENSE-APACHE)"):
+        if link not in readme:
+            errors.append(f"README must link the declared license: {link}")
+    return errors
+
+
 def check_builder_disclosure() -> list[str]:
     text = CONFIGURATION.read_text(encoding="utf-8")
     if text.count("Stored, but not applied by `build()`") == 4:
@@ -155,6 +166,7 @@ def collect_errors(manifest: dict[str, Any], readme: str) -> list[str]:
         *check_quickstart(readme),
         *check_disclosures(readme),
         *check_installation(readme),
+        *check_license_contract(readme, package["license"]),
         *check_builder_disclosure(),
         *check_links(),
     ]

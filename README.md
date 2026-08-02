@@ -6,7 +6,7 @@
 [![Security](https://github.com/ThreatFlux/virustotal-rs/actions/workflows/security.yml/badge.svg)](https://github.com/ThreatFlux/virustotal-rs/actions/workflows/security.yml)
 [![Crates.io](https://img.shields.io/crates/v/virustotal-rs.svg)](https://crates.io/crates/virustotal-rs)
 [![Documentation](https://docs.rs/virustotal-rs/badge.svg)](https://docs.rs/virustotal-rs)
-[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 [![Rust](https://img.shields.io/badge/rust-1.97.1%2B-orange.svg)](https://www.rust-lang.org)
 
 **Async Rust SDK for the VirusTotal API v3, with optional CLI and MCP server support.**
@@ -54,14 +54,8 @@ The current development MSRV is Rust 1.97.1. <!-- docs-msrv:1.97.1 -->
 
 ## Quick start
 
-Set a [VirusTotal API key](https://docs.virustotal.com/reference/authentication), then run the read-only example:
-
-```bash
-export VIRUSTOTAL_API_KEY="your-api-key"
-cargo run --example quickstart
-```
-
-`VT_FILE_HASH` is optional; the example otherwise looks up the standard EICAR test-file hash.
+After adding the dependencies above, save the following complete, read-only
+program as `src/main.rs` in your application:
 
 <!-- quickstart:start -->
 ```rust
@@ -88,6 +82,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 <!-- quickstart:end -->
+
+Set a [VirusTotal API key](https://docs.virustotal.com/reference/authentication),
+then run the consumer application:
+
+```bash
+export VIRUSTOTAL_API_KEY="your-api-key"
+cargo run
+```
+
+From a clone of this repository, run the synchronized example with:
+
+```bash
+cargo run --example quickstart
+```
+
+`VT_FILE_HASH` is optional; the application and example otherwise look up the
+standard EICAR test-file hash.
 
 Use `ApiTier::Premium` only when your account has the corresponding privileges. The tier controls this SDK's local throttling; it does not grant VirusTotal access or override account quotas.
 
@@ -187,7 +198,8 @@ The repository pins Rust 1.97.1 in `rust-toolchain.toml`. See [CONTRIBUTING.md](
 
 ## License
 
-Licensed under either [MIT or Apache-2.0](LICENSE), at your option.
+Licensed under either the [MIT License](LICENSE) or the
+[Apache License 2.0](LICENSE-APACHE), at your option.
 
 ---
 
