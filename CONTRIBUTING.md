@@ -14,6 +14,7 @@
 
 ```bash
 make install-tools
+make docs-contract
 make ci-local
 ```
 
@@ -37,14 +38,18 @@ The automated release workflow only cuts a release for `feat`, `fix`, or breakin
 - [ ] `cargo fmt --all` is clean
 - [ ] `cargo clippy --all-features --all-targets -- -D warnings` passes
 - [ ] `cargo test --all-features` passes
+- [ ] `make docs-contract` passes
 - [ ] Docs were updated when behavior or public APIs changed
 - [ ] `CHANGELOG.md` was updated for user-facing changes
 
 ## Documentation
 
 - Keep [README.md](README.md) accurate for end users.
+- Keep [docs/api-coverage.md](docs/api-coverage.md) aligned with `Client` resource accessors.
+- Keep [docs/configuration.md](docs/configuration.md) aligned with implemented builder and runtime behavior.
 - Keep [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) accurate when module boundaries change.
 - Keep [docs/RELEASING.md](docs/RELEASING.md) accurate when release automation changes.
+- Keep the marked README quickstart byte-for-byte aligned with [examples/quickstart.rs](examples/quickstart.rs). Run `python3 scripts/check_docs.py` for fast feedback.
 
 ## Security Issues
 

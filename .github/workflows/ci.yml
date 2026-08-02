@@ -202,6 +202,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Verify documentation contract
+        run: python3 scripts/check_docs.py
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
         with:
@@ -211,6 +214,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libssl-dev pkg-config
+
+      - name: Check executable quickstart
+        run: cargo check --locked --example quickstart
 
       - name: Build documentation
         run: cargo doc --locked --all-features --no-deps --document-private-items
