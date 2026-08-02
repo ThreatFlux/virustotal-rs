@@ -10,7 +10,11 @@ use crate::error::{Error, Result};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use std::time::Duration;
 
-/// Enhanced client builder with comprehensive configuration options
+/// Compatibility builder for client and standalone utility configuration.
+///
+/// [`Self::build`] applies the API key, API tier, timeout, and base URL. Retry
+/// configuration, a custom rate limiter, custom headers, and a custom user agent are
+/// currently retained by this builder but are not installed on the returned [`Client`].
 pub struct EnhancedClientBuilder {
     api_key: Option<ApiKey>,
     tier: Option<ApiTier>,
@@ -99,25 +103,35 @@ impl EnhancedClientBuilder {
         self
     }
 
-    /// Set retry configuration
+    /// Record retry configuration for compatibility.
+    ///
+    /// This setting is not applied to the [`Client`] returned by [`Self::build`]. Use
+    /// [`super::RetryUtils::retry_request`] explicitly for operations that are safe to retry.
     pub fn retry_config(mut self, max_attempts: u32, initial_delay: Duration) -> Self {
         self.retry_config = Some(RetryConfig::new(max_attempts, initial_delay));
         self
     }
 
-    /// Set advanced retry configuration
+    /// Record advanced retry configuration for compatibility.
+    ///
+    /// This setting is not applied to the [`Client`] returned by [`Self::build`].
     pub fn advanced_retry_config(mut self, config: RetryConfig) -> Self {
         self.retry_config = Some(config);
         self
     }
 
-    /// Set a custom rate limiter
+    /// Record a custom rate limiter for compatibility.
+    ///
+    /// This setting is not applied to the [`Client`] returned by [`Self::build`]. The
+    /// returned client uses its core limiter selected by [`ApiTier`].
     pub fn rate_limiter(mut self, limiter: TokenBucketLimiter) -> Self {
         self.rate_limiter = Some(limiter);
         self
     }
 
-    /// Add a custom header
+    /// Record a custom header for compatibility.
+    ///
+    /// Headers recorded here are not applied to the [`Client`] returned by [`Self::build`].
     pub fn header<K, V>(mut self, key: K, value: V) -> Self
     where
         K: TryInto<HeaderName>,
@@ -131,25 +145,34 @@ impl EnhancedClientBuilder {
         self
     }
 
-    /// Set multiple headers
+    /// Record custom headers for compatibility.
+    ///
+    /// Headers recorded here are not applied to the [`Client`] returned by [`Self::build`].
     pub fn headers(mut self, headers: HeaderMap) -> Self {
         self.headers.extend(headers);
         self
     }
 
-    /// Set custom user agent
+    /// Record a custom user agent for compatibility.
+    ///
+    /// This setting is not applied to the [`Client`] returned by [`Self::build`].
     pub fn user_agent<U: Into<String>>(mut self, user_agent: U) -> Self {
         self.user_agent = Some(user_agent.into());
         self
     }
 
-    /// Enable automatic API tier detection based on key format/length
+    /// Enable heuristic API tier detection based on key format and length.
+    ///
+    /// This does not query VirusTotal or verify account privileges. Prefer [`Self::tier`]
+    /// when the account tier is known.
     pub fn with_tier_detection(mut self) -> Self {
         self.tier_detection = true;
         self
     }
 
-    /// Build the client with all configured options
+    /// Build a client, applying the API key, tier, timeout, and base URL.
+    ///
+    /// See the type-level documentation for settings retained but not applied.
     pub fn build(self) -> Result<Client> {
         let api_key = self
             .api_key
@@ -206,7 +229,10 @@ impl ClientUtils {
         )))
     }
 
-    /// Create a preset configuration for testing
+    /// Create a preset configuration for testing.
+    ///
+    /// The returned client uses the public tier and a five-second timeout. The recorded
+    /// retry configuration is not applied automatically.
     pub fn testing_config(api_key: &str) -> EnhancedClientBuilder {
         Self::builder()
             .api_key(api_key)
@@ -215,7 +241,10 @@ impl ClientUtils {
             .retry_config(1, Duration::from_millis(100))
     }
 
-    /// Create a preset configuration for production
+    /// Create a preset configuration for production.
+    ///
+    /// The returned client uses heuristic tier detection and a 60-second timeout. The
+    /// recorded retry configuration is not applied automatically.
     pub fn production_config(api_key: &str) -> EnhancedClientBuilder {
         Self::builder()
             .api_key(api_key)

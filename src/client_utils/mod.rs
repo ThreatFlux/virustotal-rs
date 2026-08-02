@@ -1,18 +1,23 @@
 //! Client utilities for VirusTotal API
 //!
-//! This module provides comprehensive utilities for creating, configuring, and managing
-//! VirusTotal API clients. It eliminates code duplication by providing reusable patterns
-//! for common client operations.
+//! This module provides helpers for constructing clients, reading API keys from the
+//! environment, and explicitly wrapping operations with retry or rate-limit utilities.
 //!
 //! # Features
 //!
-//! - Enhanced client builder with fluent API
-//! - Environment-aware configuration
-//! - Rate limiting utilities
-//! - Retry logic with exponential backoff
-//! - Request timeout management
-//! - Header management utilities
-//! - API tier detection and auto-configuration
+//! - Environment-aware client construction
+//! - Request timeout and base URL configuration
+//! - Standalone rate-limiting and retry utilities
+//! - Header construction helpers
+//! - Heuristic API-tier detection
+//!
+//! # Builder behavior
+//!
+//! [`EnhancedClientBuilder`] currently applies the API key, tier, timeout, and base URL.
+//! Its retry, custom limiter, custom header, and user-agent setters retain configuration
+//! for compatibility but do not apply it to the returned [`crate::Client`]. Core client
+//! requests are not retried automatically; wrap an idempotent operation with
+//! [`RetryUtils::retry_request`] when retries are appropriate.
 //!
 //! # Examples
 //!
@@ -30,7 +35,7 @@
 //! # }
 //! ```
 //!
-//! ## Advanced client configuration
+//! ## Supported client configuration
 //!
 //! ```rust,no_run
 //! use virustotal_rs::{ClientUtils, ApiTier};
@@ -41,7 +46,6 @@
 //!     .api_key("your_api_key")
 //!     .tier(ApiTier::Premium)
 //!     .timeout(Duration::from_secs(60))
-//!     .retry_config(3, Duration::from_millis(1000))
 //!     .build()?;
 //! # Ok(())
 //! # }

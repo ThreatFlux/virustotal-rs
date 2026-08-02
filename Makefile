@@ -1,16 +1,16 @@
 .PHONY: all clean build test fmt clippy doc audit security coverage bench check install-tools help \
-         fmt-check test-no-features test-mcp-features build-examples test-doc doc-check doc-links \
+         fmt-check test-no-features test-mcp-features build-examples test-doc doc-check docs-contract doc-links \
          deny outdated security-geiger security-supply-chain semver-check feature-test feature-test-full \
          msrv msrv-install security-enhanced ci-local validate analyze examples release-prep dev
 
 RUST_MSRV ?= 1.97.1
 
 # Default target
-all: install-tools fmt clippy build test test-no-features test-mcp-features build-examples test-doc doc-check doc-links audit security
+all: install-tools fmt clippy build test test-no-features test-mcp-features build-examples test-doc doc-check docs-contract doc-links audit security
 	@echo "✅ All checks passed!"
 
 # CI simulation - matches GitHub Actions CI workflow
-ci: fmt-check clippy build test test-no-features test-mcp-features build-examples test-doc doc-check
+ci: fmt-check clippy build test test-no-features test-mcp-features build-examples test-doc doc-check docs-contract
 	@echo "✅ CI checks passed!"
 
 # Install required tools
@@ -95,6 +95,13 @@ doc-check:
 	@echo '<style>.sidebar { width: 250px; } .content { margin-left: 250px; }</style>' > docs-header.html
 	@RUSTDOCFLAGS="-D warnings --html-in-header docs-header.html" cargo doc --locked --all-features --no-deps --document-private-items
 	@echo "✅ Documentation check passed"
+
+# Validate source-backed documentation facts and the executable quickstart
+docs-contract:
+	@echo "📚 Checking documentation contract..."
+	@python3 scripts/check_docs.py
+	@cargo check --locked --example quickstart
+	@echo "✅ Documentation contract passed"
 
 # Run security audit
 audit:
@@ -223,7 +230,7 @@ security-enhanced: security security-supply-chain security-geiger semver-check
 	@echo "✅ Enhanced security analysis complete!"
 
 # CI-equivalent validation (matches GitHub Actions CI workflow)
-ci-local: fmt-check clippy build test test-no-features test-mcp-features build-examples test-doc doc-check doc-links feature-test
+ci-local: fmt-check clippy build test test-no-features test-mcp-features build-examples test-doc doc-check docs-contract doc-links feature-test
 	@echo "✅ Local CI validation complete!"
 
 # Full validation (everything - matches all CI/CD workflows)
@@ -254,6 +261,7 @@ help:
 	@echo "  make test-doc     - Test documentation examples"
 	@echo "  make doc          - Generate documentation"
 	@echo "  make doc-check    - Check documentation with strict warnings"
+	@echo "  make docs-contract - Check README/source alignment and executable quickstart"
 	@echo "  make doc-links    - Check documentation links"
 	@echo ""
 	@echo "🔒 Security targets:"

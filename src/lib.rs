@@ -1,3 +1,38 @@
+//! Async Rust SDK for the VirusTotal API v3.
+//!
+//! The core [`Client`] exposes typed resource clients for files, URLs, domains, IP
+//! addresses, search, collections, graphs, hunting, feeds, and private APIs. Optional
+//! crate features add the CLI and MCP server without expanding the default dependency
+//! surface.
+//!
+//! This is an independent, community-maintained project. It is not affiliated with,
+//! endorsed by, or maintained by VirusTotal or Google.
+//!
+//! # Quick start
+//!
+//! ```rust,no_run
+//! use virustotal_rs::{ApiTier, ClientBuilder};
+//!
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! let client = ClientBuilder::new()
+//!     .api_key(std::env::var("VIRUSTOTAL_API_KEY")?)
+//!     .tier(ApiTier::Public)
+//!     .build()?;
+//!
+//! let report = client
+//!     .files()
+//!     .get("44d88612fea8a8f36de82e1278abb02f")
+//!     .await?;
+//! println!("{}", report.object.id);
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! `ApiTier` controls only this crate's in-process limiter; VirusTotal account
+//! privileges and server-side quotas remain authoritative. Core requests are not
+//! retried automatically. See the repository's configuration guide for credential,
+//! rate-limit, retry, and custom-base-URL behavior.
+
 pub mod analysis;
 pub mod attack_tactics;
 pub mod attack_techniques;
