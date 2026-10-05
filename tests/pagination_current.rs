@@ -43,14 +43,18 @@ fn iterator<'a>(
     }
 }
 
+fn filtered_search_request() -> wiremock::MockBuilder {
+    Mock::given(method("GET"))
+        .and(path("/api/v3/intelligence/search"))
+        .and(query_param("query", "type:file tag:a+b&c"))
+        .and(query_param("limit", "2"))
+}
+
 #[tokio::test]
 async fn opaque_cursor_and_existing_query_survive_an_empty_continuing_page() {
     for enhanced in [false, true] {
         let (server, client) = fixture().await;
-        Mock::given(method("GET"))
-            .and(path("/api/v3/intelligence/search"))
-            .and(query_param("query", "type:file tag:a+b&c"))
-            .and(query_param("limit", "2"))
+        filtered_search_request()
             .respond_with(
                 ResponseTemplate::new(200)
                     .set_body_json(json!({"data": [], "meta": {"cursor": "a+/=&? #"}})),
@@ -59,10 +63,7 @@ async fn opaque_cursor_and_existing_query_survive_an_empty_continuing_page() {
             .expect(1)
             .mount(&server)
             .await;
-        Mock::given(method("GET"))
-            .and(path("/api/v3/intelligence/search"))
-            .and(query_param("query", "type:file tag:a+b&c"))
-            .and(query_param("limit", "2"))
+        filtered_search_request()
             .and(query_param("cursor", "a+/=&? #"))
             .respond_with(
                 ResponseTemplate::new(200)

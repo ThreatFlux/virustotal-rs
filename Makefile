@@ -7,7 +7,7 @@ RUST_MSRV ?= 1.97.1
 
 # Install the repository-owned hook, including from an isolated Git worktree.
 hooks-install:
-	@python3 scripts/install_hooks.py
+	@sh scripts/install_hooks.sh
 
 # Fast commit checks. Run ci-local separately before pushing or opening a PR.
 pre-commit: fmt-check

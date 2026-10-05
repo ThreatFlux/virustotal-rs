@@ -34,7 +34,8 @@ Dependency policy checks now include all features. MPL-2.0 acceptance is limited
    updates to immutable commits, review release ownership, and adapt dependency
    changes without weakening quality/security gates.
 2. **API agent:** implement the documented analysis/search/URL slices above and
-   add the offline fixtures in `tests/current_api_tests.rs` and
+   add the offline suite entry point in `tests/current_api_tests.rs`, its analysis
+   and search/URL modules in `tests/current_api/`, and
    `examples/current_api_models.rs`.
 3. **Integrator:** implement transport and bounded iterator changes, review each
    agent's work, run repository gates with API keys unset, verify the consumer
@@ -42,7 +43,9 @@ Dependency policy checks now include all features. MPL-2.0 acceptance is limited
    exact PR commit. No release, publication, or live endpoint mutations are part
    of this plan.
 
-The focused test file records protocol and failure regressions. Local and hosted
+The focused suite's [analysis tests](../tests/current_api/analyses.rs) and
+[search/URL tests](../tests/current_api/search_urls.rs) record protocol and failure
+regressions. Local and hosted
 validation receipts belong in the resulting PR so this document does not present
 an unrun check as passed.
 

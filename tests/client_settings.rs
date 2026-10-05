@@ -6,16 +6,28 @@ use virustotal_rs::{ApiKey, ApiTier, EnhancedClientBuilder, HeaderUtils};
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-#[tokio::test]
-async fn settings_apply_to_every_request_format_and_survive_timeout_changes() {
-    let server = MockServer::start().await;
-    let client = EnhancedClientBuilder::new()
+fn configured_builder(server: &MockServer) -> EnhancedClientBuilder {
+    EnhancedClientBuilder::new()
         .api_key("fixture-api-key")
         .tier(ApiTier::Premium)
         .base_url(format!("{}/api/v3/", server.uri()))
         .header("x-sdk-fixture", "configured")
-        .header("user-agent", "overridden")
         .user_agent("sdk-test/1")
+}
+
+fn configured_request(verb: &str, route: &str) -> wiremock::MockBuilder {
+    Mock::given(method(verb))
+        .and(path(route))
+        .and(header("x-apikey", "fixture-api-key"))
+        .and(header("x-sdk-fixture", "configured"))
+        .and(header("user-agent", "sdk-test/1"))
+}
+
+#[tokio::test]
+async fn settings_apply_to_every_request_format_and_survive_timeout_changes() {
+    let server = MockServer::start().await;
+    let client = configured_builder(&server)
+        .header("user-agent", "overridden")
         .timeout(Duration::from_secs(5))
         .build()
         .unwrap()
@@ -31,11 +43,7 @@ async fn settings_apply_to_every_request_format_and_survive_timeout_changes() {
         ("DELETE", "empty"),
         ("DELETE", "header"),
     ] {
-        Mock::given(method(verb))
-            .and(path(format!("/api/v3/{endpoint}")))
-            .and(header("x-apikey", "fixture-api-key"))
-            .and(header("x-sdk-fixture", "configured"))
-            .and(header("user-agent", "sdk-test/1"))
+        configured_request(verb, &format!("/api/v3/{endpoint}"))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({"ok": true})))
             .expect(1)
             .mount(&server)
@@ -140,19 +148,8 @@ async fn header_map_configuration_is_applied() {
 #[tokio::test]
 async fn file_upload_uses_the_shared_base_path_headers_and_error_mapping() {
     let server = MockServer::start().await;
-    let client = EnhancedClientBuilder::new()
-        .api_key("fixture-api-key")
-        .tier(ApiTier::Premium)
-        .base_url(format!("{}/api/v3/", server.uri()))
-        .header("x-sdk-fixture", "configured")
-        .user_agent("sdk-test/1")
-        .build()
-        .unwrap();
-    Mock::given(method("POST"))
-        .and(path("/api/v3/files"))
-        .and(header("x-apikey", "fixture-api-key"))
-        .and(header("x-sdk-fixture", "configured"))
-        .and(header("user-agent", "sdk-test/1"))
+    let client = configured_builder(&server).build().unwrap();
+    configured_request("POST", "/api/v3/files")
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_json(json!({"data": {"type": "analysis", "id": "fixture"}})),
