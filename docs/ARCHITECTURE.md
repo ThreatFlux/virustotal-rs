@@ -55,13 +55,14 @@ flowchart TB
 ### Core request stack
 
 - `src/client.rs` owns the HTTP client, request execution, and shared configuration.
+- `src/pagination.rs` shares cursor encoding, cycle detection, and finite page/item budgets between collection iterators.
 - `src/auth.rs` and `src/rate_limit.rs` encapsulate API tier handling and throttling.
 - `src/error/` maps HTTP and validation failures into a typed error surface.
 - `src/url_utils/` centralizes endpoint construction and path/query validation.
 
 ### VirusTotal resource clients
 
-The top-level resource modules (`files`, `urls`, `domains`, `ip_addresses`, `comments`, `search`, `collections`, `livehunt`, `retrohunt`, `graphs`, and others) each expose a focused client plus the types required to deserialize that API family.
+The top-level resource modules (`analysis`, `files`, `urls`, `domains`, `ip_addresses`, `comments`, `search`, `collections`, `livehunt`, `retrohunt`, `graphs`, and others) each expose a focused client plus the types required to deserialize that API family.
 
 ### Shared developer ergonomics
 
@@ -71,7 +72,7 @@ The top-level resource modules (`files`, `urls`, `domains`, `ip_addresses`, `com
 
 ### Optional CLI and MCP layers
 
-- `src/cli/` and `src/bin/vt-cli.rs` wrap the SDK for command-line usage and indexing workflows.
+- `src/cli/` and `src/bin/vt-cli.rs` wrap the SDK for command-line usage. Only Download is currently exposed by the binary; the other command modules remain dormant. `src/cli/elasticsearch.rs` supplies stable HTTP operations for the optional indexing examples.
 - `src/mcp/` and `src/bin/mcp_server.rs` expose the SDK through Model Context Protocol transports, including optional JWT and OAuth flows.
 
 ## Design Notes

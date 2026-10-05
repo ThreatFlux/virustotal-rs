@@ -1,18 +1,19 @@
-use crate::cli::utils::{handle_vt_error, read_hashes_from_file, setup_client_arc, ProgressTracker};
+use crate::cli::utils::{
+    ProgressTracker, handle_vt_error, read_hashes_from_file, setup_client_arc,
+};
 use crate::{ApiTier, Client};
 use anyhow::{Context, Result};
 use chrono::Utc;
 use clap::Args;
 use futures::stream::{self, StreamExt};
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::fs;
 use uuid::Uuid;
 
-// Note: elasticsearch dependency needs to be added to Cargo.toml
-use elasticsearch::{http::transport::Transport, BulkParts, Elasticsearch};
+use crate::cli::elasticsearch::ElasticsearchClient;
 
 #[derive(Args, Debug)]
 pub struct IndexArgs {
@@ -91,12 +92,14 @@ pub async fn execute(
     dry_run: bool,
 ) -> Result<()> {
     // Initialize Elasticsearch client
-    let transport =
-        Transport::single_node(&args.es_url).context("Failed to create Elasticsearch transport")?;
-    let es_client = Elasticsearch::new(transport);
+    let es_client = ElasticsearchClient::new(
+        &args.es_url,
+        args.es_username.as_deref(),
+        args.es_password.as_deref(),
+    )?;
 
     // Test connection
-    match es_client.ping().send().await {
+    match es_client.ping().await {
         Ok(_) => {
             if verbose {
                 println!("✓ Connected to Elasticsearch at {}", args.es_url);
@@ -278,7 +281,7 @@ async fn download_and_process_hashes(
 
     let download_config = prepare_download_configuration(args, tier, verbose, hashes.len())?;
     let results = execute_concurrent_downloads(hashes, client, args, download_config).await;
-    
+
     finalize_download_results(results, args)
 }
 
@@ -370,9 +373,7 @@ async fn process_single_hash(
         Ok(file_info) => {
             handle_successful_download(file_info, &hash, &reports_dir, skip_errors).await
         }
-        Err(e) => {
-            handle_download_error(e, &hash, skip_errors)
-        }
+        Err(e) => handle_download_error(e, &hash, skip_errors),
     }
 }
 
@@ -413,12 +414,12 @@ async fn save_report_to_disk(
     hash: &str,
     reports_dir: &Arc<PathBuf>,
 ) -> Result<()> {
-    let json_report = serde_json::to_string_pretty(file_info)
-        .unwrap_or_else(|_| "{}".to_string());
+    let json_report = serde_json::to_string_pretty(file_info).unwrap_or_else(|_| "{}".to_string());
     let report_filename = format!("{}.json", hash);
     let report_path = reports_dir.join(&report_filename);
 
-    fs::write(&report_path, &json_report).await
+    fs::write(&report_path, &json_report)
+        .await
         .map_err(|e| anyhow::anyhow!("Failed to save report for {}: {}", hash, e))
 }
 
@@ -493,9 +494,14 @@ fn finalize_download_results(
 fn process_vt_report(file_hash: &str, json_data: &Value) -> Result<ProcessedReport> {
     let report_uuid = Uuid::new_v4().to_string();
     let attributes = extract_attributes(json_data)?;
-    
+
     let mut documents = Vec::new();
-    documents.push(create_main_report_document(&report_uuid, file_hash, json_data, attributes)?);
+    documents.push(create_main_report_document(
+        &report_uuid,
+        file_hash,
+        json_data,
+        attributes,
+    )?);
     add_analysis_results(&mut documents, &report_uuid, file_hash, attributes);
     add_sandbox_verdicts(&mut documents, &report_uuid, file_hash, attributes);
     add_crowdsourced_data(&mut documents, &report_uuid, file_hash, attributes);
@@ -532,9 +538,18 @@ fn create_main_report_document(
 
 fn create_base_document_fields(report_uuid: &str, file_hash: &str) -> Map<String, Value> {
     let mut doc = Map::new();
-    doc.insert("report_uuid".to_string(), Value::String(report_uuid.to_string()));
-    doc.insert("file_hash".to_string(), Value::String(file_hash.to_string()));
-    doc.insert("index_time".to_string(), Value::String(Utc::now().to_rfc3339()));
+    doc.insert(
+        "report_uuid".to_string(),
+        Value::String(report_uuid.to_string()),
+    );
+    doc.insert(
+        "file_hash".to_string(),
+        Value::String(file_hash.to_string()),
+    );
+    doc.insert(
+        "index_time".to_string(),
+        Value::String(Utc::now().to_rfc3339()),
+    );
     doc
 }
 
@@ -566,15 +581,49 @@ fn add_basic_file_fields(main_report: &mut Map<String, Value>, attributes: &Valu
 
 fn get_basic_field_list() -> [&'static str; 43] {
     [
-        "sha256", "sha1", "md5", "vhash", "tlsh", "ssdeep", "permhash", "symhash",
-        "magic", "magika", "meaningful_name", "type_description", "type_tag",
-        "type_extension", "size", "names", "times_submitted", "unique_sources",
-        "reputation", "tags", "type_tags", "first_submission_date", "last_submission_date",
-        "last_analysis_date", "last_modification_date", "first_seen_itw_date",
-        "last_seen_itw_date", "creation_date", "downloadable", "available_tools",
-        "last_analysis_stats", "total_votes", "threat_severity", "trid", "exiftool",
-        "office_info", "pe_info", "androguard", "bundle_info", "pdf_info",
-        "sigma_analysis_summary", "sigma_analysis_results", "network_infrastructure",
+        "sha256",
+        "sha1",
+        "md5",
+        "vhash",
+        "tlsh",
+        "ssdeep",
+        "permhash",
+        "symhash",
+        "magic",
+        "magika",
+        "meaningful_name",
+        "type_description",
+        "type_tag",
+        "type_extension",
+        "size",
+        "names",
+        "times_submitted",
+        "unique_sources",
+        "reputation",
+        "tags",
+        "type_tags",
+        "first_submission_date",
+        "last_submission_date",
+        "last_analysis_date",
+        "last_modification_date",
+        "first_seen_itw_date",
+        "last_seen_itw_date",
+        "creation_date",
+        "downloadable",
+        "available_tools",
+        "last_analysis_stats",
+        "total_votes",
+        "threat_severity",
+        "trid",
+        "exiftool",
+        "office_info",
+        "pe_info",
+        "androguard",
+        "bundle_info",
+        "pdf_info",
+        "sigma_analysis_summary",
+        "sigma_analysis_results",
+        "network_infrastructure",
     ]
 }
 
@@ -590,7 +639,8 @@ fn add_analysis_results(
     {
         for (engine_name, engine_result) in analysis_results {
             if let Some(engine_data) = engine_result.as_object() {
-                let analysis_doc = create_analysis_document(report_uuid, file_hash, engine_name, engine_data);
+                let analysis_doc =
+                    create_analysis_document(report_uuid, file_hash, engine_name, engine_data);
                 documents.push(analysis_doc);
             }
         }
@@ -604,8 +654,11 @@ fn create_analysis_document(
     engine_data: &Map<String, Value>,
 ) -> IndexedDocument {
     let mut analysis_doc = create_base_document_fields(report_uuid, file_hash);
-    analysis_doc.insert("engine_name".to_string(), Value::String(engine_name.to_string()));
-    
+    analysis_doc.insert(
+        "engine_name".to_string(),
+        Value::String(engine_name.to_string()),
+    );
+
     for (key, value) in engine_data {
         analysis_doc.insert(key.clone(), value.clone());
     }
@@ -628,7 +681,8 @@ fn add_sandbox_verdicts(
         .and_then(|v| v.as_object())
     {
         for (sandbox_name, verdict) in sandbox_verdicts {
-            let sandbox_doc = create_sandbox_document(report_uuid, file_hash, sandbox_name, verdict);
+            let sandbox_doc =
+                create_sandbox_document(report_uuid, file_hash, sandbox_name, verdict);
             documents.push(sandbox_doc);
         }
     }
@@ -641,7 +695,10 @@ fn create_sandbox_document(
     verdict: &Value,
 ) -> IndexedDocument {
     let mut sandbox_doc = create_base_document_fields(report_uuid, file_hash);
-    sandbox_doc.insert("sandbox_name".to_string(), Value::String(sandbox_name.to_string()));
+    sandbox_doc.insert(
+        "sandbox_name".to_string(),
+        Value::String(sandbox_name.to_string()),
+    );
     sandbox_doc.insert("verdict".to_string(), verdict.clone());
 
     IndexedDocument {
@@ -686,7 +743,7 @@ fn create_yara_document(
 }
 
 async fn create_elasticsearch_indexes(
-    client: &Elasticsearch,
+    client: &ElasticsearchClient,
     args: &IndexArgs,
     verbose: bool,
     dry_run: bool,
@@ -712,7 +769,7 @@ fn get_index_definitions() -> Vec<(&'static str, Value)> {
 }
 
 async fn process_single_index(
-    client: &Elasticsearch,
+    client: &ElasticsearchClient,
     index_name: &str,
     mapping: Value,
     args: &IndexArgs,
@@ -728,25 +785,12 @@ async fn process_single_index(
     handle_index_creation(client, index_name, mapping, index_exists, args, verbose).await
 }
 
-async fn check_index_exists(client: &Elasticsearch, index_name: &str) -> Result<bool> {
-    let response = client
-        .indices()
-        .exists(elasticsearch::indices::IndicesExistsParts::Index(&[index_name]))
-        .send()
-        .await;
-
-    match response {
-        Ok(response) => Ok(response.status_code().as_u16() != 404),
-        Err(e) => Err(anyhow::anyhow!(
-            "Failed to check if index {} exists: {}",
-            index_name,
-            e
-        )),
-    }
+async fn check_index_exists(client: &ElasticsearchClient, index_name: &str) -> Result<bool> {
+    client.index_exists(index_name).await
 }
 
 async fn handle_index_creation(
-    client: &Elasticsearch,
+    client: &ElasticsearchClient,
     index_name: &str,
     mapping: Value,
     index_exists: bool,
@@ -771,18 +815,14 @@ fn should_delete_existing_index(args: &IndexArgs, index_exists: bool) -> bool {
 }
 
 async fn delete_existing_index(
-    client: &Elasticsearch,
+    client: &ElasticsearchClient,
     index_name: &str,
     verbose: bool,
 ) -> Result<()> {
     if verbose {
         println!("Deleting existing index: {}", index_name);
     }
-    client
-        .indices()
-        .delete(elasticsearch::indices::IndicesDeleteParts::Index(&[index_name]))
-        .send()
-        .await?;
+    client.delete_index(index_name).await?;
     Ok(())
 }
 
@@ -791,7 +831,7 @@ fn should_create_index(index_exists: bool, args: &IndexArgs) -> bool {
 }
 
 async fn create_new_index(
-    client: &Elasticsearch,
+    client: &ElasticsearchClient,
     index_name: &str,
     mapping: Value,
     verbose: bool,
@@ -800,18 +840,13 @@ async fn create_new_index(
         println!("Creating index: {}", index_name);
     }
 
-    let create_response = client
-        .indices()
-        .create(elasticsearch::indices::IndicesCreateParts::Index(index_name))
-        .body(mapping)
-        .send()
-        .await?;
+    let create_response = client.create_index(index_name, &mapping).await?;
 
-    if !create_response.status_code().is_success() {
+    if !create_response.status().is_success() {
         return Err(anyhow::anyhow!(
             "Failed to create index {}: {}",
             index_name,
-            create_response.status_code()
+            create_response.status()
         ));
     }
 
@@ -819,20 +854,20 @@ async fn create_new_index(
 }
 
 async fn index_documents_bulk(
-    client: &Elasticsearch,
+    client: &ElasticsearchClient,
     reports: Vec<ProcessedReport>,
     args: &IndexArgs,
     verbose: bool,
 ) -> Result<()> {
     let all_documents = prepare_documents_for_indexing(reports, args);
     let total_docs = all_documents.len();
-    
+
     print_indexing_summary(total_docs, &all_documents);
     let progress = create_indexing_progress(total_docs, verbose);
 
     process_documents_in_batches(client, all_documents, args, verbose, &progress).await?;
     finish_indexing_progress(progress);
-    
+
     Ok(())
 }
 
@@ -855,20 +890,31 @@ fn prepare_documents_for_indexing(
 }
 
 fn print_indexing_summary(total_docs: usize, all_documents: &[IndexedDocument]) {
-    let report_count = all_documents.len() / if total_docs > 0 { total_docs / all_documents.len().max(1) } else { 1 };
-    println!("Indexing {} documents from {} reports", total_docs, report_count);
+    let report_count = all_documents.len()
+        / if total_docs > 0 {
+            total_docs / all_documents.len().max(1)
+        } else {
+            1
+        };
+    println!(
+        "Indexing {} documents from {} reports",
+        total_docs, report_count
+    );
 }
 
 fn create_indexing_progress(total_docs: usize, verbose: bool) -> Option<ProgressTracker> {
     if !verbose {
-        Some(ProgressTracker::new(total_docs as u64, "Indexing documents"))
+        Some(ProgressTracker::new(
+            total_docs as u64,
+            "Indexing documents",
+        ))
     } else {
         None
     }
 }
 
 async fn process_documents_in_batches(
-    client: &Elasticsearch,
+    client: &ElasticsearchClient,
     all_documents: Vec<IndexedDocument>,
     args: &IndexArgs,
     verbose: bool,
@@ -880,15 +926,15 @@ async fn process_documents_in_batches(
     for batch in all_documents.chunks(args.batch_size) {
         process_single_batch(client, batch, args).await?;
         indexed += batch.len();
-        
+
         update_batch_progress(indexed, total_docs, batch.len(), verbose, progress);
     }
-    
+
     Ok(())
 }
 
 async fn process_single_batch(
-    client: &Elasticsearch,
+    client: &ElasticsearchClient,
     batch: &[IndexedDocument],
     args: &IndexArgs,
 ) -> Result<()> {
@@ -915,29 +961,22 @@ fn create_bulk_request_body(batch: &[IndexedDocument]) -> Result<String> {
 }
 
 async fn send_bulk_request(
-    client: &Elasticsearch,
+    client: &ElasticsearchClient,
     bulk_body_str: String,
-) -> Result<elasticsearch::http::response::Response> {
-    let response = client
-        .bulk(BulkParts::None)
-        .body(vec![bulk_body_str])
-        .send()
-        .await?;
+) -> Result<reqwest::Response> {
+    let response = client.bulk(bulk_body_str).await?;
 
-    if !response.status_code().is_success() {
+    if !response.status().is_success() {
         return Err(anyhow::anyhow!(
             "Bulk indexing failed: {}",
-            response.status_code()
+            response.status()
         ));
     }
 
     Ok(response)
 }
 
-async fn handle_bulk_response(
-    response: elasticsearch::http::response::Response,
-    args: &IndexArgs,
-) -> Result<()> {
+async fn handle_bulk_response(response: reqwest::Response, args: &IndexArgs) -> Result<()> {
     let response_body: Value = response.json().await?;
     if let Some(errors) = response_body.get("errors") {
         if errors.as_bool() == Some(true) {

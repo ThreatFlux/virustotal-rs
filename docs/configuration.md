@@ -41,10 +41,12 @@ Use `VIRUSTOTAL_API_KEY` for new library integrations. The additional names exis
 | Base URL | `https://www.virustotal.com/api/v3/` | Yes | Yes |
 | Retry configuration | No automatic retries | Not available | **Stored, but not applied by `build()`** |
 | Custom rate limiter | Tier-derived core limiter | Not available | **Stored, but not applied by `build()`** |
-| Custom headers | `Accept` and `x-apikey` per request | Not available | **Stored, but not applied by `build()`** |
-| Custom user agent | `virustotal-rs/<crate-version>` | Not available | **Stored, but not applied by `build()`** |
+| Custom headers | `Accept` and `x-apikey` per request | Not available | Applied to JSON, form, multipart, raw, and delete requests |
+| Custom user agent | `virustotal-rs/<crate-version>` | Not available | Applied to every request; overrides a custom `User-Agent` header |
 
-The compatibility setters remain callable so existing source continues to compile, but calling `retry_config`, `advanced_retry_config`, `rate_limiter`, `header`, `headers`, or `user_agent` on `EnhancedClientBuilder` does not change the returned `Client` today. Do not rely on those settings until an implementation change is documented and released.
+The retry and limiter compatibility setters remain callable, but `retry_config`, `advanced_retry_config`, and `rate_limiter` do not change the returned `Client`. Use the standalone retry and limiter utilities explicitly.
+
+`header`, `headers`, and `user_agent` now apply to every HTTP request format. Invalid single-header syntax is ignored for compatibility; invalid user-agent values fail at build time. Headers cannot override `x-apikey`, `Authorization`, `Host`, or `Content-Length`. API-key debug output is redacted and shared client/HeaderUtils credential headers are marked sensitive. Public file uploads use the shared multipart transport, including API errors and local throttling. A later `Client::with_timeout` preserves these settings.
 
 `with_tier_detection()` is applied, but it guesses from API-key format and length. It is not an account lookup and cannot establish actual privileges. Prefer `.tier(ApiTier::Public)` or `.tier(ApiTier::Premium)` explicitly.
 
@@ -99,3 +101,9 @@ Match typed `Error` variants when an application needs different handling for au
 ## Data handling
 
 Public file/URL submission and private scanning have different visibility and licensing properties. Confirm the destination and account entitlement before uploading files or submitting URLs. Review VirusTotal's [getting-started guidance](https://docs.virustotal.com/reference/getting-started) and [Private Scanning documentation](https://docs.virustotal.com/docs/private-scanning); the SDK cannot determine whether content is safe or authorized to share.
+
+## Collection pagination
+
+Core and enhanced collection iterators preserve existing query parameters and encode opaque cursors as query values. An empty page with a continuation cursor does not complete collection. Empty or missing cursors terminate iteration; server-provided next URLs are not followed.
+
+Both iterators default to 1,000 pages and 1,000,000 items. Use `with_bounds` with positive `NonZeroUsize` limits for a different budget. Repeated cursors, cycles, and exhausted bounds return errors instead of silently returning partial results. A manual `next_batch` caller receives the current distinct page before a repeated cursor is reported on the next call. Page size zero is rejected before any request. These bounds limit collection across pages, not the byte size of a single HTTP response.

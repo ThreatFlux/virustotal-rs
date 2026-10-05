@@ -137,9 +137,13 @@ def check_license_contract(readme: str, expression: str) -> list[str]:
 
 def check_builder_disclosure() -> list[str]:
     text = CONFIGURATION.read_text(encoding="utf-8")
-    if text.count("Stored, but not applied by `build()`") == 4:
-        return []
-    return ["configuration guide must disclose all four inactive builder settings"]
+    errors = []
+    if text.count("Stored, but not applied by `build()`") != 2:
+        errors.append("configuration guide must disclose inactive retry and limiter settings")
+    for phrase in ("Applied to JSON, form, multipart, raw, and delete requests", "Applied to every request"):
+        if phrase not in text:
+            errors.append(f"configuration guide must describe active HTTP settings: {phrase}")
+    return errors
 
 
 def check_document_links(document: Path) -> list[str]:

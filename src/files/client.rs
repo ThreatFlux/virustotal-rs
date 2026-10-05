@@ -146,15 +146,7 @@ impl<'a> FileClient<'a> {
         password: Option<&str>,
     ) -> Result<crate::AnalysisResponse> {
         let form = self.create_multipart_form(bytes, filename, password);
-        let request = self
-            .client
-            .http_client()
-            .post(upload_url)
-            .header("x-apikey", self.client.api_key())
-            .multipart(form);
-
-        let response = request.send().await.map_err(crate::Error::Http)?;
-        self.handle_upload_response(response).await
+        self.client.post_multipart(upload_url, form).await
     }
 
     async fn post_multipart_form(
@@ -162,16 +154,7 @@ impl<'a> FileClient<'a> {
         endpoint: &str,
         form: multipart::Form,
     ) -> Result<crate::AnalysisResponse> {
-        let url = format!("{}/{}", self.client.base_url(), endpoint);
-        let request = self
-            .client
-            .http_client()
-            .post(&url)
-            .header("x-apikey", self.client.api_key())
-            .multipart(form);
-
-        let response = request.send().await.map_err(crate::Error::Http)?;
-        self.handle_upload_response(response).await
+        self.client.post_multipart(endpoint, form).await
     }
 
     pub async fn get_upload_url(&self) -> Result<String> {
@@ -243,32 +226,6 @@ impl<'a> FileClient<'a> {
         }
 
         form
-    }
-
-    /// Helper method to handle upload response with common error handling logic
-    async fn handle_upload_response(
-        &self,
-        response: reqwest::Response,
-    ) -> Result<crate::AnalysisResponse> {
-        if response.status().is_success() {
-            let text = response.text().await.map_err(crate::Error::Http)?;
-            serde_json::from_str(&text).map_err(crate::Error::Json)
-        } else {
-            let status = response.status();
-            let text = response.text().await.map_err(crate::Error::Http)?;
-
-            if let Ok(error_response) =
-                serde_json::from_str::<crate::error::ApiErrorResponse>(&text)
-            {
-                Err(crate::Error::from_response(status, error_response.error))
-            } else {
-                Err(crate::Error::unknown(format!(
-                    "HTTP {}: {}",
-                    status,
-                    text.chars().take(200).collect::<String>()
-                )))
-            }
-        }
     }
 
     pub async fn get_comments_iterator(&self, file_id: &str) -> CommentIterator<'_> {

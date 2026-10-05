@@ -27,7 +27,9 @@ impl HeaderUtils {
     /// Create standard VirusTotal headers
     pub fn standard_headers(api_key: &ApiKey) -> HeaderMap {
         let mut headers = HeaderMap::new();
-        headers.insert("x-apikey", HeaderValue::from_str(api_key.as_str()).unwrap());
+        let mut key = HeaderValue::from_str(api_key.as_str()).unwrap();
+        key.set_sensitive(true);
+        headers.insert("x-apikey", key);
         headers.insert("Accept", HeaderValue::from_static("application/json"));
         headers.insert(
             "User-Agent",

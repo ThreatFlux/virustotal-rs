@@ -3,6 +3,12 @@ use crate::objects::Object;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+mod current;
+pub use current::{
+    AnalysisClient, AnalysisEngineResult, AnalysisPollOptions, AnalysisReport,
+    AnalysisReportAttributes,
+};
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Analysis {
     #[serde(flatten)]
@@ -31,6 +37,7 @@ pub struct AnalysisAttributes {
 #[serde(rename_all = "lowercase")]
 pub enum AnalysisStatus {
     Queued,
+    #[serde(rename = "in-progress", alias = "inprogress")]
     InProgress,
     Completed,
 }

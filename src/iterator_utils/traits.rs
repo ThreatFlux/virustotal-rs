@@ -22,9 +22,6 @@ pub trait PaginatedIterator<T: Send> {
 
         while self.has_more() {
             let batch = self.next_batch().await?;
-            if batch.is_empty() {
-                break;
-            }
             all_items.extend(batch);
         }
 
@@ -196,9 +193,6 @@ where
 
         while result.len() < n && self.has_more() {
             let batch = self.next_batch().await?;
-            if batch.is_empty() {
-                break;
-            }
 
             for item in batch {
                 if result.len() >= n {
@@ -220,9 +214,6 @@ where
 
         while self.has_more() {
             let batch = self.next_batch().await?;
-            if batch.is_empty() {
-                break;
-            }
 
             for item in batch {
                 if !predicate(&item) {

@@ -1,9 +1,17 @@
 .PHONY: all clean build test fmt clippy doc audit security coverage bench check install-tools help \
          fmt-check test-no-features test-mcp-features build-examples test-doc doc-check docs-contract doc-links \
          deny outdated security-geiger security-supply-chain semver-check feature-test feature-test-full \
-         msrv msrv-install security-enhanced ci-local validate analyze examples release-prep dev
+         msrv msrv-install security-enhanced ci-local validate analyze examples release-prep dev hooks-install pre-commit
 
 RUST_MSRV ?= 1.97.1
+
+# Install the repository-owned hook, including from an isolated Git worktree.
+hooks-install:
+	@sh scripts/install_hooks.sh
+
+# Fast commit checks. Run ci-local separately before pushing or opening a PR.
+pre-commit: fmt-check
+	@python3 scripts/check_docs.py
 
 # Default target
 all: install-tools fmt clippy build test test-no-features test-mcp-features build-examples test-doc doc-check docs-contract doc-links audit security
@@ -16,15 +24,15 @@ ci: fmt-check clippy build test test-no-features test-mcp-features build-example
 # Install required tools
 install-tools:
 	@echo "📦 Installing required tools..."
-	@command -v cargo-audit >/dev/null 2>&1 || cargo install cargo-audit --locked
-	@command -v cargo-outdated >/dev/null 2>&1 || cargo install cargo-outdated --locked
-	@command -v cargo-deny >/dev/null 2>&1 || cargo install cargo-deny --locked
-	@command -v cargo-llvm-cov >/dev/null 2>&1 || cargo install cargo-llvm-cov --locked
-	@command -v cargo-hack >/dev/null 2>&1 || cargo install cargo-hack --locked
-	@command -v cargo-deadlinks >/dev/null 2>&1 || cargo install cargo-deadlinks --locked
-	@command -v cargo-geiger >/dev/null 2>&1 || cargo install cargo-geiger --locked
-	@command -v cargo-supply-chain >/dev/null 2>&1 || cargo install cargo-supply-chain --locked
-	@command -v cargo-semver-checks >/dev/null 2>&1 || cargo install cargo-semver-checks --locked
+	@cargo audit --version 2>/dev/null | grep -Eq "(^| )0\.22\.2($$| )" || cargo install cargo-audit --version 0.22.2 --locked
+	@cargo outdated --version 2>/dev/null | grep -Eq "(^| )0\.19\.0($$| )" || cargo install cargo-outdated --version 0.19.0 --locked
+	@cargo deny --version 2>/dev/null | grep -Eq "(^| )0\.20\.2($$| )" || cargo install cargo-deny --version 0.20.2 --locked
+	@cargo llvm-cov --version 2>/dev/null | grep -Eq "(^| )0\.9\.1($$| )" || cargo install cargo-llvm-cov --version 0.9.1 --locked
+	@cargo hack --version 2>/dev/null | grep -Eq "(^| )0\.6\.45($$| )" || cargo install cargo-hack --version 0.6.45 --locked
+	@cargo deadlinks --version 2>/dev/null | grep -Eq "(^| )0\.8\.1($$| )" || cargo install cargo-deadlinks --version 0.8.1 --locked
+	@cargo geiger --version 2>/dev/null | grep -Eq "(^| )0\.13\.0($$| )" || cargo install cargo-geiger --version 0.13.0 --locked
+	@cargo supply-chain --version 2>/dev/null | grep -Eq "(^| )0\.3\.7($$| )" || cargo install cargo-supply-chain --version 0.3.7 --locked
+	@cargo semver-checks --version 2>/dev/null | grep -Eq "(^| )0\.51\.0($$| )" || cargo install cargo-semver-checks --version 0.51.0 --locked
 	@echo "✅ Tools installed"
 
 # Format code
@@ -137,7 +145,7 @@ security-supply-chain:
 doc-links:
 	@echo "🔗 Checking documentation links..."
 	@cargo doc --locked --all-features --no-deps --document-private-items
-	@cargo deadlinks --dir target/doc || echo "⚠️ Some documentation links may be broken"
+	@cargo deadlinks --dir "$${CARGO_TARGET_DIR:-target}/doc" || echo "⚠️ Some documentation links may be broken"
 	@echo "✅ Documentation link check complete"
 
 # Semantic versioning checks
@@ -183,13 +191,13 @@ msrv-install:
 # Test feature combinations
 feature-test:
 	@echo "🔀 Testing feature combinations..."
-	@cargo hack check --feature-powerset --depth 2 --all-targets
+	@cargo hack check --locked --feature-powerset --depth 2 --all-targets
 	@echo "✅ Feature combination tests passed"
 
 # Test feature combinations with tests
 feature-test-full:
 	@echo "🔀 Testing feature combinations (with tests)..."
-	@cargo hack test --feature-powerset --depth 2
+	@cargo hack test --locked --feature-powerset --depth 2
 	@echo "✅ Full feature combination tests passed"
 
 # Quick check (faster than full build)

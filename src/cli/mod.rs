@@ -1,5 +1,6 @@
 pub mod commands;
 pub mod config;
+pub mod elasticsearch;
 pub mod utils;
 
 use clap::{Parser, Subcommand};

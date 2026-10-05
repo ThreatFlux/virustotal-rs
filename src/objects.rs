@@ -112,6 +112,7 @@ pub struct CollectionIterator<'a, T> {
     cursor: Option<String>,
     finished: bool,
     limit: Option<u32>,
+    pagination: crate::pagination::PaginationState,
     _phantom: PhantomData<T>,
 }
 
@@ -126,6 +127,7 @@ where
             cursor: None,
             finished: false,
             limit: None,
+            pagination: crate::pagination::PaginationState::default(),
             _phantom: PhantomData,
         }
     }
@@ -135,38 +137,40 @@ where
         self
     }
 
+    /// Bound pages and total items. Defaults are 1,000 pages and 1,000,000 items.
+    /// Exceeding either bound returns an error instead of a partial collection.
+    pub fn with_bounds(
+        mut self,
+        max_pages: std::num::NonZeroUsize,
+        max_items: std::num::NonZeroUsize,
+    ) -> Self {
+        self.pagination.set_bounds(max_pages, max_items);
+        self
+    }
+
     pub async fn next_batch(&mut self) -> crate::Result<Vec<T>> {
         if self.finished {
             return Ok(Vec::new());
         }
 
-        let mut url = self.url.clone();
-        let mut query_params = Vec::new();
-
-        if let Some(cursor) = &self.cursor {
-            query_params.push(format!("cursor={}", cursor));
-        }
-
-        if let Some(limit) = self.limit {
-            query_params.push(format!("limit={}", limit));
-        }
-
-        if !query_params.is_empty() {
-            url = format!("{}?{}", url, query_params.join("&"));
-        }
+        let effective_cursor = self
+            .cursor
+            .clone()
+            .or_else(|| crate::pagination::endpoint_cursor(&self.url));
+        self.pagination
+            .before_request(effective_cursor.as_deref())?;
+        let url = crate::pagination::page_url(&self.url, self.cursor.as_deref(), self.limit)?;
 
         let response: Collection<T> = self.client.get(&url).await?;
 
         let items = response.data;
-
-        if let Some(meta) = response.meta {
-            self.cursor = meta.cursor;
-            if self.cursor.is_none() {
-                self.finished = true;
-            }
-        } else {
-            self.finished = true;
-        }
+        let next = response
+            .meta
+            .and_then(|meta| meta.cursor)
+            .filter(|cursor| !cursor.is_empty());
+        self.pagination.record(items.len(), next.as_deref())?;
+        self.finished = next.is_none();
+        self.cursor = next;
 
         Ok(items)
     }
@@ -176,9 +180,6 @@ where
 
         while !self.finished {
             let batch = self.next_batch().await?;
-            if batch.is_empty() {
-                break;
-            }
             all_items.extend(batch);
         }
 
