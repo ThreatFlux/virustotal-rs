@@ -72,7 +72,7 @@ where
     async fn next_batch(&mut self) -> std::result::Result<Vec<T>, Self::Error> {
         loop {
             let batch = self.inner.next_batch().await?;
-            if batch.is_empty() {
+            if batch.is_empty() && !self.inner.has_more() {
                 return Ok(batch);
             }
 
@@ -177,9 +177,6 @@ where
         // Fill buffer from inner iterator
         while self.buffer.len() < self.batch_size && self.inner.has_more() {
             let inner_batch = self.inner.next_batch().await?;
-            if inner_batch.is_empty() {
-                break;
-            }
             self.buffer.extend(inner_batch);
         }
 
@@ -191,7 +188,7 @@ where
 
         // If no more items and buffer has remaining, include it
         if !self.inner.has_more() && !self.buffer.is_empty() {
-            let remaining = self.buffer.drain(..).collect();
+            let remaining = std::mem::take(&mut self.buffer);
             batches.push(remaining);
         }
 

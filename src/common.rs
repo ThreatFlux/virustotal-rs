@@ -26,10 +26,15 @@ pub struct BaseAttributes {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AnalysisStats {
+    #[serde(default)]
     pub harmless: u32,
+    #[serde(default)]
     pub malicious: u32,
+    #[serde(default)]
     pub suspicious: u32,
+    #[serde(default)]
     pub undetected: u32,
+    #[serde(default)]
     pub timeout: u32,
     #[serde(rename = "confirmed-timeout")]
     pub confirmed_timeout: Option<u32>,
@@ -295,7 +300,7 @@ impl AnalysisOperations for BaseResourceClient {
     ) -> crate::Result<crate::Analysis> {
         use crate::objects::ObjectResponse;
 
-        let url = format!("analyses/{}", analysis_id);
+        let url = crate::url_utils::Endpoints::analysis(analysis_id).build();
         let response: ObjectResponse<crate::analysis::AnalysisAttributes> =
             client.get(&url).await?;
         Ok(crate::Analysis {

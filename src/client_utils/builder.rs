@@ -13,8 +13,8 @@ use std::time::Duration;
 /// Compatibility builder for client and standalone utility configuration.
 ///
 /// [`Self::build`] applies the API key, API tier, timeout, and base URL. Retry
-/// configuration, a custom rate limiter, custom headers, and a custom user agent are
-/// currently retained by this builder but are not installed on the returned [`Client`].
+/// configuration and a custom rate limiter are retained but not installed on the returned
+/// [`Client`]. Custom headers and the user agent apply to every request format.
 pub struct EnhancedClientBuilder {
     api_key: Option<ApiKey>,
     tier: Option<ApiTier>,
@@ -76,7 +76,13 @@ impl EnhancedClientBuilder {
             client = client.with_base_url(base_url)?;
         }
 
-        Ok(client)
+        let mut headers = self.headers.clone();
+        if let Some(user_agent) = &self.user_agent {
+            let value = HeaderValue::from_str(user_agent)
+                .map_err(|_| Error::bad_request("User agent is not a valid HTTP header value"))?;
+            headers.insert(reqwest::header::USER_AGENT, value);
+        }
+        client.with_headers(headers)
     }
 
     /// Set the API key
@@ -129,9 +135,10 @@ impl EnhancedClientBuilder {
         self
     }
 
-    /// Record a custom header for compatibility.
+    /// Set a custom header for every request.
     ///
-    /// Headers recorded here are not applied to the [`Client`] returned by [`Self::build`].
+    /// Invalid header syntax is ignored for compatibility. Credential, host, and
+    /// content-length overrides are rejected by [`Self::build`].
     pub fn header<K, V>(mut self, key: K, value: V) -> Self
     where
         K: TryInto<HeaderName>,
@@ -145,17 +152,17 @@ impl EnhancedClientBuilder {
         self
     }
 
-    /// Record custom headers for compatibility.
+    /// Set custom headers for every request.
     ///
-    /// Headers recorded here are not applied to the [`Client`] returned by [`Self::build`].
+    /// Credential, host, and content-length overrides are rejected by [`Self::build`].
     pub fn headers(mut self, headers: HeaderMap) -> Self {
         self.headers.extend(headers);
         self
     }
 
-    /// Record a custom user agent for compatibility.
+    /// Set the user agent for every request.
     ///
-    /// This setting is not applied to the [`Client`] returned by [`Self::build`].
+    /// This takes precedence over a User-Agent supplied through [`Self::headers`].
     pub fn user_agent<U: Into<String>>(mut self, user_agent: U) -> Self {
         self.user_agent = Some(user_agent.into());
         self
@@ -170,7 +177,7 @@ impl EnhancedClientBuilder {
         self
     }
 
-    /// Build a client, applying the API key, tier, timeout, and base URL.
+    /// Build a client, applying the API key, tier, timeout, base URL, headers, and user agent.
     ///
     /// See the type-level documentation for settings retained but not applied.
     pub fn build(self) -> Result<Client> {

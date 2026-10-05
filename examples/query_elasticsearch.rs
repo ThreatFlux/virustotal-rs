@@ -1,14 +1,22 @@
 use clap::Parser;
-use elasticsearch::{Elasticsearch, SearchParts, http::transport::Transport};
 use serde_json::{Value, json};
+use virustotal_rs::cli::elasticsearch::ElasticsearchClient;
 
-#[derive(Parser, Debug)]
+#[derive(Parser)]
 #[command(name = "vt-es-query")]
 #[command(about = "Query VirusTotal data indexed in Elasticsearch")]
 struct Args {
     /// Elasticsearch URL
     #[arg(long, default_value = "http://localhost:9200")]
     es_url: String,
+
+    /// Elasticsearch Basic authentication username
+    #[arg(long)]
+    es_username: Option<String>,
+
+    /// Elasticsearch Basic authentication password
+    #[arg(long)]
+    es_password: Option<String>,
 
     /// Query type to execute
     #[arg(short, long, default_value = "summary")]
@@ -27,32 +35,38 @@ struct Args {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
-    let client = initialize_client(&args.es_url).await?;
+    let client = initialize_client(&args).await?;
     execute_query(&client, &args).await?;
 
     Ok(())
 }
 
-async fn initialize_client(es_url: &str) -> Result<Elasticsearch, Box<dyn std::error::Error>> {
+async fn initialize_client(args: &Args) -> Result<ElasticsearchClient, Box<dyn std::error::Error>> {
     // Initialize Elasticsearch client
-    let transport = Transport::single_node(es_url)?;
-    let client = Elasticsearch::new(transport);
+    let client = ElasticsearchClient::new(
+        &args.es_url,
+        args.es_username.as_deref(),
+        args.es_password.as_deref(),
+    )?;
 
     // Test connection
-    match client.ping().send().await {
+    match client.ping().await {
         Ok(_) => {
-            println!("✓ Connected to Elasticsearch at {}", es_url);
+            println!("✓ Connected to Elasticsearch at {}", args.es_url);
             Ok(client)
         }
         Err(e) => {
-            eprintln!("Failed to connect to Elasticsearch at {}: {}", es_url, e);
+            eprintln!(
+                "Failed to connect to Elasticsearch at {}: {}",
+                args.es_url, e
+            );
             Err(e.into())
         }
     }
 }
 
 async fn execute_query(
-    client: &Elasticsearch,
+    client: &ElasticsearchClient,
     args: &Args,
 ) -> Result<(), Box<dyn std::error::Error>> {
     match args.query.as_str() {
@@ -75,7 +89,7 @@ async fn execute_query(
     Ok(())
 }
 
-async fn query_summary(client: &Elasticsearch) -> Result<(), Box<dyn std::error::Error>> {
+async fn query_summary(client: &ElasticsearchClient) -> Result<(), Box<dyn std::error::Error>> {
     println!("\n=== Index Summary ===");
 
     let indices = vec![
@@ -87,10 +101,7 @@ async fn query_summary(client: &Elasticsearch) -> Result<(), Box<dyn std::error:
     ];
 
     for index in indices {
-        let response = client
-            .count(elasticsearch::CountParts::Index(&[index]))
-            .send()
-            .await?;
+        let response = client.count(index).await?;
 
         let body: Value = response.json().await?;
         let count = body.get("count").and_then(|c| c.as_u64()).unwrap_or(0);
@@ -100,15 +111,13 @@ async fn query_summary(client: &Elasticsearch) -> Result<(), Box<dyn std::error:
     Ok(())
 }
 
-async fn query_malicious_files(client: &Elasticsearch) -> Result<(), Box<dyn std::error::Error>> {
+async fn query_malicious_files(
+    client: &ElasticsearchClient,
+) -> Result<(), Box<dyn std::error::Error>> {
     println!("\n=== Files with Malicious Detections ===");
 
     let query = build_malicious_files_query();
-    let response = client
-        .search(SearchParts::Index(&["vt_reports"]))
-        .body(query)
-        .send()
-        .await?;
+    let response = client.search("vt_reports", &query).await?;
 
     let body: Value = response.json().await?;
     process_malicious_files_results(&body);
@@ -173,7 +182,9 @@ fn print_malicious_file_info(source: &Value) {
     );
 }
 
-async fn query_engine_stats(client: &Elasticsearch) -> Result<(), Box<dyn std::error::Error>> {
+async fn query_engine_stats(
+    client: &ElasticsearchClient,
+) -> Result<(), Box<dyn std::error::Error>> {
     println!("\n=== Top Detecting Engines ===");
 
     let query = json!({
@@ -193,11 +204,7 @@ async fn query_engine_stats(client: &Elasticsearch) -> Result<(), Box<dyn std::e
         "size": 0
     });
 
-    let response = client
-        .search(SearchParts::Index(&["vt_analysis_results"]))
-        .body(query)
-        .send()
-        .await?;
+    let response = client.search("vt_analysis_results", &query).await?;
 
     let body: Value = response.json().await?;
     if let Some(aggs) = body.get("aggregations")
@@ -223,7 +230,7 @@ async fn query_engine_stats(client: &Elasticsearch) -> Result<(), Box<dyn std::e
 }
 
 async fn query_by_hash(
-    client: &Elasticsearch,
+    client: &ElasticsearchClient,
     hash: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("\n=== Analysis for Hash: {} ===", hash);
@@ -242,7 +249,7 @@ async fn query_by_hash(
 }
 
 async fn fetch_main_report(
-    client: &Elasticsearch,
+    client: &ElasticsearchClient,
     hash: &str,
 ) -> Result<Value, Box<dyn std::error::Error>> {
     let query = json!({
@@ -253,11 +260,7 @@ async fn fetch_main_report(
         }
     });
 
-    let response = client
-        .search(SearchParts::Index(&["vt_reports"]))
-        .body(query)
-        .send()
-        .await?;
+    let response = client.search("vt_reports", &query).await?;
 
     Ok(response.json().await?)
 }
@@ -315,15 +318,13 @@ fn display_detection_stats(stats: &Value) {
 }
 
 async fn query_and_display_malicious_detections(
-    client: &Elasticsearch,
+    client: &ElasticsearchClient,
     report_uuid: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let malicious_query = build_malicious_detections_query(report_uuid);
 
     let mal_response = client
-        .search(SearchParts::Index(&["vt_analysis_results"]))
-        .body(malicious_query)
-        .send()
+        .search("vt_analysis_results", &malicious_query)
         .await?;
 
     let mal_body: Value = mal_response.json().await?;
@@ -374,7 +375,9 @@ fn print_detection_result(source: &Value) {
     println!("  {}: {}", engine, result);
 }
 
-async fn query_yara_matches(client: &Elasticsearch) -> Result<(), Box<dyn std::error::Error>> {
+async fn query_yara_matches(
+    client: &ElasticsearchClient,
+) -> Result<(), Box<dyn std::error::Error>> {
     println!("\n=== Files with YARA Rule Matches ===");
 
     let query = json!({
@@ -389,11 +392,7 @@ async fn query_yara_matches(client: &Elasticsearch) -> Result<(), Box<dyn std::e
         "size": 10
     });
 
-    let response = client
-        .search(SearchParts::Index(&["vt_crowdsourced_data"]))
-        .body(query)
-        .send()
-        .await?;
+    let response = client.search("vt_crowdsourced_data", &query).await?;
 
     let body: Value = response.json().await?;
     if let Some(hits) = body

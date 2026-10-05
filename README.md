@@ -50,7 +50,7 @@ The `main` branch can be ahead of the newest crates.io release. To test unreleas
 cargo add virustotal-rs --git https://github.com/ThreatFlux/virustotal-rs.git
 ```
 
-The current development MSRV is Rust 1.97.1. <!-- docs-msrv:1.97.1 -->
+Consumers require Rust 1.97.1 or newer. Development and CI use stable Rust 1.99.0. <!-- docs-msrv:1.97.1 -->
 
 ## Quick start
 
@@ -111,6 +111,7 @@ The contract check keeps this table aligned with `Cargo.toml`.
 | --- | --- | --- |
 | `default` | Yes | Empty feature set; core async SDK only |
 | `cli` | No | Enables the `vt-cli` download workflow and its dependencies |
+| `elasticsearch` | No | Empty compatibility alias; REST indexing helpers and examples require `cli` |
 | `mcp` | No | Enables the MCP server runtime and transports |
 | `mcp-jwt` | No | Adds JWT authentication and enables `mcp` |
 | `mcp-oauth` | No | Adds OAuth 2.1 authentication and enables `mcp` |
@@ -187,7 +188,7 @@ make test
 make ci-local
 ```
 
-The repository pins Rust 1.97.1 in `rust-toolchain.toml`. See [CONTRIBUTING.md](CONTRIBUTING.md) for the validation matrix and pull-request expectations.
+The repository pins stable Rust 1.99.0 in `rust-toolchain.toml`; consumers retain an MSRV of 1.97.1. See [CONTRIBUTING.md](CONTRIBUTING.md) for the validation matrix and pull-request expectations.
 
 ## Support and security
 

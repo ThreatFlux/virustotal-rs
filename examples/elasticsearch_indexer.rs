@@ -1,6 +1,5 @@
 use chrono::Utc;
 use clap::Parser;
-use elasticsearch::{BulkParts, Elasticsearch, http::transport::Transport};
 use futures::stream::{self, StreamExt};
 use serde_json::{Map, Value, json};
 use std::path::{Path, PathBuf};
@@ -8,9 +7,10 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::fs;
 use uuid::Uuid;
+use virustotal_rs::cli::elasticsearch::ElasticsearchClient;
 use virustotal_rs::{ApiKey, ApiTier, Client};
 
-#[derive(Parser, Debug)]
+#[derive(Parser)]
 #[command(name = "vt-es-indexer")]
 #[command(
     about = "Index VirusTotal analysis reports into Elasticsearch with hierarchical structure"
@@ -23,6 +23,14 @@ struct Args {
     /// Elasticsearch URL
     #[arg(long, default_value = "http://localhost:9200")]
     es_url: String,
+
+    /// Elasticsearch Basic authentication username
+    #[arg(long)]
+    es_username: Option<String>,
+
+    /// Elasticsearch Basic authentication password
+    #[arg(long)]
+    es_password: Option<String>,
 
     /// Enable indexing to Elasticsearch
     #[arg(long)]
@@ -85,6 +93,10 @@ struct DownloadParams {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
+    if args.batch_size == 0 {
+        return Err("Elasticsearch batch size must be positive".into());
+    }
+
     // Validate arguments and check if indexing is enabled
     if !validate_arguments(&args) {
         return Ok(());
@@ -119,13 +131,16 @@ fn validate_arguments(args: &Args) -> bool {
 /// Initializes Elasticsearch client and tests the connection
 async fn initialize_elasticsearch_client(
     args: &Args,
-) -> Result<Elasticsearch, Box<dyn std::error::Error>> {
+) -> Result<ElasticsearchClient, Box<dyn std::error::Error>> {
     // Initialize Elasticsearch client
-    let transport = Transport::single_node(&args.es_url)?;
-    let es_client = Elasticsearch::new(transport);
+    let es_client = ElasticsearchClient::new(
+        &args.es_url,
+        args.es_username.as_deref(),
+        args.es_password.as_deref(),
+    )?;
 
     // Test Elasticsearch connection
-    match es_client.ping().send().await {
+    match es_client.ping().await {
         Ok(_) => {
             if args.verbose {
                 println!("✓ Connected to Elasticsearch at {}", args.es_url);
@@ -168,7 +183,7 @@ async fn process_reports_from_input(
 
 /// Coordinates the final indexing process by creating indexes and bulk indexing documents
 async fn coordinate_indexing(
-    es_client: &Elasticsearch,
+    es_client: &ElasticsearchClient,
     processed_reports: Vec<ProcessedReport>,
     args: &Args,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -946,7 +961,7 @@ fn process_vt_report(
 }
 
 async fn create_elasticsearch_indexes(
-    client: &Elasticsearch,
+    client: &ElasticsearchClient,
     args: &Args,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let indexes = get_index_definitions();
@@ -970,44 +985,21 @@ fn get_index_definitions() -> Vec<(&'static str, Value)> {
 }
 
 async fn create_index_if_not_exists(
-    client: &Elasticsearch,
+    client: &ElasticsearchClient,
     index_name: &str,
     mapping: Value,
     args: &Args,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let exists_response = check_index_exists(client, index_name).await;
-
-    match exists_response {
-        Ok(response) => {
-            if response.status_code().as_u16() == 404 {
-                create_new_index(client, index_name, mapping, args).await?
-            } else if args.verbose {
-                println!("Index {} already exists", index_name);
-            }
-        }
-        Err(e) => {
-            return Err(format!("Failed to check if index {} exists: {}", index_name, e).into());
-        }
+    if !client.index_exists(index_name).await? {
+        create_new_index(client, index_name, mapping, args).await?;
+    } else if args.verbose {
+        println!("Index {} already exists", index_name);
     }
-
     Ok(())
 }
 
-async fn check_index_exists(
-    client: &Elasticsearch,
-    index_name: &str,
-) -> Result<elasticsearch::http::response::Response, elasticsearch::Error> {
-    client
-        .indices()
-        .exists(elasticsearch::indices::IndicesExistsParts::Index(&[
-            index_name,
-        ]))
-        .send()
-        .await
-}
-
 async fn create_new_index(
-    client: &Elasticsearch,
+    client: &ElasticsearchClient,
     index_name: &str,
     mapping: Value,
     args: &Args,
@@ -1016,20 +1008,13 @@ async fn create_new_index(
         println!("Creating index: {}", index_name);
     }
 
-    let create_response = client
-        .indices()
-        .create(elasticsearch::indices::IndicesCreateParts::Index(
-            index_name,
-        ))
-        .body(mapping)
-        .send()
-        .await?;
+    let create_response = client.create_index(index_name, &mapping).await?;
 
-    if !create_response.status_code().is_success() {
+    if !create_response.status().is_success() {
         return Err(format!(
             "Failed to create index {}: {}",
             index_name,
-            create_response.status_code()
+            create_response.status()
         )
         .into());
     }
@@ -1038,7 +1023,7 @@ async fn create_new_index(
 }
 
 async fn index_documents_bulk(
-    client: &Elasticsearch,
+    client: &ElasticsearchClient,
     reports: Vec<ProcessedReport>,
     args: &Args,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -1071,7 +1056,7 @@ fn flatten_report_documents(reports: Vec<ProcessedReport>) -> Vec<IndexedDocumen
 }
 
 async fn process_document_batch(
-    client: &Elasticsearch,
+    client: &ElasticsearchClient,
     batch: &[IndexedDocument],
     args: &Args,
 ) -> Result<usize, Box<dyn std::error::Error>> {
@@ -1101,24 +1086,20 @@ fn prepare_bulk_request_body(
 }
 
 async fn execute_bulk_request(
-    client: &Elasticsearch,
+    client: &ElasticsearchClient,
     bulk_body: String,
-) -> Result<elasticsearch::http::response::Response, Box<dyn std::error::Error>> {
-    let response = client
-        .bulk(BulkParts::None)
-        .body(vec![bulk_body])
-        .send()
-        .await?;
+) -> Result<reqwest::Response, Box<dyn std::error::Error>> {
+    let response = client.bulk(bulk_body).await?;
 
-    if !response.status_code().is_success() {
-        return Err(format!("Bulk indexing failed: {}", response.status_code()).into());
+    if !response.status().is_success() {
+        return Err(format!("Bulk indexing failed: {}", response.status()).into());
     }
 
     Ok(response)
 }
 
 async fn handle_bulk_response(
-    response: elasticsearch::http::response::Response,
+    response: reqwest::Response,
     args: &Args,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let response_body: Value = response.json().await?;

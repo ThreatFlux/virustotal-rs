@@ -1,3 +1,6 @@
+[graph]
+all-features = true
+
 [licenses]
 allow = [
     "MIT",
@@ -12,13 +15,21 @@ allow = [
     "CDLA-Permissive-2.0",
 ]
 
+# Existing CLI dependencies use MPL-2.0. Keep acceptance scoped to these exact
+# packages now that optional integrations are included in the policy graph.
+[[licenses.exceptions]]
+name = "colored"
+version = "=3.1.1"
+allow = ["MPL-2.0"]
+
+[[licenses.exceptions]]
+name = "option-ext"
+version = "=0.2.0"
+allow = ["MPL-2.0"]
+
 [bans]
 multiple-versions = "warn"
 wildcards = "allow"
-skip = [
-    # Known safe duplicates due to dependency tree requirements
-    { name = "hashbrown", version = "=0.14.5" },
-]
 
 [sources]
 unknown-registry = "warn"

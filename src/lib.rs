@@ -58,6 +58,7 @@ pub mod livehunt;
 pub mod macros;
 pub mod metadata;
 pub mod objects;
+mod pagination;
 pub mod popular_threat_categories;
 pub mod private_files;
 pub mod private_files_client;
@@ -87,7 +88,10 @@ pub mod cli;
 #[cfg(test)]
 pub mod test_utils;
 
-pub use analysis::{Analysis, AnalysisResponse};
+pub use analysis::{
+    Analysis, AnalysisClient, AnalysisEngineResult, AnalysisPollOptions, AnalysisReport,
+    AnalysisReportAttributes, AnalysisResponse,
+};
 pub use attack_tactics::{AttackTactic, AttackTacticClient};
 pub use attack_techniques::{AttackTechnique, AttackTechniqueClient};
 pub use auth::{ApiKey, ApiTier};
@@ -170,7 +174,10 @@ pub use retrohunt::{
     Corpus, CreateRetrohuntJobRequest, JobStatus, MatchingFileContext, RetrohuntClient,
     RetrohuntJob, RetrohuntMatchingFile, TimeRange,
 };
-pub use search::{FileSearchResult, SearchClient, SearchOrder, SearchResult, SnippetResponse};
+pub use search::{
+    FileSearchResult, SearchClient, SearchObject, SearchOrder, SearchPage, SearchResult,
+    SnippetResponse,
+};
 pub use sigma_rules::{SigmaRule, SigmaRuleResponse, SigmaRulesClient};
 pub use threat_actors::{RelationshipOrder, ThreatActor, ThreatActorOrder, ThreatActorsClient};
 pub use url_utils::{

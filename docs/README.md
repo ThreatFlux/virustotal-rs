@@ -4,6 +4,7 @@ This directory holds user and maintainer documentation for `virustotal-rs`.
 
 | File | Audience | Purpose |
 |------|----------|---------|
+| [`sdk-feature-plan.md`](sdk-feature-plan.md) | Contributors | Verified October 2026 API gaps, implemented slices, and deferred surfaces |
 | [`api-coverage.md`](api-coverage.md) | SDK users | Source-derived resource-client inventory and account-access boundaries |
 | [`configuration.md`](configuration.md) | SDK users | Credentials, builders, timeouts, rate limits, retries, errors, and data handling |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Contributors | High-level component map for the SDK, CLI, and MCP modules |

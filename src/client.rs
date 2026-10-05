@@ -1,6 +1,7 @@
 use crate::auth::{ApiKey, ApiTier};
 use crate::error::{ApiErrorResponse, Error, Result};
 use crate::rate_limit::RateLimiter;
+use reqwest::header::{HeaderMap, HeaderValue};
 use reqwest::{Client as ReqwestClient, Method, RequestBuilder, Response};
 use serde::{Serialize, de::DeserializeOwned};
 use std::time::Duration;
@@ -15,10 +16,16 @@ pub struct Client {
     api_key: ApiKey,
     rate_limiter: RateLimiter,
     base_url: Url,
+    timeout: Duration,
+    headers: HeaderMap,
+    api_key_header: HeaderValue,
 }
 
 impl Client {
     pub fn new(api_key: ApiKey, tier: ApiTier) -> Result<Self> {
+        let mut api_key_header = HeaderValue::from_str(api_key.as_str())
+            .map_err(|_| Error::bad_request("API key is not a valid HTTP header value"))?;
+        api_key_header.set_sensitive(true);
         let http_client = ReqwestClient::builder()
             .timeout(DEFAULT_TIMEOUT)
             .user_agent(format!("virustotal-rs/{}", env!("CARGO_PKG_VERSION")))
@@ -33,6 +40,9 @@ impl Client {
             api_key,
             rate_limiter,
             base_url,
+            timeout: DEFAULT_TIMEOUT,
+            headers: HeaderMap::new(),
+            api_key_header,
         })
     }
 
@@ -49,12 +59,35 @@ impl Client {
     }
 
     pub fn with_timeout(mut self, timeout: Duration) -> Result<Self> {
+        self.timeout = timeout;
+        self.rebuild_http_client()?;
+        Ok(self)
+    }
+
+    pub(crate) fn with_headers(mut self, headers: HeaderMap) -> Result<Self> {
+        if headers.keys().any(|name| {
+            matches!(
+                name.as_str(),
+                "x-apikey" | "authorization" | "host" | "content-length"
+            )
+        }) {
+            return Err(Error::bad_request(
+                "Custom headers cannot override credentials, host, or content length",
+            ));
+        }
+        self.headers = headers;
+        self.rebuild_http_client()?;
+        Ok(self)
+    }
+
+    fn rebuild_http_client(&mut self) -> Result<()> {
         self.http_client = ReqwestClient::builder()
-            .timeout(timeout)
+            .timeout(self.timeout)
             .user_agent(format!("virustotal-rs/{}", env!("CARGO_PKG_VERSION")))
+            .default_headers(self.headers.clone())
             .build()
             .map_err(Error::Http)?;
-        Ok(self)
+        Ok(())
     }
 
     pub fn with_base_url(mut self, base_url: &str) -> Result<Self> {
@@ -98,7 +131,7 @@ impl Client {
         let request = self
             .http_client
             .request(Method::POST, url)
-            .header("x-apikey", self.api_key.as_str())
+            .header("x-apikey", self.api_key_header.clone())
             .header("Accept", "application/json")
             .form(form);
 
@@ -130,6 +163,14 @@ impl Client {
         header_name: &str,
         header_value: &str,
     ) -> Result<()> {
+        if matches!(
+            header_name.to_ascii_lowercase().as_str(),
+            "x-apikey" | "authorization" | "host" | "content-length"
+        ) {
+            return Err(Error::bad_request(
+                "Request headers cannot override credentials, host, or content length",
+            ));
+        }
         self.rate_limiter.check_rate_limit().await?;
 
         let url = self
@@ -140,7 +181,7 @@ impl Client {
         let request = self
             .http_client
             .request(Method::DELETE, url)
-            .header("x-apikey", self.api_key.as_str())
+            .header("x-apikey", self.api_key_header.clone())
             .header("Accept", "application/json")
             .header(header_name, header_value);
 
@@ -214,7 +255,7 @@ impl Client {
         let request = self
             .http_client
             .request(Method::POST, url)
-            .header("x-apikey", self.api_key.as_str())
+            .header("x-apikey", self.api_key_header.clone())
             .header("Accept", "application/json")
             .multipart(form);
 
@@ -259,14 +300,14 @@ impl Client {
     fn build_request(&self, method: Method, url: Url) -> RequestBuilder {
         self.http_client
             .request(method, url)
-            .header("x-apikey", self.api_key.as_str())
+            .header("x-apikey", self.api_key_header.clone())
             .header("Accept", "application/json")
     }
 
     fn build_request_raw(&self, method: Method, url: Url) -> RequestBuilder {
         self.http_client
             .request(method, url)
-            .header("x-apikey", self.api_key.as_str())
+            .header("x-apikey", self.api_key_header.clone())
     }
 
     async fn parse_response<T>(&self, response: Response) -> Result<T>

@@ -30,7 +30,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
-  RUST_VERSION: 1.97.1
+  RUST_VERSION: 1.99.0
 
 jobs:
   prepare:
@@ -45,9 +45,12 @@ jobs:
     steps:
       - name: Determine source ref
         id: source_ref
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_SOURCE_REF: ${{ github.event.inputs.source_ref }}
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ github.event.inputs.source_ref }}" ]]; then
-            echo "source_ref=${{ github.event.inputs.source_ref }}" >> "$GITHUB_OUTPUT"
+          if [[ "${EVENT_NAME}" == "workflow_dispatch" && -n "${INPUT_SOURCE_REF}" ]]; then
+            echo "source_ref=${INPUT_SOURCE_REF}" >> "$GITHUB_OUTPUT"
           else
             echo "source_ref=${GITHUB_REF}" >> "$GITHUB_OUTPUT"
           fi
@@ -60,25 +63,30 @@ jobs:
 
       - name: Determine version
         id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            VERSION="${{ github.event.inputs.version }}"
+          if [[ "${EVENT_NAME}" == "workflow_dispatch" ]]; then
+            VERSION="${INPUT_VERSION}"
           else
             VERSION="${GITHUB_REF#refs/tags/v}"
           fi
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Validate version format
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
           if ! [[ "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$ ]]; then
             echo "Invalid version format: ${VERSION}"
             exit 1
           fi
 
       - name: Validate manifest version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
           CURRENT_VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
           if [[ "${CURRENT_VERSION}" != "${VERSION}" ]]; then
             echo "Cargo.toml version ${CURRENT_VERSION} does not match release version ${VERSION}"
@@ -87,10 +95,13 @@ jobs:
 
       - name: Determine prerelease flag
         id: prerelease
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_PRERELEASE: ${{ github.event.inputs.prerelease }}
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "prerelease=${{ github.event.inputs.prerelease }}" >> "$GITHUB_OUTPUT"
+          if [[ "${EVENT_NAME}" == "workflow_dispatch" ]]; then
+            echo "prerelease=${INPUT_PRERELEASE}" >> "$GITHUB_OUTPUT"
           elif [[ "${VERSION}" == *-* ]]; then
             echo "prerelease=true" >> "$GITHUB_OUTPUT"
           else
@@ -111,12 +122,14 @@ jobs:
 
       - name: Ensure release tag
         id: release_ref
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          SOURCE_REF: ${{ steps.source_ref.outputs.source_ref }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
-          VERSION="${{ steps.version.outputs.version }}"
           TAG="v${VERSION}"
-          SOURCE_REF="${{ steps.source_ref.outputs.source_ref }}"
-          TARGET_SHA="$(git rev-parse "${SOURCE_REF}^{commit}")"
+          TARGET_SHA="$(git rev-parse --verify --end-of-options "${SOURCE_REF}^{commit}")"
 
           if git rev-parse -q --verify "refs/tags/${TAG}^{commit}" >/dev/null; then
             EXISTING_SHA="$(git rev-parse "${TAG}^{commit}")"
@@ -124,7 +137,9 @@ jobs:
               echo "Existing tag ${TAG} points to ${EXISTING_SHA}, expected ${TARGET_SHA}"
               exit 1
             fi
-          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          elif [[ "${EVENT_NAME}" == "workflow_dispatch" ]]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git tag -a "${TAG}" "${TARGET_SHA}" -m "Release ${TAG}"
             git push origin "refs/tags/${TAG}"
           else
@@ -156,7 +171,7 @@ jobs:
           ref: ${{ needs.prepare.outputs.source_ref }}
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
+        uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # v1
         with:
           toolchain: ${{ env.RUST_VERSION }}
 
@@ -228,7 +243,7 @@ jobs:
           ref: ${{ needs.prepare.outputs.source_ref }}
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
+        uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # v1
         with:
           toolchain: ${{ env.RUST_VERSION }}
 
@@ -259,9 +274,10 @@ jobs:
           pattern: release-*
 
       - name: Generate release notes
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          TAG: ${{ needs.prepare.outputs.tag }}
         run: |
-          VERSION="${{ needs.prepare.outputs.version }}"
-          TAG="${{ needs.prepare.outputs.tag }}"
 
           if [[ -f CHANGELOG.md ]]; then
             awk "/^## \\[${VERSION}\\]/{flag=1;next}/^## \\[/{flag=0}flag" CHANGELOG.md > release_notes.md
@@ -281,7 +297,7 @@ jobs:
           fi
 
       - name: Create GitHub release
-        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           body_path: release_notes.md
           draft: false

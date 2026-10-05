@@ -14,9 +14,15 @@
 
 ```bash
 make install-tools
+make hooks-install
 make docs-contract
 make ci-local
 ```
+
+The repository pre-commit hook checks formatting and the documentation contract.
+The installer resolves Git's hooks directory for normal checkouts and worktrees,
+and preserves unrelated existing hooks. Run the full `make ci-local` gate before
+pushing or opening a pull request.
 
 For integration-style examples, export either `VIRUSTOTAL_API_KEY` or `VT_API_KEY`.
 

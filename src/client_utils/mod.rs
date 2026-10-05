@@ -13,8 +13,9 @@
 //!
 //! # Builder behavior
 //!
-//! [`EnhancedClientBuilder`] currently applies the API key, tier, timeout, and base URL.
-//! Its retry, custom limiter, custom header, and user-agent setters retain configuration
+//! [`EnhancedClientBuilder`] applies the API key, tier, timeout, base URL, custom headers,
+//! and user agent to all request formats.
+//! Its retry and custom limiter setters retain configuration
 //! for compatibility but do not apply it to the returned [`crate::Client`]. Core client
 //! requests are not retried automatically; wrap an idempotent operation with
 //! [`RetryUtils::retry_request`] when retries are appropriate.

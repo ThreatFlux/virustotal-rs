@@ -309,6 +309,40 @@ impl<'a> UrlClient<'a> {
             .await
     }
 
+    /// Retrieve the documented single IP object for this URL's last resolution.
+    /// Prefer this over the legacy collection-shaped method.
+    pub async fn get_last_serving_ip_address_object(
+        &self,
+        url_id: &str,
+    ) -> Result<crate::IpAddress> {
+        let endpoint = Endpoints::url(url_id)
+            .raw_segment("last_serving_ip_address")
+            .build();
+        let response: ObjectResponse<crate::ip_addresses::IpAddressAttributes> =
+            self.client.get(&endpoint).await?;
+        if response.data.object_type != "ip_address" {
+            return Err(crate::Error::bad_request(
+                "Expected an IP address relationship object",
+            ));
+        }
+        Ok(crate::IpAddress {
+            object: response.data,
+        })
+    }
+
+    /// Fetch the single domain or IP network location with caller-selected typing.
+    /// Use `serde_json::Value` to retain either documented object shape.
+    pub async fn get_network_location<T: serde::de::DeserializeOwned>(
+        &self,
+        url_id: &str,
+    ) -> Result<T> {
+        let endpoint = Endpoints::url(url_id)
+            .raw_segment("network_location")
+            .build();
+        let response: crate::client::ApiResponse<T> = self.client.get(&endpoint).await?;
+        Ok(response.data)
+    }
+
     /// Get redirecting URLs
     pub async fn get_redirecting_urls(
         &self,
