@@ -107,12 +107,10 @@ gh workflow run release.yml \
   -f prerelease=false
 ```
 
-`source_ref` builds a different ref than the one the workflow runs on, for
-example to publish an existing tag with the current workflow:
-
-```bash
-gh workflow run release.yml --ref main -f version=X.Y.Z -f source_ref=vX.Y.Z
-```
+`release.yml` builds the commit it runs on: the pushed tag, or the head of the
+branch or tag chosen with `--ref` (default: `main`). To release from a release
+branch, dispatch on that branch with `--ref`. A dispatch tags that commit unless
+the tag already exists, in which case the tag must point at the same commit.
 
 ## Credentials
 
