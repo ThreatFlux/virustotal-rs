@@ -1,21 +1,18 @@
 version: 2
 updates:
-  # Enable version updates for Cargo
-  - package-ecosystem: "cargo"
-    directory: "/"
+  - package-ecosystem: cargo
+    directory: /
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "02:00"
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: UTC
     open-pull-requests-limit: 10
-    reviewers:
-      - "ThreatFlux"
-    commit-message:
-      prefix: "deps"
-      include: "scope"
     labels:
-      - "dependencies"
-      - "rust"
+      - dependencies
+      - rust
+    commit-message:
+      prefix: "chore(deps)"
     groups:
       development-dependencies:
         patterns:
@@ -24,8 +21,8 @@ updates:
           - "wiremock"
           - "clap"
         update-types:
-          - "minor"
-          - "patch"
+          - minor
+          - patch
       security-dependencies:
         patterns:
           - "reqwest"
@@ -33,33 +30,34 @@ updates:
           - "openssl*"
           - "ring"
         update-types:
-          - "patch"
+          - patch
       async-dependencies:
         patterns:
           - "tokio*"
           - "async-*"
           - "futures*"
         update-types:
-          - "minor"
-          - "patch"
+          - minor
+          - patch
     ignore:
-      # Ignore major version updates for now
+      # Major versions change public types; they are upgraded by hand.
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
 
-  # Enable version updates for GitHub Actions
-  - package-ecosystem: "github-actions"
-    directory: "/"
+  - package-ecosystem: github-actions
+    directory: /
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "02:00"
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: UTC
     open-pull-requests-limit: 5
-    reviewers:
-      - "ThreatFlux"
-    commit-message:
-      prefix: "ci"
-      include: "scope"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
     labels:
-      - "dependencies"
-      - "github-actions"
+      - dependencies
+      - github-actions
+    commit-message:
+      prefix: "chore(ci)"
