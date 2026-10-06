@@ -48,6 +48,7 @@ jobs:
       contents: write # Creates the release tag on a manual dispatch.
     outputs:
       version: ${{ steps.version.outputs.version }}
+      notes-source: ${{ steps.notes.outputs.source }}
     steps:
       # Every job builds the workflow's own commit (github.sha): the pushed tag,
       # or the head of the branch or tag chosen with `gh workflow run --ref` at
@@ -95,6 +96,7 @@ jobs:
           fi
 
       - name: Generate release notes
+        id: notes
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
@@ -114,7 +116,9 @@ jobs:
           fi
           if [[ -s changelog_section.md ]]; then
             cat changelog_section.md >> release_notes.md
+            echo "source=changelog" >> "$GITHUB_OUTPUT"
           else
+            echo "source=git-log" >> "$GITHUB_OUTPUT"
             PREVIOUS_TAG="$(git tag --merged HEAD --sort=-version:refname --list 'v*' | grep -vx "${TAG}" | head -n 1 || true)"
             if [[ -n "${PREVIOUS_TAG}" ]]; then
               git log "${PREVIOUS_TAG}..HEAD" --pretty=format:"- %s (%h)" --no-merges >> release_notes.md
@@ -346,6 +350,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ needs.prepare.outputs.version }}
+          NOTES_SOURCE: ${{ needs.prepare.outputs.notes-source }}
           INPUT_PRERELEASE: ${{ inputs.prerelease && 'true' || 'false' }}
         run: |
           set -euo pipefail
@@ -360,9 +365,20 @@ jobs:
           fi
 
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            # Keep the notes auto-release or a maintainer already wrote, but
-            # apply this run's prerelease state.
-            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TITLE" --prerelease="${IS_PRERELEASE}"
+            EDIT_ARGS=(--title "$TITLE" --prerelease="${IS_PRERELEASE}")
+            if [[ "$NOTES_SOURCE" == "changelog" ]]; then
+              # The CHANGELOG.md section is the curated record, so it replaces
+              # the notes auto-release wrote (feat/fix/breaking commits only).
+              EDIT_ARGS+=(--notes-file notes/release_notes.md)
+            else
+              # Without a CHANGELOG section, keep notes that have content and
+              # only replace a body that is empty or nothing but headings.
+              BODY="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body --jq .body)"
+              if ! grep -qvE '^[[:space:]]*(#.*)?$' <<<"$BODY"; then
+                EDIT_ARGS+=(--notes-file notes/release_notes.md)
+              fi
+            fi
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" "${EDIT_ARGS[@]}"
           else
             PRERELEASE_FLAG=()
             if [[ "${IS_PRERELEASE}" == "true" ]]; then

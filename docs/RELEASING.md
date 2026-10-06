@@ -3,6 +3,9 @@
 ## Automated Release Path
 
 Routine releases are driven by [Conventional Commits](https://www.conventionalcommits.org/).
+Before a release, move the `[Unreleased]` entries in `CHANGELOG.md` into a dated
+`## [X.Y.Z] - YYYY-MM-DD` section for the version auto-release will cut (its dry
+run reports it), so the GitHub Release carries the curated notes.
 
 When either the `CI` or `Security` workflow finishes on `main`, or when triggered
 manually, `auto-release.yml` calls the pinned ThreatFlux reusable release workflow:
@@ -28,8 +31,11 @@ with `GITHUB_TOKEN`; if the App token cannot be minted, the run fails instead.
 2. Builds `vt-cli` and `mcp_server` for Linux (x86_64 glibc and musl, arm64),
    macOS (arm64, x86_64), and Windows (x86_64), each with a SHA-256 checksum
 3. Generates a CycloneDX SBOM
-4. Creates the GitHub Release (keeping notes that already exist) and uploads the
-   archives, checksums, and SBOM
+4. Creates the GitHub Release and uploads the archives, checksums, and SBOM.
+   The notes are the `## [X.Y.Z]` section of `CHANGELOG.md`, which replaces the
+   commit list auto-release writes (it only lists `feat`, `fix`, and breaking
+   commits). Without a section, existing notes with content are kept and an
+   empty or heading-only body is replaced with the commits since the last tag.
 5. Publishes the crate to crates.io through
    [trusted publishing](https://crates.io/docs/trusted-publishing)
 
