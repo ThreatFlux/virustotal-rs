@@ -13,7 +13,14 @@ manually, `auto-release.yml` calls the pinned ThreatFlux reusable release workfl
 4. Updates `Cargo.toml` and `Cargo.lock`
 5. Commits the version bump
 6. Creates and pushes a new `v*` tag
-7. Dispatches `release.yml` with the new version
+
+The release commit and tag are pushed as the `threatflux-automation` GitHub App
+(organization variable `TF_AUTOMATION_APP_ID` and secret
+`TF_AUTOMATION_APP_PRIVATE_KEY`). Unlike a `GITHUB_TOKEN` push, an App push
+starts workflows: the tag starts `release.yml` through its `push: tags` trigger,
+and the release commit gets the usual `main` checks. The reusable workflow
+dispatches `release.yml` itself only when no App is configured and it releases
+with `GITHUB_TOKEN`; if the App token cannot be minted, the run fails instead.
 
 `release.yml` also accepts maintainer-created tags and:
 
