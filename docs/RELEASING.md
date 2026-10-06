@@ -15,13 +15,47 @@ manually, `auto-release.yml` calls the pinned ThreatFlux reusable release workfl
 6. Creates and pushes a new `v*` tag
 7. Dispatches `release.yml` with the new version
 
-The explicit dispatch also runs with `GITHUB_TOKEN`, whose tag pushes do not
-trigger another workflow. `release.yml` also accepts maintainer-created tags and:
+`release.yml` also accepts maintainer-created tags and:
 
-1. Validates the manifest version
-2. Builds `vt-cli` and `mcp_server` on Linux, macOS, and Windows
-3. Publishes the crate when a registry token is configured
-4. Creates or updates the GitHub Release with packaged artifacts
+1. Validates that the tag matches the `Cargo.toml` version, and never moves an existing tag
+2. Builds `vt-cli` and `mcp_server` for Linux (x86_64 glibc and musl, arm64),
+   macOS (arm64, x86_64), and Windows (x86_64), each with a SHA-256 checksum
+3. Generates a CycloneDX SBOM
+4. Creates the GitHub Release (keeping notes that already exist) and uploads the
+   archives, checksums, and SBOM
+5. Publishes the crate to crates.io through
+   [trusted publishing](https://crates.io/docs/trusted-publishing)
+
+### crates.io trusted publishing
+
+crates.io trusts the `ThreatFlux/virustotal-rs` repository, the `release.yml`
+workflow, and the `crates-io` environment. The publish job requests an OIDC token
+(`id-token: write`), and `rust-lang/crates-io-auth-action` exchanges it for a
+short-lived publish token that is revoked when the job ends. No registry token is
+stored in the repository or the organization. Renaming `release.yml` or the
+publish job's environment breaks publishing until the trusted publisher on
+crates.io is updated to match.
+
+The publish job checks crates.io first and skips a version that is already
+published, so a re-run after a partial failure is safe. A publish failure fails
+the workflow run. Prereleases (a version with a suffix such as `1.2.3-rc.1`, or
+the `prerelease` input) are not published.
+
+### Dry runs
+
+Both workflows can be rehearsed from the Actions tab or the CLI without
+creating a commit, tag, release, or crates.io version:
+
+```bash
+# Report the version auto-release would cut next
+gh workflow run auto-release.yml -f version_bump=auto -f dry_run=true
+
+# Build every target, generate the SBOM, and run `cargo publish --dry-run`
+gh workflow run release.yml -f version=X.Y.Z -f dry_run=true
+```
+
+A release dry run warns instead of failing when `version` differs from
+`Cargo.toml`; it packages and verifies the `Cargo.toml` version.
 
 There is one versioning owner: the reusable auto-release workflow. Implementation
 PRs leave the current package version in place and use Conventional Commits to
@@ -70,26 +104,31 @@ Use this when you need a hotfix, a prerelease, or a release from a specific ref.
 ```bash
 gh workflow run release.yml \
   -f version=X.Y.Z \
-  -f source_ref=main \
   -f prerelease=false
 ```
 
-## Required Secrets
+`source_ref` builds a different ref than the one the workflow runs on, for
+example to publish an existing tag with the current workflow:
 
-| Secret | Purpose |
-|--------|---------|
-| `GITHUB_TOKEN` | Git tags, release creation, artifact publishing |
-| `CARGO_REGISTRY_TOKEN` or `CRATES_IO_TOKEN` | crates.io publishing |
+```bash
+gh workflow run release.yml --ref main -f version=X.Y.Z -f source_ref=vX.Y.Z
+```
+
+## Credentials
+
+| Credential | Purpose |
+|------------|---------|
+| `GITHUB_TOKEN` | Release tag, GitHub Release, and release assets |
+| crates.io trusted publishing (OIDC) | crates.io publishing; no stored secret |
 
 ## Rollback
 
-1. Delete the GitHub Release if it was created.
-2. Delete the tag:
-   ```bash
-   git push --delete origin vX.Y.Z
-   ```
-3. Yank the crate from crates.io if it was published:
+Published tags, GitHub Releases, and crates.io versions are not deleted or
+moved; a bad release is superseded.
+
+1. Yank the crate version if it must not be used:
    ```bash
    cargo yank --version X.Y.Z
    ```
-4. Fix the issue and publish the next patch release.
+2. Mark the GitHub Release as a prerelease or edit its notes to point at the fix.
+3. Fix the issue and publish the next patch release.

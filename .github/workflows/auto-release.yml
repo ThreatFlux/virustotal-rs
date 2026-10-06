@@ -1,11 +1,16 @@
 name: Auto Release
 
 concurrency:
-  group: auto-release-${{ github.event.workflow_run.head_branch || github.ref_name || 'main' }}
+  # Dry runs use their own group so they never cancel a real release.
+  group: auto-release-${{ github.event.workflow_run.head_branch || github.ref_name || 'main' }}${{ inputs.dry_run && '-dry-run' || '' }}
   cancel-in-progress: true
 
+# workflow_run only gates the release on CI and Security for main. The
+# reusable workflow releases nothing unless the triggering run succeeded in
+# this repository (not a fork) and every required workflow passed for that
+# exact commit, and it never runs pull request code.
 on:
-  workflow_run:
+  workflow_run: # zizmor: ignore[dangerous-triggers]
     workflows: [CI, Security]
     types: [completed]
     branches: [main]
@@ -21,6 +26,11 @@ on:
           - patch
           - minor
           - major
+      dry_run:
+        description: Report the next release without creating a commit, tag, or release
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   actions: read
@@ -33,12 +43,11 @@ jobs:
       actions: write
       contents: write
       pull-requests: write
-    uses: ThreatFlux/github_actions/.github/workflows/reusable-auto-release.yml@7a5f08885a77520db023882c8de17d9e6580b7ae # v0.7.5
+    uses: ThreatFlux/github_actions/.github/workflows/reusable-auto-release.yml@8633e03be96acd076b36bfdf7bec2345e6614c5c # v0.7.6
     with:
       bump: ${{ github.event.inputs.version_bump || 'auto' }}
+      # Only a manual dispatch can request a dry run; workflow_run always releases.
+      dry-run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
       required-workflows: CI,Security
       dispatch-workflows: release.yml
       dispatch-version-workflow: release.yml
-
-    # secrets:
-    #   release-token: ${{ secrets.RELEASE_TOKEN }}
