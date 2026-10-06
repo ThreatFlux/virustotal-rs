@@ -372,9 +372,11 @@ jobs:
               EDIT_ARGS+=(--notes-file notes/release_notes.md)
             else
               # Without a CHANGELOG section, keep notes that have content and
-              # only replace a body that is empty or nothing but headings.
+              # only replace a body made of blank lines and Markdown ATX
+              # headings (up to three spaces, 1-6 '#', then a space, tab or
+              # line end), such as auto-release's bare "## Release vX.Y.Z".
               BODY="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body --jq .body)"
-              if ! grep -qvE '^[[:space:]]*(#.*)?$' <<<"$BODY"; then
+              if ! grep -qvE '^([[:space:]]*|[ ]{0,3}#{1,6}([[:blank:]].*)?)$' <<<"$BODY"; then
                 EDIT_ARGS+=(--notes-file notes/release_notes.md)
               fi
             fi
