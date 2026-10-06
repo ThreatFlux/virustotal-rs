@@ -23,10 +23,8 @@ async fn main() -> ExampleResult<()> {
 
     // Get API key for user operations
     let api_key = std::env::var("VT_API_KEY").unwrap_or_else(|_| "test_key".to_string());
-    println!(
-        "🔑 Using API key: {}...\n",
-        &api_key[..8.min(api_key.len())]
-    );
+    // Never echo any part of the key; say only where it came from.
+    println!("🔑 API key source: VT_API_KEY (a placeholder when unset)\n");
 
     let users_client = client.users();
     let groups_client = client.groups();
