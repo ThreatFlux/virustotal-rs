@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Maintenance
+
+- Publish to crates.io through trusted publishing (OIDC) instead of a stored registry token, and add dry-run modes to the release workflows.
+- Build release binaries for Linux (x86_64 glibc and musl, arm64), macOS (arm64, x86_64), and Windows with SHA-256 checksums and a CycloneDX SBOM.
+- Stop the `test_users_groups` example from printing the first characters of the API key.
+
+## [0.5.0] - 2026-10-05
+
 ### Added
 
 - Current public analysis reports with nullable engine verdicts, preserved extension fields, item relationships, and bounded completion polling.
