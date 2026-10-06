@@ -7,10 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-10-06
+
+This is the first crates.io release since 0.4.7: v0.5.0 was published on GitHub only, so 0.5.1 also carries every 0.5.0 change listed below.
+
 ### Maintenance
 
 - Publish to crates.io through trusted publishing (OIDC) instead of a stored registry token, and add dry-run modes to the release workflows.
 - Build release binaries for Linux (x86_64 glibc and musl, arm64), macOS (arm64, x86_64), and Windows with SHA-256 checksums and a CycloneDX SBOM.
+- Use this changelog's section for the version as the GitHub Release notes.
 - Stop the `test_users_groups` example from printing the first characters of the API key.
 
 ## [0.5.0] - 2026-10-05
