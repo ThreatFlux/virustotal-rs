@@ -192,7 +192,11 @@ fn configure_plain_routes(server: VtMcpServer) -> axum::Router {
 async fn serve_router(app: axum::Router, addr: SocketAddr) -> McpResult<()> {
     let listener = tokio::net::TcpListener::bind(addr).await?;
     tracing::info!("HTTP server listening on {}", addr);
-    Ok(axum::serve(listener, app.into_make_service()).await?)
+    Ok(axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await?)
 }
 
 #[cfg(feature = "axum")]
@@ -362,10 +366,19 @@ where
 #[cfg(all(feature = "axum", feature = "mcp-oauth"))]
 /// Start PKCE authorization and bind the pending session to the initiating browser.
 async fn oauth_authorize(
+    axum::extract::ConnectInfo(peer): axum::extract::ConnectInfo<SocketAddr>,
     axum::extract::State((_, oauth_state)): axum::extract::State<(VtMcpServer, OAuthState)>,
 ) -> Result<axum::response::Response, OAuthError> {
     use axum::response::IntoResponse;
 
+    if !oauth_state.allow_authorization(peer.ip()) {
+        return Ok((
+            axum::http::StatusCode::TOO_MANY_REQUESTS,
+            [(axum::http::header::RETRY_AFTER, "2")],
+            axum::Json(serde_json::json!({"error": "Too many authorization requests"})),
+        )
+            .into_response());
+    }
     let (auth_url, session_id) = oauth_state.start_authorization().map_err(|_| {
         OAuthError::AuthorizationFailed("Could not start authorization".to_string())
     })?;
@@ -502,7 +515,11 @@ mod oauth_http_tests {
         cookie: Option<&str>,
         token: Option<&str>,
     ) -> axum::response::Response {
-        let mut builder = Request::builder().uri(uri);
+        let mut builder = Request::builder()
+            .uri(uri)
+            .extension(axum::extract::ConnectInfo(
+                "127.0.0.1:12345".parse::<SocketAddr>().unwrap(),
+            ));
         if let Some(cookie) = cookie {
             builder = builder.header(header::COOKIE, cookie);
         }
@@ -681,5 +698,41 @@ mod oauth_http_tests {
                 StatusCode::OK
             );
         }
+    }
+    /// A spoofed forwarding header cannot bypass peer quotas or consume another peer's budget.
+    #[tokio::test]
+    async fn anonymous_authorization_flood_is_limited_without_starving_other_peers() {
+        let provider = MockServer::start().await;
+        let app = router_for_provider(&provider);
+        let mut limited = false;
+        for index in 0..100 {
+            let request = Request::builder()
+                .uri("/oauth/authorize")
+                .header("x-forwarded-for", format!("192.0.2.{index}"))
+                .extension(axum::extract::ConnectInfo(
+                    "127.0.0.1:12345".parse::<SocketAddr>().unwrap(),
+                ))
+                .body(Body::empty())
+                .unwrap();
+            let response = app.clone().oneshot(request).await.unwrap();
+            if response.status() == StatusCode::TOO_MANY_REQUESTS {
+                assert_eq!(response.headers()[header::RETRY_AFTER], "2");
+                limited = true;
+                break;
+            }
+            assert_eq!(response.status(), StatusCode::SEE_OTHER);
+        }
+        assert!(limited, "anonymous requests bypassed the per-peer budget");
+        let other = Request::builder()
+            .uri("/oauth/authorize")
+            .extension(axum::extract::ConnectInfo(
+                "192.0.2.200:12345".parse::<SocketAddr>().unwrap(),
+            ))
+            .body(Body::empty())
+            .unwrap();
+        assert_eq!(
+            app.oneshot(other).await.unwrap().status(),
+            StatusCode::SEE_OTHER
+        );
     }
 }

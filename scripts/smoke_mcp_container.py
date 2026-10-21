@@ -213,6 +213,22 @@ def check_oauth_clients(url, provider):
         raise RuntimeError("identity fixture did not issue independent client tokens")
     if request(url + "/", REQUEST, first)[0] != 200:
         raise RuntimeError("a second OAuth client login revoked the first client's token")
+    check_authorization_budget(url, first)
+
+
+def check_authorization_budget(url, token):
+    """Throttle anonymous starts while preserving an existing client's authenticated RPC traffic."""
+    for _ in range(100):
+        status, _, headers = request(url + "/oauth/authorize")
+        if status == 429:
+            if headers.get("Retry-After") != "2":
+                raise RuntimeError("authorization throttling omitted retry guidance")
+            if request(url + "/", REQUEST, token)[0] != 200:
+                raise RuntimeError("authorization throttling blocked an authenticated MCP client")
+            return
+        if status not in (302, 303, 307):
+            raise RuntimeError(f"unexpected authorization status during flood: {status}")
+    raise RuntimeError("anonymous authorization requests bypassed the peer budget")
 
 
 def check_server(image, platform, mode, provider=None):
@@ -298,7 +314,7 @@ def main():
     with oauth_provider() as provider:
         check_server(args.image, args.platform, "oauth", provider)
     check_stdio(args.image, args.platform)
-    print(f"MCP container verified: {args.image}; health, JWT configured/invalid/missing, OAuth PKCE/callback/bearer/replay/multiple clients, stdio")
+    print(f"MCP container verified: {args.image}; health, JWT configured/invalid/missing, OAuth PKCE/callback/bearer/replay/multiple clients/rate limiting, stdio")
 
 
 if __name__ == "__main__":

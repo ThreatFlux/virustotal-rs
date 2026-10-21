@@ -18,6 +18,7 @@ use oauth2::{
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
+    net::{IpAddr, Ipv6Addr},
     sync::{Arc, RwLock},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -188,6 +189,7 @@ pub struct OAuthState {
     client_credentials: Arc<RwLock<HashMap<String, OAuthCredentials>>>,
     callback_path: String,
     secure_cookie: bool,
+    authorization_limiter: Arc<governor::DefaultKeyedRateLimiter<IpAddr>>,
 }
 
 impl OAuthState {
@@ -229,7 +231,33 @@ impl OAuthState {
             client_credentials: Arc::new(RwLock::new(HashMap::new())),
             callback_path,
             secure_cookie,
+            authorization_limiter: Arc::new(governor::RateLimiter::keyed(
+                governor::Quota::per_minute(nonzero_ext::nonzero!(30u32)),
+            )),
         })
+    }
+
+    /// Limit anonymous authorization creation by the actual peer, retaining only recent quota state.
+    pub fn allow_authorization(&self, peer: IpAddr) -> bool {
+        self.authorization_limiter.retain_recent();
+        self.authorization_limiter
+            .check_key(&Self::client_rate_limit_key(peer))
+            .is_ok()
+    }
+
+    /// Treat mapped IPv4 and each IPv6 /64 as one client to prevent trivial address rotation.
+    fn client_rate_limit_key(peer: IpAddr) -> IpAddr {
+        match peer {
+            IpAddr::V6(address) => {
+                if let Some(mapped) = address.to_ipv4_mapped() {
+                    return IpAddr::V4(mapped);
+                }
+                let mut segments = address.segments();
+                segments[4..].fill(0);
+                IpAddr::V6(Ipv6Addr::from(segments))
+            }
+            address => address,
+        }
     }
 
     /// Start OAuth authorization flow
@@ -730,5 +758,13 @@ mod tests {
                 .get_credentials_for_token("fixture-client-1")
                 .is_some()
         );
+    }
+    /// IPv6 privacy addresses share quota while independent networks retain independent budgets.
+    #[test]
+    fn authorization_rate_keys_normalize_network_identity() {
+        let key = |ip: &str| OAuthState::client_rate_limit_key(ip.parse().unwrap());
+        assert_eq!(key("2001:db8:1:2::1"), key("2001:db8:1:2::ffff"));
+        assert_ne!(key("2001:db8:1:2::1"), key("2001:db8:1:3::1"));
+        assert_eq!(key("::ffff:192.0.2.1"), key("192.0.2.1"));
     }
 }
