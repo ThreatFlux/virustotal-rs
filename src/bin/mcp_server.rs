@@ -34,6 +34,7 @@
 //!   cargo run --bin mcp_server --features mcp-oauth
 
 #[cfg(not(feature = "mcp"))]
+/// Start the configured MCP transport and propagate startup failures.
 fn main() {
     eprintln!("Error: MCP server requires the 'mcp' feature to be enabled.");
     eprintln!("Build with: cargo build --bin mcp_server --features mcp");
@@ -43,6 +44,7 @@ fn main() {
 
 #[cfg(feature = "mcp")]
 #[tokio::main]
+/// Start the configured MCP transport and propagate startup failures.
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     use std::env;
 
@@ -61,6 +63,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 }
 
 #[cfg(feature = "mcp")]
+/// Write filtered runtime diagnostics to stderr so stdout retains JSON-RPC framing.
 fn initialize_logging() {
     use std::env;
 
@@ -80,6 +83,7 @@ fn initialize_logging() {
 }
 
 #[cfg(feature = "mcp")]
+/// Require an explicitly configured VirusTotal API key.
 fn get_api_key() -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
     use std::env;
 
@@ -88,6 +92,7 @@ fn get_api_key() -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
 }
 
 #[cfg(feature = "mcp")]
+/// Preserve the supported public and premium environment spellings.
 fn determine_api_tier() -> virustotal_rs::ApiTier {
     use std::env;
     use virustotal_rs::ApiTier;
@@ -107,6 +112,7 @@ fn determine_api_tier() -> virustotal_rs::ApiTier {
 }
 
 #[cfg(feature = "mcp")]
+/// Build the API client with the selected key and rate-limit tier.
 fn create_virustotal_client(
     api_key: String,
     api_tier: virustotal_rs::ApiTier,
@@ -125,6 +131,7 @@ fn create_virustotal_client(
 }
 
 #[cfg(feature = "mcp")]
+/// Select HTTP or stdio and reject unsupported transport names.
 async fn run_server_by_mode(
     client: virustotal_rs::Client,
     server_mode: &str,
@@ -141,6 +148,7 @@ async fn run_server_by_mode(
 }
 
 #[cfg(feature = "mcp")]
+/// Run MCP over stdin and stdout using the configured API client.
 async fn run_stdio_mode(
     client: virustotal_rs::Client,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -152,6 +160,7 @@ async fn run_stdio_mode(
 }
 
 #[cfg(feature = "mcp")]
+/// Load and enforce environment authentication settings before binding HTTP.
 async fn run_http_mode() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     use std::{env, net::SocketAddr};
     use virustotal_rs::mcp::transport::config::server_config_from_env;
@@ -170,6 +179,7 @@ async fn run_http_mode() -> Result<(), Box<dyn std::error::Error + Send + Sync>>
 }
 
 #[cfg(feature = "mcp")]
+/// Report transport availability without issuing or logging credentials.
 fn log_http_server_info(addr: &std::net::SocketAddr) {
     tracing::info!("Starting MCP server in HTTP mode...");
     tracing::info!("Server will listen on: http://{}", addr);
@@ -197,6 +207,7 @@ mod tests {
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
     #[test]
+    /// Verify the default binary HTTP address parses as the established loopback socket.
     fn test_default_address_parsing() {
         let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
         assert_eq!(addr.ip(), IpAddr::V4(Ipv4Addr::LOCALHOST));
@@ -204,6 +215,7 @@ mod tests {
     }
 
     #[test]
+    /// Verify explicitly configured HTTP bind addresses retain their host and port.
     fn test_custom_address_parsing() {
         let addr: SocketAddr = "0.0.0.0:3000".parse().unwrap();
         assert_eq!(addr.ip(), IpAddr::V4(Ipv4Addr::UNSPECIFIED));
@@ -211,6 +223,7 @@ mod tests {
     }
 
     #[test]
+    /// Verify the supported transport names and fallback mode.
     fn test_server_mode_parsing() {
         // Test different server mode variations
         assert_eq!("http".to_lowercase(), "http");
@@ -220,6 +233,7 @@ mod tests {
     }
 
     #[test]
+    /// Verify public and premium tier selection.
     fn test_api_tier_parsing() {
         // Test API tier parsing logic
         let test_cases = vec![

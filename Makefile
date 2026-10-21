@@ -238,7 +238,7 @@ security-enhanced: security security-supply-chain security-geiger semver-check
 	@echo "✅ Enhanced security analysis complete!"
 
 # CI-equivalent validation (matches GitHub Actions CI workflow)
-ci-local: fmt-check clippy build test test-no-features test-mcp-features build-examples test-doc doc-check docs-contract doc-links feature-test
+ci-local: container-check-tests fmt-check clippy build test test-no-features test-mcp-features build-examples test-doc doc-check docs-contract doc-links feature-test
 	@echo "✅ Local CI validation complete!"
 
 # Full validation (everything - matches all CI/CD workflows)
@@ -301,3 +301,7 @@ help:
 	@echo "🌍 Environment variables:"
 	@echo "  VIRUSTOTAL_API_KEY - Preferred VirusTotal API key variable"
 	@echo "  VT_API_KEY         - Backward-compatible VirusTotal API key variable"
+
+.PHONY: container-check-tests
+container-check-tests:
+	@python3 -m unittest discover -s scripts -p 'test_*.py'

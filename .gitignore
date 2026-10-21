@@ -5,11 +5,11 @@ docs/*
 !docs/*.md
 !docs/security/
 !docs/security/*.md
-!docs/security/*.txt
 .codacy/
 samples/
 samples_2/
 vt_analysis*/
 *.txt
+!docs/security/*.txt
 
 __pycache__/

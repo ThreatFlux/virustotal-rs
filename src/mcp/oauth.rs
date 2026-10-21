@@ -47,6 +47,7 @@ pub struct OAuthConfig {
 }
 
 impl Default for OAuthConfig {
+    /// Initialize the established local defaults without enabling optional authentication.
     fn default() -> Self {
         Self {
             client_id: "virustotal-mcp-client".to_string(),
@@ -184,6 +185,8 @@ pub struct OAuthState {
     client: BasicClient<EndpointSet, EndpointNotSet, EndpointNotSet, EndpointNotSet, EndpointSet>,
     sessions: Arc<RwLock<HashMap<String, OAuthSession>>>,
     credentials: Arc<RwLock<Option<OAuthCredentials>>>,
+    callback_path: String,
+    secure_cookie: bool,
 }
 
 impl OAuthState {
@@ -204,6 +207,19 @@ impl OAuthState {
         let redirect_url = RedirectUrl::new(config.redirect_uri.clone())
             .map_err(|e| anyhow!("Invalid redirect URL: {}", e))?;
 
+        let callback = url::Url::parse(&config.redirect_uri)?;
+        let callback_path = callback.path().to_string();
+        if !matches!(callback.scheme(), "http" | "https")
+            || callback.query().is_some()
+            || callback.fragment().is_some()
+            || matches!(callback_path.as_str(), "/" | "/health" | "/oauth/authorize")
+        {
+            return Err(anyhow!(
+                "redirect URI must identify a dedicated HTTP callback path"
+            ));
+        }
+        let secure_cookie = callback.scheme() == "https";
+
         let mut client = BasicClient::new(ClientId::new(config.client_id.clone()));
         if let Some(secret) = config.client_secret.as_ref() {
             client = client.set_client_secret(ClientSecret::new(secret.clone()));
@@ -218,6 +234,8 @@ impl OAuthState {
             client,
             sessions: Arc::new(RwLock::new(HashMap::new())),
             credentials: Arc::new(RwLock::new(None)),
+            callback_path,
+            secure_cookie,
         })
     }
 
@@ -256,6 +274,10 @@ impl OAuthState {
 
         {
             let mut sessions = self.sessions.write().unwrap();
+            sessions.retain(|_, session| Self::session_is_current(session));
+            if sessions.len() >= 1024 {
+                return Err(anyhow!("Too many pending authorization sessions"));
+            }
             sessions.insert(session_id.clone(), session);
         }
 
@@ -269,23 +291,57 @@ impl OAuthState {
         state: String,
         session_id: String,
     ) -> AnyhowResult<OAuthCredentials> {
-        let session = self.get_session(&session_id)?;
-        Self::validate_csrf(&session, &state)?;
+        let session = self.take_session(&session_id, &state)?;
 
         let credentials = self.exchange_code(&session, code).await?;
         self.store_credentials(credentials.clone());
-        self.remove_session(&session_id);
         Ok(credentials)
     }
 
-    fn get_session(&self, session_id: &str) -> AnyhowResult<OAuthSession> {
-        let sessions = self.sessions.read().unwrap();
-        sessions
+    /// Return the configured redirect URI path for registration on the HTTP router.
+    pub fn callback_path(&self) -> &str {
+        &self.callback_path
+    }
+
+    /// Bind authorization to the initiating browser using an HTTP-only session cookie.
+    pub fn session_cookie(&self, session_id: &str) -> String {
+        let secure = if self.secure_cookie { "; Secure" } else { "" };
+        format!(
+            "mcp_oauth_session={session_id}; Path={}; HttpOnly; SameSite=Lax; Max-Age=600{secure}",
+            self.callback_path
+        )
+    }
+
+    /// Clear the browser binding after a successful token exchange.
+    pub fn clear_session_cookie(&self) -> String {
+        self.session_cookie("").replace("Max-Age=600", "Max-Age=0")
+    }
+
+    /// Reject expired sessions, including timestamps unexpectedly in the future.
+    fn session_is_current(session: &OAuthSession) -> bool {
+        session
+            .created_at
+            .elapsed()
+            .is_ok_and(|age| age < Duration::from_secs(600))
+    }
+
+    /// Validate and consume the session atomically before starting a token exchange.
+    fn take_session(&self, session_id: &str, state: &str) -> AnyhowResult<OAuthSession> {
+        let mut sessions = self.sessions.write().unwrap();
+        let session = sessions
             .get(session_id)
-            .cloned()
+            .ok_or_else(|| anyhow!("Invalid session ID"))?;
+        if !Self::session_is_current(session) {
+            sessions.remove(session_id);
+            return Err(anyhow!("Authorization session expired"));
+        }
+        Self::validate_csrf(session, state)?;
+        sessions
+            .remove(session_id)
             .ok_or_else(|| anyhow!("Invalid session ID"))
     }
 
+    /// Require the callback state to match the pending authorization session.
     fn validate_csrf(session: &OAuthSession, state: &str) -> AnyhowResult<()> {
         if session.csrf_token != state {
             Err(anyhow!("CSRF token mismatch"))
@@ -294,6 +350,7 @@ impl OAuthState {
         }
     }
 
+    /// Exchange a one-time authorization code with its original PKCE verifier.
     async fn exchange_code(
         &self,
         session: &OAuthSession,
@@ -305,7 +362,10 @@ impl OAuthState {
                 token_request.set_pkce_verifier(PkceCodeVerifier::new(verifier.clone()));
         }
 
-        let http_client = oauth2::reqwest::Client::new();
+        let http_client = oauth2::reqwest::Client::builder()
+            .redirect(oauth2::reqwest::redirect::Policy::none())
+            .timeout(Duration::from_secs(20))
+            .build()?;
         let token_response: StandardTokenResponse<
             EmptyExtraTokenFields,
             oauth2::basic::BasicTokenType,
@@ -317,6 +377,7 @@ impl OAuthState {
         Ok(Self::build_credentials(token_response))
     }
 
+    /// Preserve token metadata and issuance time for bearer validation and refresh.
     fn build_credentials(
         token_response: StandardTokenResponse<EmptyExtraTokenFields, oauth2::basic::BasicTokenType>,
     ) -> OAuthCredentials {
@@ -343,14 +404,10 @@ impl OAuthState {
         }
     }
 
+    /// Replace the current credentials under the shared state lock.
     fn store_credentials(&self, credentials: OAuthCredentials) {
         let mut creds = self.credentials.write().unwrap();
         *creds = Some(credentials);
-    }
-
-    fn remove_session(&self, session_id: &str) {
-        let mut sessions = self.sessions.write().unwrap();
-        sessions.remove(session_id);
     }
 
     /// Get current credentials
@@ -419,6 +476,7 @@ pub enum OAuthError {
 }
 
 impl std::fmt::Display for OAuthError {
+    /// Format the OAuth error without changing its classification.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             OAuthError::InvalidToken(msg) => write!(f, "Invalid OAuth token: {}", msg),
@@ -435,6 +493,7 @@ impl std::fmt::Display for OAuthError {
 impl std::error::Error for OAuthError {}
 
 impl IntoResponse for OAuthError {
+    /// Map OAuth failures to the corresponding HTTP status and JSON error.
     fn into_response(self) -> Response {
         let (status, error_message) = match self {
             OAuthError::InvalidToken(_) => (axum::http::StatusCode::UNAUTHORIZED, self.to_string()),
@@ -466,6 +525,7 @@ where
 {
     type Rejection = OAuthError;
 
+    /// Validate a bearer token against the installed OAuth state and expiration.
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
         // Try to extract Bearer token from Authorization header
         let auth_header = parts
@@ -525,6 +585,7 @@ mod tests {
     use super::*;
 
     #[test]
+    /// Verify OAuth builder methods preserve client, scope, redirect, and endpoint settings.
     fn test_oauth_config_builder() {
         let config = OAuthConfig::new("test-client", "https://auth.example.com")
             .with_client_secret("secret123")
@@ -542,6 +603,7 @@ mod tests {
     }
 
     #[test]
+    /// Distinguish expired credentials from tokens approaching their refresh threshold.
     fn test_oauth_credentials_expiration() {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -567,6 +629,7 @@ mod tests {
     }
 
     #[tokio::test]
+    /// Require authorization URLs to contain a browser session, redirect URI, and PKCE challenge.
     async fn test_oauth_state_creation() {
         let config = OAuthConfig::default();
         let state = OAuthState::new(config).unwrap();
@@ -578,5 +641,24 @@ mod tests {
         assert!(auth_url.contains("client_id"));
         assert!(auth_url.contains("redirect_uri"));
         assert!(auth_url.contains("code_challenge")); // PKCE
+    }
+    /// Expired browser sessions fail before any network exchange and are removed.
+    #[tokio::test]
+    async fn expired_authorization_session_cannot_exchange_a_code() {
+        let state = OAuthState::new(OAuthConfig::default()).unwrap();
+        let (_, session_id) = state.start_authorization().unwrap();
+        let csrf = {
+            let mut sessions = state.sessions.write().unwrap();
+            let session = sessions.get_mut(&session_id).unwrap();
+            session.created_at = SystemTime::now() - Duration::from_secs(601);
+            session.csrf_token.clone()
+        };
+        assert!(
+            state
+                .handle_callback("fixture-code".into(), csrf, session_id.clone())
+                .await
+                .is_err()
+        );
+        assert!(!state.sessions.read().unwrap().contains_key(&session_id));
     }
 }

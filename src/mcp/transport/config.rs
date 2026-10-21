@@ -30,6 +30,7 @@ pub struct ServerConfig {
 }
 
 impl Default for ServerConfig {
+    /// Initialize the established local defaults without enabling optional authentication.
     fn default() -> Self {
         Self {
             api_key: String::new(),
@@ -217,9 +218,7 @@ impl ServerConfig {
     fn log_oauth_info(&self) {
         tracing::info!("OAuth 2.1 Authentication enabled");
         tracing::info!("Authorization endpoint: /oauth/authorize");
-        tracing::info!("Token endpoint: /oauth/token");
-        tracing::info!("Callback endpoint: /oauth/callback");
-        tracing::info!("Metadata endpoint: /oauth/metadata");
+        tracing::info!("Callback endpoint: configured redirect URI path");
     }
 
     /// Log authentication availability without minting or exposing credentials.
@@ -304,6 +303,7 @@ pub fn server_config_from_env() -> McpResult<ServerConfig> {
     Ok(config)
 }
 
+/// Reject requested authentication modes missing from the compiled binary.
 fn validate_requested_auth_features(jwt: bool, oauth: bool) -> McpResult<()> {
     if jwt && !cfg!(feature = "mcp-jwt") {
         anyhow::bail!("ENABLE_JWT requires a binary built with the mcp-jwt feature");
@@ -314,10 +314,12 @@ fn validate_requested_auth_features(jwt: bool, oauth: bool) -> McpResult<()> {
     Ok(())
 }
 
+/// Read the tier setting through the shared compatibility parser.
 fn api_tier_from_env() -> crate::ApiTier {
     api_tier_from_value(std::env::var("VIRUSTOTAL_API_TIER").ok().as_deref())
 }
 
+/// Accept the binary's historical premium spellings and default to the public tier.
 fn api_tier_from_value(value: Option<&str>) -> crate::ApiTier {
     match value {
         Some("Premium" | "premium") => crate::ApiTier::Premium,
@@ -325,6 +327,7 @@ fn api_tier_from_value(value: Option<&str>) -> crate::ApiTier {
     }
 }
 
+/// Parse an explicit HTTP bind address and propagate invalid configuration.
 fn apply_http_addr_from_env(mut config: ServerConfig) -> McpResult<ServerConfig> {
     if let Ok(addr_str) = std::env::var("HTTP_ADDR") {
         let addr: SocketAddr = addr_str
@@ -336,6 +339,7 @@ fn apply_http_addr_from_env(mut config: ServerConfig) -> McpResult<ServerConfig>
 }
 
 #[cfg(feature = "mcp-oauth")]
+/// Enable OAuth with the configured provider, redirect URI, client, and scopes.
 fn apply_oauth_from_env(mut config: ServerConfig) -> ServerConfig {
     if std::env::var_os("ENABLE_OAUTH").is_some() {
         let client_id = std::env::var("OAUTH_CLIENT_ID")
@@ -363,6 +367,7 @@ fn apply_oauth_from_env(mut config: ServerConfig) -> ServerConfig {
 }
 
 #[cfg(feature = "mcp-jwt")]
+/// Require a nonempty signing secret before enabling JWT authentication.
 fn apply_jwt_from_env(mut config: ServerConfig) -> McpResult<ServerConfig> {
     if std::env::var_os("ENABLE_JWT").is_some() {
         let secret = std::env::var("JWT_SECRET")
@@ -389,6 +394,7 @@ mod tests {
     use std::net::{IpAddr, Ipv4Addr};
 
     #[test]
+    /// Reject authentication requests unavailable in each compiled feature combination.
     fn requested_auth_modes_require_compiled_features() {
         assert!(validate_requested_auth_features(false, false).is_ok());
         assert_eq!(
@@ -406,6 +412,7 @@ mod tests {
     }
 
     #[test]
+    /// Keep existing tier spellings compatible with the environment-backed startup path.
     fn api_tier_preserves_binary_environment_compatibility() {
         assert_eq!(
             api_tier_from_value(Some("Premium")),
@@ -421,6 +428,7 @@ mod tests {
     }
 
     #[test]
+    /// Verify the server builder preserves explicitly supplied settings.
     fn test_server_config_builder() {
         let config = ServerConfig::new()
             .api_key("test_key")
@@ -438,6 +446,7 @@ mod tests {
     }
 
     #[test]
+    /// Verify default server configuration retains the documented local behavior.
     fn test_default_config() {
         let config = ServerConfig::default();
         assert!(config.api_key.is_empty());

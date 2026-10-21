@@ -11,7 +11,7 @@ import subprocess  # nosec B404
 import tempfile
 import threading
 
-from smoke_mcp_container import docker_command, image_reference, request, wait_ready
+from smoke_mcp_container import docker_command, image_reference, remove_container, request, wait_ready
 
 
 FILE_HASH = "a" * 64
@@ -85,7 +85,7 @@ def create_certificates(root):
         ]
     for command in commands:
         # Fixed executable and argument list; no shell interprets image names or fixture data.
-        subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  # nosec B603, B607 # nosemgrep
+        subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30)  # nosec B603, B607 # nosemgrep
     (root / "ca.crt").chmod(0o644)
 
 
@@ -100,19 +100,19 @@ def run_server_case(image, platform, root, proxy, mode):
     if mode != "untrusted":
         command += ["-v", f"{root}/ca.crt:/fixture/ca.crt:ro", "-e", "SSL_CERT_FILE=/fixture/ca.crt"]
     # Fixed executable and argument list; no shell interprets image names or fixture data.
-    container = subprocess.check_output(command + ["-d", "-p", "127.0.0.1::8080", "--", image], text=True).strip()  # nosec B603, B607 # nosemgrep
+    container = subprocess.check_output(command + ["-d", "-p", "127.0.0.1::8080", "--", image], text=True, timeout=60).strip()  # nosec B603, B607 # nosemgrep
     try:
         # Fixed executable and argument list; no shell interprets image names or fixture data.
-        address = subprocess.check_output(["docker", "port", container, "8080/tcp"], text=True).strip()  # nosec B603, B607 # nosemgrep
+        address = subprocess.check_output(["docker", "port", container, "8080/tcp"], text=True, timeout=20).strip()  # nosec B603, B607 # nosemgrep
         url = "http://" + address
         wait_ready(url, container)
         status, body, _ = request(url + "/", TOOL_REQUEST, timeout=15)
         # Fixed executable and argument list; no shell interprets image names or fixture data.
-        logs = subprocess.check_output(["docker", "logs", container], text=True, stderr=subprocess.STDOUT)  # nosec B603, B607 # nosemgrep
+        logs = subprocess.check_output(["docker", "logs", container], text=True, stderr=subprocess.STDOUT, timeout=20)  # nosec B603, B607 # nosemgrep
         validate_response(mode, status, json.loads(body), logs, proxy)
     finally:
         # Fixed executable and argument list; no shell interprets image names or fixture data.
-        subprocess.run(["docker", "rm", "-f", container], check=True, stdout=subprocess.DEVNULL)  # nosec B603, B607 # nosemgrep
+        remove_container(container, force=True)
 
 
 def validate_response(mode, status, result, logs, proxy):

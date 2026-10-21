@@ -2,18 +2,37 @@
 """Verify the real MCP container's health, JWT/OAuth modes and stdio transport."""
 
 import argparse
+import base64
+import contextlib
+import hashlib
+import http.server
 import json
 import re
 import secrets
 # Required for shell-free Docker/OpenSSL test commands.
 import subprocess  # nosec B404
+import sys
 import time
+import threading
 import urllib.error
 import urllib.request
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlencode, urlsplit
 
 
 REQUEST = {"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}
+
+
+def remove_container(container, force=False):
+    """Enforce bounded cleanup without replacing an active validation failure."""
+    primary_error = sys.exc_info()[1]
+    command = ["docker", "rm"] + (["-f"] if force else []) + [container]
+    try:
+        # Fixed Docker executable, shell-free arguments, and an ID returned by Docker.
+        subprocess.run(command, check=True, stdout=subprocess.DEVNULL, timeout=20)  # nosec B603 # nosemgrep
+    except (OSError, subprocess.SubprocessError) as cleanup_error:
+        if primary_error is None:
+            raise
+        print(f"Container cleanup also failed: {cleanup_error}", file=sys.stderr)
 
 
 def image_reference(value):
@@ -35,7 +54,7 @@ def docker_command(image, platform, environment):
     return command
 
 
-def request(url, body=None, token=None, timeout=3):
+def request(url, body=None, token=None, timeout=3, cookie=None):
     """Send JSON only to the loopback test server without following redirects."""
     parsed = urlsplit(url)
     if (parsed.scheme != "http" or parsed.hostname != "127.0.0.1"
@@ -44,6 +63,8 @@ def request(url, body=None, token=None, timeout=3):
     headers = {"Content-Type": "application/json"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
+    if cookie:
+        headers["Cookie"] = cookie
     data = None if body is None else json.dumps(body).encode()
     try:
         # Validated loopback HTTP only; redirects disabled.
@@ -63,7 +84,7 @@ def wait_ready(url, container):
             pass
         time.sleep(0.25)
     # Fixed executable and argument list; no shell interprets image names or fixture data.
-    logs = subprocess.check_output(["docker", "logs", container], text=True)  # nosec B603, B607 # nosemgrep
+    logs = subprocess.check_output(["docker", "logs", container], text=True, timeout=20)  # nosec B603, B607 # nosemgrep
     raise RuntimeError(f"MCP server did not become healthy: {logs}")
 
 
@@ -95,21 +116,87 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-def check_oauth(url):
-    """Require an OAuth redirect to the configured fixture identity provider."""
+class OAuthProvider(http.server.BaseHTTPRequestHandler):
+    """Exchange only the fabricated code using the observed PKCE challenge."""
+
+    def do_POST(self):
+        """Verify code, client, redirect URI, and PKCE before returning a fixture token."""
+        self.connection.settimeout(5)
+        length = int(self.headers.get("Content-Length", "0"))
+        if self.path != "/oauth/token" or not 0 < length < 8192:
+            self.send_error(400)
+            return
+        form = parse_qs(self.rfile.read(length).decode())
+        verifier = form.get("code_verifier", [""])[0]
+        challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip("=")
+        if (form.get("code") != ["fixture-code"] or form.get("grant_type") != ["authorization_code"]
+                or form.get("client_id") != ["fixture-client"]
+                or form.get("redirect_uri") != ["http://127.0.0.1:8080/fixture/callback"]
+                or challenge != self.server.challenge):
+            self.send_error(400)
+            return
+        self.server.exchanges += 1
+        # Bearer is the OAuth token type; the fabricated access token is generated randomly.
+        body = json.dumps({"access_token": self.server.token, "token_type": "Bearer", "expires_in": 3600}).encode()  # nosec B105
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *_):
+        """Keep authorization codes and token requests out of fixture access logs."""
+
+
+@contextlib.contextmanager
+def oauth_provider():
+    """Expose an isolated host fixture to Docker and always stop its server thread."""
+    # The container reaches this ephemeral fixture via host-gateway; no upstream traffic or real credentials.
+    provider = http.server.ThreadingHTTPServer(("0.0.0.0", 0), OAuthProvider)  # nosec B104
+    provider.token, provider.challenge, provider.exchanges = secrets.token_urlsafe(32), None, 0
+    provider.issuer = f"http://host.docker.internal:{provider.server_port}"
+    thread = threading.Thread(target=provider.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield provider
+    finally:
+        provider.shutdown()
+        provider.server_close()
+        thread.join(timeout=10)
+
+
+def check_oauth(url, provider):
+    """Complete browser-bound OAuth, verify authenticated MCP, and reject CSRF and replay."""
     if request(url + "/", REQUEST)[0] != 401:
         raise RuntimeError("OAuth MCP endpoint accepted an unauthenticated request")
-    opener = urllib.request.build_opener(NoRedirect)
-    try:
-        opener.open(url + "/oauth/authorize", timeout=3)
-    except urllib.error.HTTPError as error:
-        if error.code in (302, 303, 307) and error.headers.get("Location", "").startswith("https://identity.fixture/"):
-            return
-        raise RuntimeError(f"unexpected OAuth authorization response: {error.code}") from error
-    raise RuntimeError("OAuth authorization did not redirect to the configured identity provider")
+    status, _, headers = request(url + "/oauth/authorize")
+    location = urlsplit(headers.get("Location", ""))
+    if status not in (302, 303, 307) or location.netloc != urlsplit(provider.issuer).netloc:
+        raise RuntimeError("OAuth did not redirect to the isolated identity fixture")
+    query = parse_qs(location.query)
+    if query.get("code_challenge_method") != ["S256"]:
+        raise RuntimeError("OAuth did not request PKCE SHA-256")
+    provider.challenge = query["code_challenge"][0]
+    cookie = headers.get("Set-Cookie", "").split(";", 1)[0]
+    callback = url + "/fixture/callback?" + urlencode({"code": "fixture-code", "state": query["state"][0]})
+    if request(callback)[0] != 400:
+        raise RuntimeError("OAuth callback accepted a missing browser binding")
+    if request(url + "/fixture/callback?code=fixture-code&state=wrong", cookie=cookie)[0] != 400:
+        raise RuntimeError("OAuth callback accepted an incorrect state")
+    status, body, headers = request(callback, cookie=cookie)
+    if status != 200 or headers.get("Cache-Control") != "no-store" or provider.exchanges != 1:
+        raise RuntimeError("OAuth token exchange did not complete exactly once without caching")
+    token = json.loads(body)["access_token"]
+    status, body, _ = request(url + "/", REQUEST, token)
+    if token != provider.token or status != 200 or not json.loads(body).get("result", {}).get("tools"):
+        raise RuntimeError("OAuth bearer token did not authorize the real MCP tools list")
+    if request(callback, cookie=cookie)[0] != 400 or provider.exchanges != 1:
+        raise RuntimeError("OAuth callback permitted replay")
+    if request(url + "/", REQUEST, "invalid-token")[0] != 401:
+        raise RuntimeError("OAuth accepted an invalid bearer token")
 
 
-def check_server(image, platform, mode):
+def check_server(image, platform, mode, provider=None):
     """Exercise HTTP authentication and ensure credentials never appear in logs."""
     password = secrets.token_urlsafe(32)
     environment = {"VIRUSTOTAL_API_KEY": "fixture-api-key", "HTTP_ADDR": "0.0.0.0:8080"}
@@ -118,31 +205,36 @@ def check_server(image, platform, mode):
                            MCP_AUTH_USERNAME="fixture-user", MCP_AUTH_PASSWORD=password)
     else:
         environment.update(ENABLE_OAUTH="1", OAUTH_CLIENT_ID="fixture-client",
-                           OAUTH_AUTH_SERVER_URL="https://identity.fixture")
+                           OAUTH_AUTH_SERVER_URL=provider.issuer,
+                           OAUTH_REDIRECT_URI="http://127.0.0.1:8080/fixture/callback")
     command = docker_command(image, platform, environment)
     command.remove("--rm")
+    if provider is not None:
+        command += ["--add-host", "host.docker.internal:host-gateway"]
     # Fixed executable and argument list; no shell interprets image names or fixture data.
-    container = subprocess.check_output(command + ["-d", "-p", "127.0.0.1::8080", "--", image], text=True).strip()  # nosec B603, B607 # nosemgrep
+    container = subprocess.check_output(command + ["-d", "-p", "127.0.0.1::8080", "--", image], text=True, timeout=60).strip()  # nosec B603, B607 # nosemgrep
     try:
         # Fixed executable and argument list; no shell interprets image names or fixture data.
-        address = subprocess.check_output(["docker", "port", container, "8080/tcp"], text=True).strip()  # nosec B603, B607 # nosemgrep
+        address = subprocess.check_output(["docker", "port", container, "8080/tcp"], text=True, timeout=20).strip()  # nosec B603, B607 # nosemgrep
         url = "http://" + address
         wait_ready(url, container)
         if mode == "jwt":
             check_jwt(url, password)
         else:
-            check_oauth(url)
+            check_oauth(url, provider)
         # Fixed executable and argument list; no shell interprets image names or fixture data.
-        logs = subprocess.check_output(["docker", "logs", container], text=True, stderr=subprocess.STDOUT)  # nosec B603, B607 # nosemgrep
+        logs = subprocess.check_output(["docker", "logs", container], text=True, stderr=subprocess.STDOUT, timeout=20)  # nosec B603, B607 # nosemgrep
         if re.search(r"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b", logs):
             raise RuntimeError("MCP startup/request logs exposed a signed JWT")
+        if provider is not None and provider.token in logs:
+            raise RuntimeError("MCP logs exposed the OAuth access token")
         if "admin/admin123" in logs or "user/user123" in logs:
             raise RuntimeError("MCP startup logs still advertise demo credentials")
         # Fixed executable and argument list; no shell interprets image names or fixture data.
         subprocess.run(["docker", "stop", "--time", "5", container], check=True, stdout=subprocess.DEVNULL, timeout=20)  # nosec B603, B607 # nosemgrep
     finally:
         # Fixed executable and argument list; no shell interprets image names or fixture data.
-        subprocess.run(["docker", "rm", "-f", container], check=True, stdout=subprocess.DEVNULL)  # nosec B603, B607 # nosemgrep
+        remove_container(container, force=True)
 
 
 def check_missing_secret(image, platform):
@@ -184,9 +276,10 @@ def main():
     args = parser.parse_args()
     check_missing_secret(args.image, args.platform)
     check_server(args.image, args.platform, "jwt")
-    check_server(args.image, args.platform, "oauth")
+    with oauth_provider() as provider:
+        check_server(args.image, args.platform, "oauth", provider)
     check_stdio(args.image, args.platform)
-    print(f"MCP container verified: {args.image}; health, JWT configured/invalid/missing, OAuth redirect, stdio")
+    print(f"MCP container verified: {args.image}; health, JWT configured/invalid/missing, OAuth PKCE/callback/bearer/replay, stdio")
 
 
 if __name__ == "__main__":

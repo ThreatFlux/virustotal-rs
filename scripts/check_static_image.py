@@ -10,7 +10,7 @@ import subprocess  # nosec B404
 import tarfile
 import tempfile
 
-from smoke_mcp_container import image_reference
+from smoke_mcp_container import image_reference, remove_container
 
 
 BINARIES = {"usr/local/bin/app", "usr/bin/tini"}
@@ -20,11 +20,11 @@ def check_ca_trust(bundle):
     """Reject roots deliberately removed from the shipped trust bundle."""
     # Fixed executable and argument list; no shell interprets image names or fixture data.
     encoded = subprocess.check_output(  # nosec B603, B607 # nosemgrep
-        ["openssl", "crl2pkcs7", "-nocrl", "-certfile", "/dev/stdin"], input=bundle
+        ["openssl", "crl2pkcs7", "-nocrl", "-certfile", "/dev/stdin"], input=bundle, timeout=20
     )
     # Fixed executable and argument list; no shell interprets image names or fixture data.
     subjects = subprocess.check_output(  # nosec B603, B607 # nosemgrep
-        ["openssl", "pkcs7", "-print_certs", "-noout"], input=encoded
+        ["openssl", "pkcs7", "-print_certs", "-noout"], input=encoded, timeout=20
     ).decode().lower()
     for distrusted in ("emsign ecc root ca - g3", "aaa certificate services"):
         if distrusted in subjects:
@@ -135,7 +135,7 @@ def check_filesystem(container, architecture):
     """Export the disposable container and inspect its filesystem in memory."""
     with tempfile.TemporaryFile() as archive:
         # Fixed executable and argument list; no shell interprets image names or fixture data.
-        subprocess.run(["docker", "export", container], stdout=archive, check=True)  # nosec B603, B607 # nosemgrep
+        subprocess.run(["docker", "export", container], stdout=archive, check=True, timeout=120)  # nosec B603, B607 # nosemgrep
         archive.seek(0)
         with tarfile.open(fileobj=archive) as filesystem:
             files = {str(PurePosixPath(m.name)): m for m in filesystem if m.isfile()}
@@ -153,18 +153,18 @@ def main():
     if args.platform:
         create += ["--platform", args.platform]
     # Fixed executable and argument list; no shell interprets image names or fixture data.
-    container = subprocess.check_output(create + ["--", args.image], text=True).strip()  # nosec B603, B607 # nosemgrep
+    container = subprocess.check_output(create + ["--", args.image], text=True, timeout=60).strip()  # nosec B603, B607 # nosemgrep
     try:
         # Fixed executable and argument list; no shell interprets image names or fixture data.
-        info = json.loads(subprocess.check_output(["docker", "inspect", container]))[0]  # nosec B603, B607 # nosemgrep
+        info = json.loads(subprocess.check_output(["docker", "inspect", container], timeout=20))[0]  # nosec B603, B607 # nosemgrep
         # Fixed executable and argument list; no shell interprets image names or fixture data.
-        image = json.loads(subprocess.check_output(["docker", "image", "inspect", info["Image"]]))[0]  # nosec B603, B607 # nosemgrep
+        image = json.loads(subprocess.check_output(["docker", "image", "inspect", info["Image"]], timeout=20))[0]  # nosec B603, B607 # nosemgrep
         check_configuration(info)
         check_filesystem(container, image["Architecture"])
         print(f"Static runtime verified: {args.image} ({image['Architecture']})")
     finally:
         # Fixed executable and argument list; no shell interprets image names or fixture data.
-        subprocess.run(["docker", "rm", container], stdout=subprocess.DEVNULL, check=True)  # nosec B603, B607 # nosemgrep
+        remove_container(container)
 
 
 if __name__ == "__main__":

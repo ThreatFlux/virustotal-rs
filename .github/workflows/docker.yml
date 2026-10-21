@@ -1,5 +1,10 @@
 name: MCP Container
 
+# Main builds are serialized; versioned release builds retain independent groups.
+concurrency:
+  group: mcp-container-${{ github.ref }}
+  cancel-in-progress: false
+
 on:
   pull_request:
     branches: [main]
@@ -38,6 +43,20 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
+      - name: Validate dispatched release and run container-check regressions
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          python3 scripts/container_publish_tags.py --validate
+          if [[ "$REF_TYPE" == tag ]]; then
+            git merge-base --is-ancestor HEAD origin/main || {
+              echo "Release tags must identify a commit already merged into main." >&2
+              exit 1
+            }
+          fi
+          python3 -m unittest discover -s scripts -p 'test_*.py'
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Build complete MCP server with all authentication features
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -90,14 +109,14 @@ jobs:
         if: steps.scan.outcome != 'success'
         run: exit 1
       - name: Registry login
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.ref_type == 'tag')
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Publish exact tested platform image
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.ref_type == 'tag')
         env:
           IMAGE: ghcr.io/threatflux/virustotal-rs-mcp
           SHA: ${{ github.sha }}
@@ -107,11 +126,15 @@ jobs:
           docker push "${IMAGE}:${SHA}-${ARCH}"
   manifest:
     needs: container
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.ref_type == 'tag')
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       packages: write
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
@@ -125,10 +148,45 @@ jobs:
           REF_TYPE: ${{ github.ref_type }}
           REF_NAME: ${{ github.ref_name }}
         run: |
-          tags=(--tag "${IMAGE}:${SHA}")
-          if [[ "$REF_TYPE" == tag ]]; then
-            tags+=(--tag "${IMAGE}:${REF_NAME}" --tag "${IMAGE}:${REF_NAME#v}" --tag "${IMAGE}:latest")
-          else
-            tags+=(--tag "${IMAGE}:latest")
-          fi
+          tags_output=$(python3 scripts/container_publish_tags.py)
+          mapfile -t tags <<< "$tags_output"
           docker buildx imagetools create "${tags[@]}" "${IMAGE}:${SHA}-amd64" "${IMAGE}:${SHA}-arm64"
+
+  latest:
+    needs: manifest
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.ref_type == 'tag')
+    runs-on: ubuntu-latest
+    # Only this short job writes latest. Canceled pending updates are safe:
+    # every surviving updater promotes the current main image, not its own SHA.
+    concurrency:
+      group: mcp-container-latest
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Promote only the tested current main index
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IMAGE: ghcr.io/threatflux/virustotal-rs-mcp
+        run: |
+          main_head=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)
+          source=$(python3 scripts/container_publish_tags.py --latest --main-head "$main_head")
+          if ! docker buildx imagetools inspect "$source" > /dev/null 2> manifest-error.txt; then
+            if grep -Eq 'manifest unknown|not found' manifest-error.txt; then
+              echo "Current main has no completed, tested image yet; its publication will update latest."
+              exit 0
+            fi
+            cat manifest-error.txt >&2
+            exit 1
+          fi
+          docker buildx imagetools create --tag "${IMAGE}:latest" "$source"
