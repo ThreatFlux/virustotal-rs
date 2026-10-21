@@ -46,6 +46,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write # Creates the release tag on a manual dispatch.
+      actions: write # Dispatches the container workflow on the verified release tag.
     outputs:
       version: ${{ steps.version.outputs.version }}
       notes-source: ${{ steps.notes.outputs.source }}
@@ -194,6 +195,19 @@ jobs:
             echo "Tag ${TAG} points to ${REMOTE_TAG_SHA} on GitHub, not the selected source commit ${SOURCE_SHA}" >&2
             exit 1
           fi
+
+
+      # GITHUB_TOKEN-created tags do not start push workflows. Every real
+      # dispatch (direct or auto-release fallback) therefore dispatches the
+      # container build on the tag whose remote commit was verified above.
+      - name: Dispatch verified release container
+        if: github.event_name == 'workflow_dispatch' && env.DRY_RUN != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          gh workflow run docker.yml --repo "$GITHUB_REPOSITORY" --ref "v${VERSION}"
 
   build:
     name: Build (${{ matrix.target }})

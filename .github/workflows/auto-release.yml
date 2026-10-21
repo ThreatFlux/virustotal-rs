@@ -50,10 +50,10 @@ jobs:
       dry-run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
       required-workflows: CI,Security
       # The threatflux-automation App cuts the release, so its tag push starts
-      # release.yml and docker.yml (on: push: tags) by themselves and the reusable workflow skips
-      # this dispatch. The dispatch only runs when no App is configured and
-      # the release is cut with GITHUB_TOKEN, whose tag push starts nothing.
-      dispatch-workflows: release.yml,docker.yml
+      # release.yml and docker.yml (on: push: tags) themselves. Without the App,
+      # GITHUB_TOKEN creates a tag whose push starts nothing: dispatch release.yml,
+      # which dispatches docker.yml after verifying the remote release tag.
+      dispatch-workflows: release.yml
       dispatch-version-workflow: release.yml
       github-app-id: ${{ vars.TF_AUTOMATION_APP_ID }}
     secrets:
