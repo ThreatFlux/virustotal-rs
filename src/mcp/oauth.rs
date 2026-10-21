@@ -184,7 +184,8 @@ pub struct OAuthState {
     config: OAuthConfig,
     client: BasicClient<EndpointSet, EndpointNotSet, EndpointNotSet, EndpointNotSet, EndpointSet>,
     sessions: Arc<RwLock<HashMap<String, OAuthSession>>>,
-    credentials: Arc<RwLock<Option<OAuthCredentials>>>,
+    latest_credentials: Arc<RwLock<Option<OAuthCredentials>>>,
+    client_credentials: Arc<RwLock<HashMap<String, OAuthCredentials>>>,
     callback_path: String,
     secure_cookie: bool,
 }
@@ -224,7 +225,8 @@ impl OAuthState {
             config,
             client,
             sessions: Arc::new(RwLock::new(HashMap::new())),
-            credentials: Arc::new(RwLock::new(None)),
+            latest_credentials: Arc::new(RwLock::new(None)),
+            client_credentials: Arc::new(RwLock::new(HashMap::new())),
             callback_path,
             secure_cookie,
         })
@@ -285,7 +287,7 @@ impl OAuthState {
         let session = self.take_session(&session_id, &state)?;
 
         let credentials = self.exchange_code(&session, code).await?;
-        self.store_credentials(credentials.clone());
+        self.store_credentials(credentials.clone())?;
         Ok(credentials)
     }
 
@@ -395,22 +397,34 @@ impl OAuthState {
         }
     }
 
-    /// Replace the current credentials under the shared state lock.
-    fn store_credentials(&self, credentials: OAuthCredentials) {
-        let mut creds = self.credentials.write().unwrap();
-        *creds = Some(credentials);
+    /// Preserve each client's bearer credentials and keep the legacy latest-token accessor compatible.
+    fn store_credentials(&self, credentials: OAuthCredentials) -> AnyhowResult<()> {
+        {
+            let mut clients = self.client_credentials.write().unwrap();
+            clients.retain(|_, credentials| !credentials.is_expired());
+            if clients.len() >= 1024 && !clients.contains_key(&credentials.access_token) {
+                return Err(anyhow!("Too many active OAuth clients"));
+            }
+            clients.insert(credentials.access_token.clone(), credentials.clone());
+        }
+        *self.latest_credentials.write().unwrap() = Some(credentials);
+        Ok(())
     }
 
-    /// Get current credentials
+    /// Get the most recent credentials for existing single-client library callers.
     pub fn get_credentials(&self) -> Option<OAuthCredentials> {
-        let creds = self.credentials.read().unwrap();
-        creds.clone()
+        self.latest_credentials.read().unwrap().clone()
+    }
+
+    /// Look up the requesting client's credentials without depending on another client's login.
+    pub fn get_credentials_for_token(&self, token: &str) -> Option<OAuthCredentials> {
+        self.client_credentials.read().unwrap().get(token).cloned()
     }
 
     /// Refresh access token
     pub async fn refresh_token(&self) -> AnyhowResult<OAuthCredentials> {
         let refresh_token = {
-            let creds = self.credentials.read().unwrap();
+            let creds = self.latest_credentials.read().unwrap();
             creds
                 .as_ref()
                 .and_then(|c| c.refresh_token.clone())
@@ -425,10 +439,10 @@ impl OAuthState {
             .map_err(|e| anyhow!("Token refresh failed: {}", e))?;
         let mut credentials = Self::build_credentials(token_response);
         if credentials.refresh_token.is_none() {
-            let creds = self.credentials.read().unwrap();
+            let creds = self.latest_credentials.read().unwrap();
             credentials.refresh_token = creds.as_ref().and_then(|c| c.refresh_token.clone());
         }
-        self.store_credentials(credentials.clone());
+        self.store_credentials(credentials.clone())?;
 
         Ok(credentials)
     }
@@ -436,7 +450,7 @@ impl OAuthState {
     /// Get valid access token (refresh if needed)
     pub async fn get_access_token(&self) -> AnyhowResult<String> {
         let (needs_refresh, token) = {
-            let creds = self.credentials.read().unwrap();
+            let creds = self.latest_credentials.read().unwrap();
             let c = creds
                 .as_ref()
                 .ok_or_else(|| anyhow!("No credentials available"))?;
@@ -532,14 +546,10 @@ where
             .get::<OAuthState>()
             .ok_or_else(|| OAuthError::InvalidToken("OAuth not configured".to_string()))?;
 
-        // Validate token by checking current credentials
+        // Validate only the credentials indexed by this client's bearer token.
         let credentials = oauth_state
-            .get_credentials()
+            .get_credentials_for_token(auth_header)
             .ok_or(OAuthError::InvalidToken("No valid credentials".to_string()))?;
-
-        if credentials.access_token != auth_header {
-            return Err(OAuthError::InvalidToken("Token mismatch".to_string()));
-        }
 
         if credentials.is_expired() {
             return Err(OAuthError::ExpiredToken);
@@ -669,5 +679,56 @@ mod tests {
                 .1;
             assert_eq!(redirect, uri);
         }
+    }
+    /// Capacity exhaustion must not evict authenticated clients, and expired entries free a slot.
+    #[test]
+    fn client_capacity_preserves_existing_tokens_and_reclaims_expired_entries() {
+        let state = OAuthState::new(OAuthConfig::default()).unwrap();
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let credentials = OAuthCredentials {
+            access_token: "fixture-capacity-token".into(),
+            token_type: "Bearer".into(),
+            expires_in: Some(3600),
+            refresh_token: None,
+            scope: None,
+            issued_at: now,
+        };
+        for index in 0..1024 {
+            let mut client = credentials.clone();
+            client.access_token = format!("fixture-client-{index}");
+            state.store_credentials(client).unwrap();
+        }
+        assert!(state.store_credentials(credentials.clone()).is_err());
+        assert!(
+            state
+                .get_credentials_for_token("fixture-client-0")
+                .is_some()
+        );
+        state
+            .client_credentials
+            .write()
+            .unwrap()
+            .get_mut("fixture-client-0")
+            .unwrap()
+            .issued_at = now - 3601;
+        state.store_credentials(credentials).unwrap();
+        assert!(
+            state
+                .get_credentials_for_token("fixture-client-0")
+                .is_none()
+        );
+        assert!(
+            state
+                .get_credentials_for_token("fixture-capacity-token")
+                .is_some()
+        );
+        assert!(
+            state
+                .get_credentials_for_token("fixture-client-1")
+                .is_some()
+        );
     }
 }

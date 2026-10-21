@@ -525,7 +525,21 @@ mod oauth_http_tests {
 
     type AuthorizationQuery = std::collections::HashMap<String, String>;
 
-    /// Run an isolated token provider and construct the actual configured HTTP router.
+    /// Construct the actual HTTP router for an isolated identity provider.
+    fn router_for_provider(provider: &MockServer) -> Router {
+        let config = OAuthConfig::new("fixture-client", provider.uri())
+            .with_redirect_uri("http://127.0.0.1:8080/custom/callback?tenant=fixture");
+        let state = OAuthState::new(config).unwrap();
+        let server = VtMcpServer::new(
+            crate::ClientBuilder::new()
+                .api_key("fixture-api-key")
+                .build()
+                .unwrap(),
+        );
+        oauth_router(server, state)
+    }
+
+    /// Run an isolated provider expecting exactly one authorization-code exchange.
     async fn fixture() -> (Router, MockServer) {
         let provider = MockServer::start().await;
         Mock::given(method("POST"))
@@ -536,16 +550,7 @@ mod oauth_http_tests {
             .expect(1)
             .mount(&provider)
             .await;
-        let config = OAuthConfig::new("fixture-client", provider.uri())
-            .with_redirect_uri("http://127.0.0.1:8080/custom/callback?tenant=fixture");
-        let state = OAuthState::new(config).unwrap();
-        let server = VtMcpServer::new(
-            crate::ClientBuilder::new()
-                .api_key("fixture-api-key")
-                .build()
-                .unwrap(),
-        );
-        (oauth_router(server, state), provider)
+        (router_for_provider(&provider), provider)
     }
 
     /// Start authorization and retain the browser cookie and identity-provider query.
@@ -642,5 +647,39 @@ mod oauth_http_tests {
             StatusCode::BAD_REQUEST
         );
         assert_pkce(&provider, &query).await;
+    }
+    /// Completing another browser login must not revoke an existing client's valid bearer token.
+    #[tokio::test]
+    async fn oauth_clients_remain_authorized_after_another_client_logs_in() {
+        use wiremock::matchers::body_string_contains;
+        let provider = MockServer::start().await;
+        let app = router_for_provider(&provider);
+        let clients = [
+            ("first-client", "fixture-first-token"),
+            ("second-client", "fixture-second-token"),
+        ];
+        for (code, token) in clients {
+            Mock::given(method("POST"))
+                .and(path("/oauth/token"))
+                .and(body_string_contains(format!("code={code}")))
+                .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                    "access_token": token, "token_type": "Bearer", "expires_in": 3600
+                })))
+                .expect(1)
+                .mount(&provider)
+                .await;
+            let (cookie, query) = begin(&app).await;
+            let callback = format!("/custom/callback?code={code}&state={}", query["state"]);
+            assert_eq!(
+                send(&app, &callback, Some(&cookie), None).await.status(),
+                StatusCode::OK
+            );
+        }
+        for (_, token) in clients {
+            assert_eq!(
+                send(&app, "/", None, Some(token)).await.status(),
+                StatusCode::OK
+            );
+        }
     }
 }

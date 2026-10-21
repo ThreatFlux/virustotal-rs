@@ -136,6 +136,8 @@ class OAuthProvider(http.server.BaseHTTPRequestHandler):
             self.send_error(400)
             return
         self.server.exchanges += 1
+        self.server.token = secrets.token_urlsafe(32)
+        self.server.tokens.append(self.server.token)
         # Bearer is the OAuth token type; the fabricated access token is generated randomly.
         body = json.dumps({"access_token": self.server.token, "token_type": "Bearer", "expires_in": 3600}).encode()  # nosec B105
         self.send_response(200)
@@ -153,7 +155,7 @@ def oauth_provider():
     """Expose an isolated host fixture to Docker and always stop its server thread."""
     # The container reaches this ephemeral fixture via host-gateway; no upstream traffic or real credentials.
     provider = http.server.ThreadingHTTPServer(("0.0.0.0", 0), OAuthProvider)  # nosec B104
-    provider.token, provider.challenge, provider.exchanges = secrets.token_urlsafe(32), None, 0
+    provider.token, provider.challenge, provider.exchanges, provider.tokens = None, None, 0, []
     provider.issuer = f"http://host.docker.internal:{provider.server_port}"
     thread = threading.Thread(target=provider.serve_forever, daemon=True)
     thread.start()
@@ -183,22 +185,34 @@ def check_oauth(url, provider):
         raise RuntimeError("OAuth callback accepted a missing browser binding")
     if request(url + "/fixture/callback?code=fixture-code&state=wrong", cookie=cookie)[0] != 400:
         raise RuntimeError("OAuth callback accepted an incorrect state")
-    check_oauth_exchange(url, provider, callback, cookie)
+    return check_oauth_exchange(url, provider, callback, cookie)
 
 
 def check_oauth_exchange(url, provider, callback, cookie):
     """Verify callback response, bearer authorization, replay rejection, and invalid tokens."""
+    exchanges = provider.exchanges
     status, body, headers = request(callback, cookie=cookie)
-    if status != 200 or headers.get("Cache-Control") != "no-store" or provider.exchanges != 1:
+    if status != 200 or headers.get("Cache-Control") != "no-store" or provider.exchanges != exchanges + 1:
         raise RuntimeError("OAuth token exchange did not complete exactly once without caching")
     token = json.loads(body)["access_token"]
     status, body, _ = request(url + "/", REQUEST, token)
     if token != provider.token or status != 200 or not json.loads(body).get("result", {}).get("tools"):
         raise RuntimeError("OAuth bearer token did not authorize the real MCP tools list")
-    if request(callback, cookie=cookie)[0] != 400 or provider.exchanges != 1:
+    if request(callback, cookie=cookie)[0] != 400 or provider.exchanges != exchanges + 1:
         raise RuntimeError("OAuth callback permitted replay")
     if request(url + "/", REQUEST, "invalid-token")[0] != 401:
         raise RuntimeError("OAuth accepted an invalid bearer token")
+    return token
+
+
+def check_oauth_clients(url, provider):
+    """Ensure independent browser logins retain independent, simultaneously valid bearer tokens."""
+    first = check_oauth(url, provider)
+    second = check_oauth(url, provider)
+    if first == second:
+        raise RuntimeError("identity fixture did not issue independent client tokens")
+    if request(url + "/", REQUEST, first)[0] != 200:
+        raise RuntimeError("a second OAuth client login revoked the first client's token")
 
 
 def check_server(image, platform, mode, provider=None):
@@ -226,12 +240,12 @@ def check_server(image, platform, mode, provider=None):
         if mode == "jwt":
             check_jwt(url, password)
         else:
-            check_oauth(url, provider)
+            check_oauth_clients(url, provider)
         # Fixed executable and argument list; no shell interprets image names or fixture data.
         logs = subprocess.check_output(["docker", "logs", container], text=True, stderr=subprocess.STDOUT, timeout=20)  # nosec B603, B607 # nosemgrep
         if re.search(r"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b", logs):
             raise RuntimeError("MCP startup/request logs exposed a signed JWT")
-        if provider is not None and provider.token in logs:
+        if provider is not None and any(token in logs for token in provider.tokens):
             raise RuntimeError("MCP logs exposed the OAuth access token")
         if "admin/admin123" in logs or "user/user123" in logs:
             raise RuntimeError("MCP startup logs still advertise demo credentials")
@@ -284,7 +298,7 @@ def main():
     with oauth_provider() as provider:
         check_server(args.image, args.platform, "oauth", provider)
     check_stdio(args.image, args.platform)
-    print(f"MCP container verified: {args.image}; health, JWT configured/invalid/missing, OAuth PKCE/callback/bearer/replay, stdio")
+    print(f"MCP container verified: {args.image}; health, JWT configured/invalid/missing, OAuth PKCE/callback/bearer/replay/multiple clients, stdio")
 
 
 if __name__ == "__main__":
