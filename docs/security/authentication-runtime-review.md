@@ -36,3 +36,17 @@ OAuth callback token grants must include every requested scope; an omitted scope
 requested set, while an explicit reduction is rejected before storing credentials. Refresh grants
 use the same rule. Public HTTP callback hosts require HTTPS; plaintext redirects are restricted to
 loopback IP addresses and `localhost`. Standalone OAuth clients retain custom redirect schemes.
+
+Authorization and token endpoints also require HTTPS outside explicit loopback hosts, including
+standalone OAuth clients; validation uses both effective endpoint URLs before any authorization
+traffic. Token issuance and refresh use a timeout and refuse redirects. `SSL_CERT_FILE` may supply
+an explicit PEM CA bundle for private identity providers; peer and hostname verification remain
+enabled, and an invalid or empty bundle fails closed. The container identity-provider fixture now
+uses TLS with a temporary CA: an untrusted-provider exchange must fail without transmitting a code,
+while an explicitly trusted provider completes the existing PKCE, callback, multi-client and rate
+limit checks. No plaintext host-gateway exception or certificate-verification bypass is introduced.
+
+Empty comma-separated scope entries and blank builder entries are excluded from authorization and
+grant validation, without accepting a grant missing any nonempty requested scope. Keyed limiter
+cleanup runs at most once per 30 seconds rather than scanning the map on every anonymous request;
+the per-peer quota and public unwind-safety traits remain unchanged.

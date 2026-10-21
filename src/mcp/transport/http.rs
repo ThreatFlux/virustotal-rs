@@ -118,15 +118,7 @@ fn validate_oauth_http_callback(config: &OAuthConfig) -> McpResult<()> {
     {
         anyhow::bail!("HTTP OAuth redirect URI must identify a dedicated HTTP callback path");
     }
-    let loopback = match callback.host() {
-        Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
-        Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
-        Some(url::Host::Domain(host)) => host.eq_ignore_ascii_case("localhost"),
-        None => false,
-    };
-    if callback.scheme() == "http" && !loopback {
-        anyhow::bail!("HTTP OAuth redirect URI requires HTTPS outside loopback hosts");
-    }
+    OAuthConfig::require_secure_transport(&config.redirect_uri)?;
     Ok(())
 }
 

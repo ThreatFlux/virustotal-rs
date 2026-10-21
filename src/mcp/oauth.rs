@@ -20,7 +20,7 @@ use std::{
     collections::HashMap,
     net::{IpAddr, Ipv6Addr},
     sync::{Arc, Mutex, RwLock},
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use uuid::Uuid;
 
@@ -65,6 +65,21 @@ impl Default for OAuthConfig {
 }
 
 impl OAuthConfig {
+    /// Require encryption for OAuth URLs except explicit loopback development endpoints.
+    pub(crate) fn require_secure_transport(uri: &str) -> AnyhowResult<()> {
+        let endpoint = url::Url::parse(uri)?;
+        let loopback = match endpoint.host() {
+            Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
+            Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
+            Some(url::Host::Domain(host)) => host.eq_ignore_ascii_case("localhost"),
+            None => false,
+        };
+        if endpoint.scheme() != "https" && !(endpoint.scheme() == "http" && loopback) {
+            return Err(anyhow!("OAuth URL requires HTTPS outside loopback hosts"));
+        }
+        Ok(())
+    }
+
     /// Create a new OAuth configuration
     pub fn new(client_id: impl Into<String>, auth_server_url: impl Into<String>) -> Self {
         Self {
@@ -113,7 +128,9 @@ impl OAuthConfig {
     pub fn parse_scopes(scopes_str: &str) -> Vec<String> {
         scopes_str
             .split(',')
-            .map(|s| s.trim().to_string())
+            .map(str::trim)
+            .filter(|scope| !scope.is_empty())
+            .map(str::to_string)
             .collect()
     }
 
@@ -179,6 +196,12 @@ pub struct OAuthSession {
     pub created_at: SystemTime,
 }
 
+/// Track keyed authorization quotas and a bounded cleanup cadence.
+struct AuthorizationLimiter {
+    limiter: governor::DefaultKeyedRateLimiter<IpAddr>,
+    last_cleanup: Instant,
+}
+
 /// OAuth state manager
 #[derive(Clone)]
 pub struct OAuthState {
@@ -190,12 +213,13 @@ pub struct OAuthState {
     callback_path: String,
     secure_cookie: bool,
     // Preserve the existing public unwind-safety traits while protecting governor's interior state.
-    authorization_limiter: Arc<Mutex<governor::DefaultKeyedRateLimiter<IpAddr>>>,
+    authorization_limiter: Arc<Mutex<AuthorizationLimiter>>,
 }
 
 impl OAuthState {
     /// Create a new OAuth state manager
-    pub fn new(config: OAuthConfig) -> AnyhowResult<Self> {
+    pub fn new(mut config: OAuthConfig) -> AnyhowResult<Self> {
+        config.scopes.retain(|scope| !scope.trim().is_empty());
         let auth_url = AuthUrl::new(format!(
             "{}{}",
             config.auth_server_url, config.auth_endpoint
@@ -207,6 +231,9 @@ impl OAuthState {
             config.auth_server_url, config.token_endpoint
         ))
         .map_err(|e| anyhow!("Invalid token URL: {}", e))?;
+
+        OAuthConfig::require_secure_transport(auth_url.as_str())?;
+        OAuthConfig::require_secure_transport(token_url.as_str())?;
 
         let redirect_url = RedirectUrl::new(config.redirect_uri.clone())
             .map_err(|e| anyhow!("Invalid redirect URL: {}", e))?;
@@ -232,17 +259,24 @@ impl OAuthState {
             client_credentials: Arc::new(RwLock::new(HashMap::new())),
             callback_path,
             secure_cookie,
-            authorization_limiter: Arc::new(Mutex::new(governor::RateLimiter::keyed(
-                governor::Quota::per_minute(nonzero_ext::nonzero!(30u32)),
-            ))),
+            authorization_limiter: Arc::new(Mutex::new(AuthorizationLimiter {
+                limiter: governor::RateLimiter::keyed(governor::Quota::per_minute(
+                    nonzero_ext::nonzero!(30u32),
+                )),
+                last_cleanup: Instant::now(),
+            })),
         })
     }
 
     /// Limit anonymous authorization creation by the actual peer, retaining only recent quota state.
     pub fn allow_authorization(&self, peer: IpAddr) -> bool {
-        let limiter = self.authorization_limiter.lock().unwrap();
-        limiter.retain_recent();
-        limiter
+        let mut state = self.authorization_limiter.lock().unwrap();
+        if state.last_cleanup.elapsed() >= Duration::from_secs(30) {
+            state.limiter.retain_recent();
+            state.last_cleanup = Instant::now();
+        }
+        state
+            .limiter
             .check_key(&Self::client_rate_limit_key(peer))
             .is_ok()
     }
@@ -386,10 +420,7 @@ impl OAuthState {
                 token_request.set_pkce_verifier(PkceCodeVerifier::new(verifier.clone()));
         }
 
-        let http_client = oauth2::reqwest::Client::builder()
-            .redirect(oauth2::reqwest::redirect::Policy::none())
-            .timeout(Duration::from_secs(20))
-            .build()?;
+        let http_client = Self::token_http_client()?;
         let token_response: StandardTokenResponse<
             EmptyExtraTokenFields,
             oauth2::basic::BasicTokenType,
@@ -401,16 +432,39 @@ impl OAuthState {
         Ok(Self::build_credentials(token_response))
     }
 
+    /// Preserve certificate verification while accepting an explicitly configured local CA bundle.
+    fn token_http_client() -> AnyhowResult<oauth2::reqwest::Client> {
+        let mut builder = oauth2::reqwest::Client::builder()
+            .redirect(oauth2::reqwest::redirect::Policy::none())
+            .timeout(Duration::from_secs(20));
+        if let Some(path) = std::env::var_os("SSL_CERT_FILE") {
+            let certificates =
+                oauth2::reqwest::Certificate::from_pem_bundle(&std::fs::read(path)?)?;
+            if certificates.is_empty() {
+                return Err(anyhow!("SSL_CERT_FILE contains no certificates"));
+            }
+            for certificate in certificates {
+                builder = builder.add_root_certificate(certificate);
+            }
+        }
+        Ok(builder.build()?)
+    }
+
     /// Reject explicit scope reductions and inherit requested scopes when the provider omits them.
     fn require_scopes(
         credentials: &mut OAuthCredentials,
         requested: &[String],
     ) -> AnyhowResult<()> {
+        let requested: Vec<&str> = requested
+            .iter()
+            .map(String::as_str)
+            .filter(|scope| !scope.trim().is_empty())
+            .collect();
         let granted = credentials.scope.get_or_insert_with(|| requested.join(" "));
         if requested.iter().any(|required| {
             !granted
                 .split_ascii_whitespace()
-                .any(|scope| scope == required)
+                .any(|scope| scope == *required)
         }) {
             return Err(anyhow!("Provider did not grant all requested OAuth scopes"));
         }
@@ -483,7 +537,7 @@ impl OAuthState {
         let token_response = self
             .client
             .exchange_refresh_token(&RefreshToken::new(refresh_token))
-            .request_async(&oauth2::reqwest::Client::new())
+            .request_async(&Self::token_http_client()?)
             .await
             .map_err(|e| anyhow!("Token refresh failed: {}", e))?;
         let mut credentials = Self::build_credentials(token_response);
@@ -839,6 +893,96 @@ mod tests {
                 .is_none()
         );
     }
+    /// Empty comma-separated and builder entries must not become impossible required scopes.
+    #[test]
+    fn empty_scope_entries_do_not_break_authorization_or_grant_validation() {
+        assert_eq!(
+            OAuthConfig::parse_scopes("mcp,profile, ,"),
+            ["mcp", "profile"]
+        );
+        assert!(OAuthConfig::parse_scopes(" , ").is_empty());
+        let requested = vec!["mcp".into(), "".into(), "profile".into(), " ".into()];
+        let state = OAuthState::new(OAuthConfig::default().with_scopes(requested.clone())).unwrap();
+        let (authorization, _) = state.start_authorization().unwrap();
+        let query: HashMap<_, _> = url::Url::parse(&authorization)
+            .unwrap()
+            .query_pairs()
+            .into_owned()
+            .collect();
+        assert_eq!(query["scope"], "mcp profile");
+        for granted in [None, Some("mcp profile".to_string())] {
+            let mut credentials = OAuthCredentials {
+                access_token: "scope-fixture".into(),
+                token_type: "Bearer".into(),
+                expires_in: Some(3600),
+                refresh_token: None,
+                scope: granted,
+                issued_at: 0,
+            };
+            OAuthState::require_scopes(&mut credentials, &requested).unwrap();
+            assert_eq!(credentials.scope.as_deref(), Some("mcp profile"));
+            credentials.scope = Some("profile".into());
+            assert!(OAuthState::require_scopes(&mut credentials, &requested).is_err());
+        }
+    }
+
+    /// Repeated requests avoid full keyed-store scans while periodic cleanup still runs.
+    #[test]
+    fn authorization_limiter_cleans_up_at_a_bounded_interval() {
+        let state = OAuthState::new(OAuthConfig::default()).unwrap();
+        let peer = "127.0.0.1".parse().unwrap();
+        let initial = state.authorization_limiter.lock().unwrap().last_cleanup;
+        assert!(state.allow_authorization(peer));
+        assert_eq!(
+            state.authorization_limiter.lock().unwrap().last_cleanup,
+            initial
+        );
+        let due = Instant::now() - Duration::from_secs(31);
+        state.authorization_limiter.lock().unwrap().last_cleanup = due;
+        assert!(state.allow_authorization(peer));
+        let cleaned = state.authorization_limiter.lock().unwrap().last_cleanup;
+        assert!(cleaned > due);
+        assert!(state.allow_authorization(peer));
+        assert_eq!(
+            state.authorization_limiter.lock().unwrap().last_cleanup,
+            cleaned
+        );
+    }
+
+    /// Validate both effective provider endpoints before any authorization or token traffic.
+    #[test]
+    fn provider_endpoints_require_https_except_on_loopback() {
+        for issuer in [
+            "https://auth.example.com",
+            "http://localhost:8080",
+            "http://127.0.0.1:8080",
+            "http://[::1]:8080",
+        ] {
+            assert!(
+                OAuthState::new(OAuthConfig::new("fixture", issuer)).is_ok(),
+                "{issuer}"
+            );
+        }
+        for issuer in [
+            "http://auth.example.com",
+            "http://192.168.1.1",
+            "http://localhost.example.com",
+            "http://127.0.0.1@auth.example.com",
+            "ftp://auth.example.com",
+        ] {
+            assert!(
+                OAuthState::new(OAuthConfig::new("fixture", issuer)).is_err(),
+                "{issuer}"
+            );
+        }
+        let bad_auth = OAuthConfig::new("fixture", "http://localhost")
+            .with_endpoints("@remote.example.com/authorize", "/token");
+        assert!(OAuthState::new(bad_auth).is_err());
+        let bad_token = OAuthConfig::new("fixture", "http://localhost")
+            .with_endpoints("/authorize", "@remote.example.com/token");
+        assert!(OAuthState::new(bad_token).is_err());
+    }
+
     /// Private storage changes must preserve the public concurrency and unwind-safety contract.
     #[test]
     fn oauth_state_preserves_its_public_auto_traits() {

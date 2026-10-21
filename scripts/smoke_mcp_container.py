@@ -7,11 +7,14 @@ import contextlib
 import hashlib
 import http.server
 import json
+from pathlib import Path
 import re
 import secrets
+import ssl
 # Required for shell-free Docker/OpenSSL test commands.
 import subprocess  # nosec B404
 import sys
+import tempfile
 import time
 import threading
 import urllib.error
@@ -173,20 +176,29 @@ class OAuthProvider(http.server.BaseHTTPRequestHandler):
 
 @contextlib.contextmanager
 def oauth_provider():
-    """Expose an isolated host fixture to Docker and always stop its server thread."""
-    # The container reaches this ephemeral fixture via host-gateway; no upstream traffic or real credentials.
-    provider = http.server.ThreadingHTTPServer(("0.0.0.0", 0), OAuthProvider)  # nosec B104
-    provider.token, provider.challenge, provider.exchanges, provider.tokens = None, None, 0, []
-    provider.issuer = f"http://host.docker.internal:{provider.server_port}"
-    provider.expires_in = 3600
-    thread = threading.Thread(target=provider.serve_forever, daemon=True)
-    thread.start()
-    try:
-        yield provider
-    finally:
-        provider.shutdown()
-        provider.server_close()
-        thread.join(timeout=10)
+    """Expose a TLS identity fixture with an explicit temporary CA and always stop its thread."""
+    from smoke_mcp_https import create_certificates
+
+    with tempfile.TemporaryDirectory(prefix="mcp-oauth-fixture-") as directory:
+        root = Path(directory)
+        create_certificates(root, [("provider", "host.docker.internal")])
+        # Container host-gateway fixture: ephemeral port, fabricated data, no upstream forwarding.
+        provider = http.server.ThreadingHTTPServer(("0.0.0.0", 0), OAuthProvider)  # nosec B104
+        tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        tls.load_cert_chain(root / "provider.crt", root / "provider.key")
+        provider.socket = tls.wrap_socket(provider.socket, server_side=True)
+        provider.token, provider.challenge, provider.exchanges, provider.tokens = None, None, 0, []
+        provider.issuer = f"https://host.docker.internal:{provider.server_port}"
+        provider.ca_path = root / "ca.crt"
+        provider.expires_in = 3600
+        thread = threading.Thread(target=provider.serve_forever, daemon=True)
+        thread.start()
+        try:
+            yield provider
+        finally:
+            provider.shutdown()
+            provider.server_close()
+            thread.join(timeout=10)
 
 
 def check_oauth(url, provider):
@@ -208,6 +220,19 @@ def check_oauth(url, provider):
     if request(url + "/fixture/callback?code=fixture-code&state=wrong", cookie=cookie)[0] != 400:
         raise RuntimeError("OAuth callback accepted an incorrect state")
     return check_oauth_exchange(url, provider, callback, cookie)
+
+
+def check_oauth_untrusted(url, provider):
+    """An untrusted provider certificate must fail before the token endpoint receives a code."""
+    exchanges = provider.exchanges
+    status, _, headers = request(url + "/oauth/authorize")
+    if status != 303:
+        raise RuntimeError("OAuth fixture did not begin authorization")
+    query = parse_qs(urlsplit(headers["Location"]).query)
+    cookie = headers["Set-Cookie"].split(";", 1)[0]
+    callback = url + "/fixture/callback?" + urlencode({"code": "fixture-code", "state": query["state"][0]})
+    if request(callback, cookie=cookie)[0] != 400 or provider.exchanges != exchanges:
+        raise RuntimeError("OAuth token exchange accepted an untrusted provider certificate")
 
 
 def check_oauth_exchange(url, provider, callback, cookie):
@@ -272,6 +297,9 @@ def check_server(image, platform, mode, provider=None):
     command.remove("--rm")
     if provider is not None:
         command += ["--add-host", "host.docker.internal:host-gateway"]
+        if mode != "oauth-untrusted":
+            command += ["-v", f"{provider.ca_path}:/fixture/provider-ca.crt:ro",
+                        "-e", "SSL_CERT_FILE=/fixture/provider-ca.crt"]
     # Fixed executable and argument list; no shell interprets image names or fixture data.
     with managed_container(command + ["-d", "-p", "127.0.0.1::8080", "--", image]) as container:
         # Fixed executable and argument list; no shell interprets image names or fixture data.
@@ -280,6 +308,8 @@ def check_server(image, platform, mode, provider=None):
         wait_ready(url, container)
         if mode == "jwt":
             check_jwt(url, password)
+        elif mode == "oauth-untrusted":
+            check_oauth_untrusted(url, provider)
         else:
             check_oauth_clients(url, provider)
         # Fixed executable and argument list; no shell interprets image names or fixture data.
@@ -344,6 +374,7 @@ def main():
     check_missing_secret(args.image, args.platform)
     check_server(args.image, args.platform, "jwt")
     with oauth_provider() as provider:
+        check_server(args.image, args.platform, "oauth-untrusted", provider)
         check_server(args.image, args.platform, "oauth", provider)
     check_stdio(args.image, args.platform)
     print(f"MCP container verified: {args.image}; health, JWT configured/invalid/missing, OAuth PKCE/callback/bearer/replay/multiple clients/rate limiting, stdio")

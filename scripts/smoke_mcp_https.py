@@ -67,15 +67,16 @@ class ProxyServer(socketserver.ThreadingTCPServer):
     daemon_threads = True
 
 
-def create_certificates(root):
+def create_certificates(root, hostnames=None):
     """Generate a temporary CA and certificates for valid and wrong hostnames."""
     commands = [["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
                  "-subj", "/CN=Temporary MCP fixture CA", "-addext", "basicConstraints=critical,CA:TRUE",
                  "-keyout", str(root / "ca.key"), "-out", str(root / "ca.crt")]]
-    for name, hostname in [("valid", "www.virustotal.com"), ("wrong", "wrong.fixture")]:
+    for name, hostname in hostnames or [("valid", "www.virustotal.com"), ("wrong", "wrong.fixture")]:
         extension = root / f"{name}.cnf"
+        loopback = ",IP:127.0.0.1" if name == "provider" else ""
         extension.write_text("basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\n"
-                             f"subjectAltName=DNS:{hostname}\nextendedKeyUsage=serverAuth\n")
+                             f"subjectAltName=DNS:{hostname}{loopback}\nextendedKeyUsage=serverAuth\n")
         commands += [
             ["openssl", "req", "-new", "-newkey", "rsa:2048", "-nodes", "-subj", f"/CN={hostname}",
              "-keyout", str(root / f"{name}.key"), "-out", str(root / f"{name}.csr")],
