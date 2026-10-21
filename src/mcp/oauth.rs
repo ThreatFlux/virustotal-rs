@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     net::{IpAddr, Ipv6Addr},
-    sync::{Arc, RwLock},
+    sync::{Arc, Mutex, RwLock},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use uuid::Uuid;
@@ -189,7 +189,8 @@ pub struct OAuthState {
     client_credentials: Arc<RwLock<HashMap<String, OAuthCredentials>>>,
     callback_path: String,
     secure_cookie: bool,
-    authorization_limiter: Arc<governor::DefaultKeyedRateLimiter<IpAddr>>,
+    // Preserve the existing public unwind-safety traits while protecting governor's interior state.
+    authorization_limiter: Arc<Mutex<governor::DefaultKeyedRateLimiter<IpAddr>>>,
 }
 
 impl OAuthState {
@@ -231,16 +232,17 @@ impl OAuthState {
             client_credentials: Arc::new(RwLock::new(HashMap::new())),
             callback_path,
             secure_cookie,
-            authorization_limiter: Arc::new(governor::RateLimiter::keyed(
+            authorization_limiter: Arc::new(Mutex::new(governor::RateLimiter::keyed(
                 governor::Quota::per_minute(nonzero_ext::nonzero!(30u32)),
-            )),
+            ))),
         })
     }
 
     /// Limit anonymous authorization creation by the actual peer, retaining only recent quota state.
     pub fn allow_authorization(&self, peer: IpAddr) -> bool {
-        self.authorization_limiter.retain_recent();
-        self.authorization_limiter
+        let limiter = self.authorization_limiter.lock().unwrap();
+        limiter.retain_recent();
+        limiter
             .check_key(&Self::client_rate_limit_key(peer))
             .is_ok()
     }
@@ -818,5 +820,15 @@ mod tests {
                 .get_credentials_for_token("fixture-no-expiry")
                 .is_none()
         );
+    }
+    /// Private storage changes must preserve the public concurrency and unwind-safety contract.
+    #[test]
+    fn oauth_state_preserves_its_public_auto_traits() {
+        /// Compile only when downstream users can retain their existing trait bounds.
+        fn assert_traits<
+            T: Clone + Send + Sync + std::panic::UnwindSafe + std::panic::RefUnwindSafe,
+        >() {
+        }
+        assert_traits::<OAuthState>();
     }
 }
