@@ -71,6 +71,7 @@ fn initialize_logging() {
         .add_directive("axum=info".parse().unwrap());
 
     tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
         .with_env_filter(env_filter)
         .with_target(false)
         .with_thread_ids(true)

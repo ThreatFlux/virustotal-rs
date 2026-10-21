@@ -5,7 +5,7 @@ use super::http::run_http_server_with_oauth;
 use super::{http::run_http_server, stdio::run_stdio_server};
 use crate::mcp::McpResult;
 #[cfg(feature = "mcp-jwt")]
-use crate::mcp::auth::{JwtConfig, JwtManager};
+use crate::mcp::auth::JwtConfig;
 #[cfg(feature = "mcp-oauth")]
 use crate::mcp::oauth::OAuthConfig;
 use std::net::SocketAddr;
@@ -194,7 +194,7 @@ impl ServerConfig {
         addr: SocketAddr,
     ) -> Option<McpResult<()>> {
         if let Some(jwt_config) = &self.jwt_config {
-            self.log_jwt_info(jwt_config);
+            self.log_jwt_info();
             return Some(
                 run_http_server_with_config(client.clone(), addr, Some(jwt_config.clone())).await,
             );
@@ -222,17 +222,11 @@ impl ServerConfig {
         tracing::info!("Metadata endpoint: /oauth/metadata");
     }
 
-    /// Log JWT configuration information
+    /// Log authentication availability without minting or exposing credentials.
     #[cfg(feature = "mcp-jwt")]
-    fn log_jwt_info(&self, jwt_config: &JwtConfig) {
-        let jwt_manager = JwtManager::new(jwt_config.clone());
-        if let Ok(admin_token) = jwt_manager.generate_admin_token("admin") {
-            tracing::info!("JWT Authentication enabled");
-            tracing::info!("Sample admin credentials: admin/admin123");
-            tracing::info!("Sample user credentials: user/user123");
-            tracing::info!("Sample admin token: {}", admin_token);
-            tracing::info!("Use POST /auth/token to authenticate");
-        }
+    fn log_jwt_info(&self) {
+        tracing::info!("JWT Authentication enabled");
+        tracing::info!("Use POST /auth/token with explicitly configured credentials");
     }
 
     /// Initialize tracing/logging
@@ -248,6 +242,7 @@ impl ServerConfig {
         let _ = tracing_subscriber::registry()
             .with(
                 tracing_subscriber::fmt::layer()
+                    .with_writer(std::io::stderr)
                     .with_target(false)
                     .with_thread_ids(true)
                     .with_level(true)

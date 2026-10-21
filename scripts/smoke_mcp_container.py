@@ -3,6 +3,7 @@
 
 import argparse
 import json
+import re
 import secrets
 import subprocess
 import time
@@ -103,6 +104,11 @@ def check_server(image, platform, mode):
             check_jwt(url, password)
         else:
             check_oauth(url)
+        logs = subprocess.check_output(["docker", "logs", container], text=True, stderr=subprocess.STDOUT)
+        if re.search(r"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b", logs):
+            raise RuntimeError("MCP startup/request logs exposed a signed JWT")
+        if "admin/admin123" in logs or "user/user123" in logs:
+            raise RuntimeError("MCP startup logs still advertise demo credentials")
         subprocess.run(["docker", "stop", "--time", "5", container], check=True, stdout=subprocess.DEVNULL, timeout=20)
     finally:
         subprocess.run(["docker", "rm", "-f", container], check=True, stdout=subprocess.DEVNULL)
@@ -119,13 +125,12 @@ def check_stdio(image, platform):
     command = docker_command(image, platform, {"VIRUSTOTAL_API_KEY": "fixture-api-key", "SERVER_MODE": "stdio"})
     result = subprocess.run(command + ["-i", "--", image], input=json.dumps(REQUEST) + "\n",
                             capture_output=True, text=True, timeout=20)
-    responses = []
-    for line in result.stdout.splitlines():
-        try:
-            responses.append(json.loads(line))
-        except json.JSONDecodeError:
-            continue
-    if result.returncode or not any(item.get("result", {}).get("tools") for item in responses):
+    try:
+        responses = [json.loads(line) for line in result.stdout.splitlines() if line]
+    except json.JSONDecodeError as error:
+        raise RuntimeError("stdio stdout contains diagnostic text outside JSON-RPC framing") from error
+    if (result.returncode or len(responses) != 1 or responses[0].get("id") != REQUEST["id"]
+            or not responses[0].get("result", {}).get("tools")):
         raise RuntimeError(f"stdio MCP tools request failed: {result.stdout}\n{result.stderr}")
 
 
