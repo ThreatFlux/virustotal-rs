@@ -41,6 +41,7 @@ jobs:
             runner: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        id: checkout
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -70,7 +71,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=mcp-${{ matrix.arch }}
           build-args: |
             VERSION=${{ github.ref_name }}
-            VCS_REF=${{ github.sha }}
+            VCS_REF=${{ steps.checkout.outputs.commit }}
       - name: Verify static provenance and real MCP authentication/transports
         run: |
           python3 scripts/check_static_image.py vt-mcp:scan
@@ -119,7 +120,7 @@ jobs:
         if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.ref_type == 'tag')
         env:
           IMAGE: ghcr.io/threatflux/virustotal-rs-mcp
-          SHA: ${{ github.sha }}
+          SHA: ${{ steps.checkout.outputs.commit }}
           ARCH: ${{ matrix.arch }}
         run: |
           docker tag vt-mcp:scan "${IMAGE}:${SHA}-${ARCH}"
@@ -133,6 +134,7 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        id: checkout
         with:
           persist-credentials: false
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
@@ -144,7 +146,7 @@ jobs:
       - name: Publish tested multi-platform index
         env:
           IMAGE: ghcr.io/threatflux/virustotal-rs-mcp
-          SHA: ${{ github.sha }}
+          SHA: ${{ steps.checkout.outputs.commit }}
           REF_TYPE: ${{ github.ref_type }}
           REF_NAME: ${{ github.ref_name }}
         run: |
