@@ -333,6 +333,24 @@ def check_missing_secret(image, platform):
         raise RuntimeError(f"JWT startup did not fail closed without signing configuration: {result.stderr}")
 
 
+def check_missing_oauth_endpoints(image, platform):
+    """Reject absent or empty OAuth provider and callback URLs before starting a listener."""
+    for setting in ("OAUTH_AUTH_SERVER_URL", "OAUTH_REDIRECT_URI"):
+        for value in (None, ""):
+            environment = {"VIRUSTOTAL_API_KEY": "fixture-api-key", "ENABLE_OAUTH": "1",
+                           "OAUTH_AUTH_SERVER_URL": "https://auth.invalid",
+                           "OAUTH_REDIRECT_URI": "http://127.0.0.1:8080/fixture/callback"}
+            if value is None:
+                environment.pop(setting)
+            else:
+                environment[setting] = value
+            command = docker_command(image, platform, environment)
+            # Fixed Docker executable and shell-free arguments; image is a validated operand.
+            result = subprocess.run(command + ["--", image], capture_output=True, text=True, timeout=20)  # nosec B603 # nosemgrep
+            if not result.returncode or f"{setting} is required" not in result.stderr:
+                raise RuntimeError(f"OAuth startup accepted missing/empty {setting}")
+
+
 def check_invalid_mode(image, platform):
     """Reject misspelled transport names instead of unexpectedly starting an HTTP listener."""
     command = docker_command(image, platform, {"VIRUSTOTAL_API_KEY": "fixture-api-key", "SERVER_MODE": "sdtio"})
@@ -372,6 +390,7 @@ def main():
     args = parser.parse_args()
     check_invalid_mode(args.image, args.platform)
     check_missing_secret(args.image, args.platform)
+    check_missing_oauth_endpoints(args.image, args.platform)
     check_server(args.image, args.platform, "jwt")
     with oauth_provider() as provider:
         check_server(args.image, args.platform, "oauth-untrusted", provider)

@@ -50,3 +50,8 @@ Empty comma-separated scope entries and blank builder entries are excluded from 
 grant validation, without accepting a grant missing any nonempty requested scope. Keyed limiter
 cleanup runs at most once per 30 seconds rather than scanning the map on every anonymous request;
 the per-peer quota and public unwind-safety traits remain unchanged.
+
+Environment-backed OAuth startup requires explicit nonempty `OAUTH_AUTH_SERVER_URL` and
+`OAUTH_REDIRECT_URI` values. Missing settings fail before listening, rather than inheriting
+standalone-library defaults that can point authorization back at the MCP endpoint or target a
+different callback port. Explicit builder configuration retains its existing library defaults.

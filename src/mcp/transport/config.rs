@@ -292,7 +292,7 @@ pub fn server_config_from_env() -> McpResult<ServerConfig> {
 
     #[cfg(feature = "mcp-oauth")]
     {
-        config = apply_oauth_from_env(config);
+        config = apply_oauth_from_env(config)?;
     }
 
     #[cfg(feature = "mcp-jwt")]
@@ -340,21 +340,23 @@ fn apply_http_addr_from_env(mut config: ServerConfig) -> McpResult<ServerConfig>
 
 #[cfg(feature = "mcp-oauth")]
 /// Enable OAuth with the configured provider, redirect URI, client, and scopes.
-fn apply_oauth_from_env(mut config: ServerConfig) -> ServerConfig {
+fn apply_oauth_from_env(mut config: ServerConfig) -> McpResult<ServerConfig> {
     if std::env::var_os("ENABLE_OAUTH").is_some() {
         let client_id = std::env::var("OAUTH_CLIENT_ID")
             .unwrap_or_else(|_| "virustotal-mcp-client".to_string());
-        let auth_server_url = std::env::var("OAUTH_AUTH_SERVER_URL")
-            .unwrap_or_else(|_| "http://localhost:8080".to_string());
-
-        let mut oauth_config = OAuthConfig::new(client_id, auth_server_url);
+        let auth_server_url = required_oauth_setting(
+            std::env::var("OAUTH_AUTH_SERVER_URL").ok(),
+            "OAUTH_AUTH_SERVER_URL",
+        )?;
+        let redirect_uri = required_oauth_setting(
+            std::env::var("OAUTH_REDIRECT_URI").ok(),
+            "OAUTH_REDIRECT_URI",
+        )?;
+        let mut oauth_config =
+            OAuthConfig::new(client_id, auth_server_url).with_redirect_uri(redirect_uri);
 
         if let Ok(client_secret) = std::env::var("OAUTH_CLIENT_SECRET") {
             oauth_config = oauth_config.with_client_secret(client_secret);
-        }
-
-        if let Ok(redirect_uri) = std::env::var("OAUTH_REDIRECT_URI") {
-            oauth_config = oauth_config.with_redirect_uri(redirect_uri);
         }
 
         if let Some(scopes) = OAuthConfig::scopes_from_env() {
@@ -363,7 +365,17 @@ fn apply_oauth_from_env(mut config: ServerConfig) -> ServerConfig {
 
         config = config.with_oauth(oauth_config);
     }
-    config
+    Ok(config)
+}
+
+#[cfg(feature = "mcp-oauth")]
+/// Environment-backed OAuth startup requires explicit, nonempty endpoints rather than local defaults.
+fn required_oauth_setting(value: Option<String>, name: &str) -> McpResult<String> {
+    value
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| {
+            anyhow::anyhow!("{name} is required and must not be empty when ENABLE_OAUTH is set")
+        })
 }
 
 #[cfg(feature = "mcp-jwt")]
@@ -425,6 +437,35 @@ mod tests {
         for value in [None, Some("Public"), Some("public"), Some("unknown")] {
             assert_eq!(api_tier_from_value(value), crate::ApiTier::Public);
         }
+    }
+
+    /// Missing and blank OAuth environment settings fail without mutating process-global state.
+    #[cfg(feature = "mcp-oauth")]
+    #[test]
+    fn oauth_environment_requires_explicit_provider_and_callback_settings() {
+        for name in ["OAUTH_AUTH_SERVER_URL", "OAUTH_REDIRECT_URI"] {
+            for value in [None, Some(String::new()), Some("  ".to_string())] {
+                let error = required_oauth_setting(value, name).unwrap_err().to_string();
+                assert!(error.contains(name));
+                assert!(error.contains("ENABLE_OAUTH"));
+            }
+        }
+        assert_eq!(
+            required_oauth_setting(
+                Some("https://auth.example.com".into()),
+                "OAUTH_AUTH_SERVER_URL"
+            )
+            .unwrap(),
+            "https://auth.example.com"
+        );
+        assert_eq!(
+            required_oauth_setting(
+                Some("http://127.0.0.1:8080/callback".into()),
+                "OAUTH_REDIRECT_URI"
+            )
+            .unwrap(),
+            "http://127.0.0.1:8080/callback"
+        );
     }
 
     #[test]
