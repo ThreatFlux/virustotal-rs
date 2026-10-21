@@ -90,6 +90,7 @@ async fn configure_and_serve(
     #[cfg(feature = "mcp-oauth")]
     if let Some(config) = _oauth_config {
         tracing::info!("Enabling OAuth 2.1 authentication for HTTP server");
+        validate_oauth_http_callback(&config)?;
         let oauth_state = OAuthState::new(config)?;
         let app = oauth_router(server, oauth_state);
         return serve_router(app, addr).await;
@@ -105,6 +106,19 @@ async fn configure_and_serve(
 
     let app = plain_router(server);
     serve_router(app, addr).await
+}
+
+/// Apply HTTP-router callback restrictions without limiting standalone OAuth library clients.
+#[cfg(all(feature = "axum", feature = "mcp-oauth"))]
+fn validate_oauth_http_callback(config: &OAuthConfig) -> McpResult<()> {
+    let callback = url::Url::parse(&config.redirect_uri)?;
+    if !matches!(callback.scheme(), "http" | "https")
+        || callback.fragment().is_some()
+        || matches!(callback.path(), "/" | "/health" | "/oauth/authorize")
+    {
+        anyhow::bail!("HTTP OAuth redirect URI must identify a dedicated HTTP callback path");
+    }
+    Ok(())
 }
 
 #[cfg(feature = "axum")]
@@ -523,7 +537,7 @@ mod oauth_http_tests {
             .mount(&provider)
             .await;
         let config = OAuthConfig::new("fixture-client", provider.uri())
-            .with_redirect_uri("http://127.0.0.1:8080/custom/callback");
+            .with_redirect_uri("http://127.0.0.1:8080/custom/callback?tenant=fixture");
         let state = OAuthState::new(config).unwrap();
         let server = VtMcpServer::new(
             crate::ClientBuilder::new()

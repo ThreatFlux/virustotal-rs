@@ -209,15 +209,6 @@ impl OAuthState {
 
         let callback = url::Url::parse(&config.redirect_uri)?;
         let callback_path = callback.path().to_string();
-        if !matches!(callback.scheme(), "http" | "https")
-            || callback.query().is_some()
-            || callback.fragment().is_some()
-            || matches!(callback_path.as_str(), "/" | "/health" | "/oauth/authorize")
-        {
-            return Err(anyhow!(
-                "redirect URI must identify a dedicated HTTP callback path"
-            ));
-        }
         let secure_cookie = callback.scheme() == "https";
 
         let mut client = BasicClient::new(ClientId::new(config.client_id.clone()));
@@ -660,5 +651,23 @@ mod tests {
                 .is_err()
         );
         assert!(!state.sessions.read().unwrap().contains_key(&session_id));
+    }
+    /// Keep registered query parameters and native-app redirect schemes compatible with the library API.
+    #[test]
+    fn authorization_preserves_existing_redirect_uri_forms() {
+        for uri in [
+            "https://app.example.com/callback?tenant=fixture",
+            "fixture-app:/callback?tenant=fixture",
+        ] {
+            let state = OAuthState::new(OAuthConfig::default().with_redirect_uri(uri)).unwrap();
+            let (location, _) = state.start_authorization().unwrap();
+            let location = url::Url::parse(&location).unwrap();
+            let redirect = location
+                .query_pairs()
+                .find(|(key, _)| key == "redirect_uri")
+                .unwrap()
+                .1;
+            assert_eq!(redirect, uri);
+        }
     }
 }
