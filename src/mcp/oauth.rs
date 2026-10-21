@@ -316,7 +316,8 @@ impl OAuthState {
     ) -> AnyhowResult<OAuthCredentials> {
         let session = self.take_session(&session_id, &state)?;
 
-        let credentials = self.exchange_code(&session, code).await?;
+        let mut credentials = self.exchange_code(&session, code).await?;
+        Self::require_scopes(&mut credentials, &session.original_scopes)?;
         self.store_credentials(credentials.clone())?;
         Ok(credentials)
     }
@@ -400,6 +401,22 @@ impl OAuthState {
         Ok(Self::build_credentials(token_response))
     }
 
+    /// Reject explicit scope reductions and inherit requested scopes when the provider omits them.
+    fn require_scopes(
+        credentials: &mut OAuthCredentials,
+        requested: &[String],
+    ) -> AnyhowResult<()> {
+        let granted = credentials.scope.get_or_insert_with(|| requested.join(" "));
+        if requested.iter().any(|required| {
+            !granted
+                .split_ascii_whitespace()
+                .any(|scope| scope == required)
+        }) {
+            return Err(anyhow!("Provider did not grant all requested OAuth scopes"));
+        }
+        Ok(())
+    }
+
     /// Preserve token metadata and issuance time for bearer validation and refresh.
     fn build_credentials(
         token_response: StandardTokenResponse<EmptyExtraTokenFields, oauth2::basic::BasicTokenType>,
@@ -470,6 +487,7 @@ impl OAuthState {
             .await
             .map_err(|e| anyhow!("Token refresh failed: {}", e))?;
         let mut credentials = Self::build_credentials(token_response);
+        Self::require_scopes(&mut credentials, &self.config.scopes)?;
         if credentials.refresh_token.is_none() {
             let creds = self.latest_credentials.read().unwrap();
             credentials.refresh_token = creds.as_ref().and_then(|c| c.refresh_token.clone());

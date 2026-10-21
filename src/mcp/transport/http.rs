@@ -118,6 +118,15 @@ fn validate_oauth_http_callback(config: &OAuthConfig) -> McpResult<()> {
     {
         anyhow::bail!("HTTP OAuth redirect URI must identify a dedicated HTTP callback path");
     }
+    let loopback = match callback.host() {
+        Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
+        Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
+        Some(url::Host::Domain(host)) => host.eq_ignore_ascii_case("localhost"),
+        None => false,
+    };
+    if callback.scheme() == "http" && !loopback {
+        anyhow::bail!("HTTP OAuth redirect URI requires HTTPS outside loopback hosts");
+    }
     Ok(())
 }
 
@@ -670,6 +679,7 @@ mod oauth_http_tests {
         );
         let credentials: serde_json::Value =
             serde_json::from_slice(&to_bytes(response.into_body(), 8192).await.unwrap()).unwrap();
+        assert_eq!(credentials["scope"], "mcp profile");
         let authorized = send(app, "/", None, credentials["access_token"].as_str()).await;
         assert_eq!(authorized.status(), StatusCode::OK);
         let result: serde_json::Value =
@@ -714,6 +724,72 @@ mod oauth_http_tests {
         );
         assert_pkce(&provider, &query).await;
     }
+    /// HTTP callbacks require transport encryption except on explicit loopback hosts.
+    #[test]
+    fn public_oauth_callbacks_require_https() {
+        for uri in [
+            "https://app.example.com/callback",
+            "http://localhost:8080/callback",
+            "http://127.0.0.1:8080/callback",
+            "http://127.0.0.2:8080/callback",
+            "http://[::1]:8080/callback",
+        ] {
+            let config = OAuthConfig::default().with_redirect_uri(uri);
+            assert!(validate_oauth_http_callback(&config).is_ok(), "{uri}");
+        }
+        for uri in [
+            "http://app.example.com/callback",
+            "http://localhost.example.com/callback",
+            "http://192.168.1.2/callback",
+            "http://[2001:db8::1]/callback",
+        ] {
+            let config = OAuthConfig::default().with_redirect_uri(uri);
+            assert!(validate_oauth_http_callback(&config).is_err(), "{uri}");
+        }
+    }
+
+    /// Explicitly reduced or case-mismatched scopes must never authorize a provider token.
+    #[tokio::test]
+    async fn oauth_callback_enforces_requested_scopes_before_storing_credentials() {
+        for scope in ["profile", "", "MCP profile", "mcp profile extra"] {
+            let provider = MockServer::start().await;
+            Mock::given(method("POST"))
+                .and(path("/oauth/token"))
+                .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                    "access_token": "scope-token", "token_type": "Bearer", "scope": scope
+                })))
+                .expect(1)
+                .mount(&provider)
+                .await;
+            let app = router_for_provider(&provider);
+            let (cookie, query) = begin(&app).await;
+            let callback = format!("/custom/callback?code=scope-code&state={}", query["state"]);
+            let accepted = scope == "mcp profile extra";
+            let expected = if accepted {
+                StatusCode::OK
+            } else {
+                StatusCode::BAD_REQUEST
+            };
+            assert_eq!(
+                send(&app, &callback, Some(&cookie), None).await.status(),
+                expected
+            );
+            let bearer_status = if accepted {
+                StatusCode::OK
+            } else {
+                StatusCode::UNAUTHORIZED
+            };
+            assert_eq!(
+                send(&app, "/", None, Some("scope-token")).await.status(),
+                bearer_status
+            );
+            assert_eq!(
+                send(&app, &callback, Some(&cookie), None).await.status(),
+                StatusCode::BAD_REQUEST
+            );
+        }
+    }
+
     /// Completing another browser login must not revoke an existing client's valid bearer token.
     #[tokio::test]
     async fn oauth_clients_remain_authorized_after_another_client_logs_in() {
