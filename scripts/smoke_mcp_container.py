@@ -183,6 +183,11 @@ def check_oauth(url, provider):
         raise RuntimeError("OAuth callback accepted a missing browser binding")
     if request(url + "/fixture/callback?code=fixture-code&state=wrong", cookie=cookie)[0] != 400:
         raise RuntimeError("OAuth callback accepted an incorrect state")
+    check_oauth_exchange(url, provider, callback, cookie)
+
+
+def check_oauth_exchange(url, provider, callback, cookie):
+    """Verify callback response, bearer authorization, replay rejection, and invalid tokens."""
     status, body, headers = request(callback, cookie=cookie)
     if status != 200 or headers.get("Cache-Control") != "no-store" or provider.exchanges != 1:
         raise RuntimeError("OAuth token exchange did not complete exactly once without caching")

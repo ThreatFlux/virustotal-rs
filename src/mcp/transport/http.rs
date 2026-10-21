@@ -509,9 +509,10 @@ mod oauth_http_tests {
             .unwrap()
     }
 
-    /// Complete the real token exchange and require cookie, CSRF, PKCE, and one-time session binding.
-    #[tokio::test]
-    async fn oauth_callback_authenticates_and_rejects_unbound_or_replayed_callbacks() {
+    type AuthorizationQuery = std::collections::HashMap<String, String>;
+
+    /// Run an isolated token provider and construct the actual configured HTTP router.
+    async fn fixture() -> (Router, MockServer) {
         let provider = MockServer::start().await;
         Mock::given(method("POST"))
             .and(path("/oauth/token"))
@@ -530,8 +531,12 @@ mod oauth_http_tests {
                 .build()
                 .unwrap(),
         );
-        let app = oauth_router(server, state);
-        let auth = send(&app, "/oauth/authorize", None, None).await;
+        (oauth_router(server, state), provider)
+    }
+
+    /// Start authorization and retain the browser cookie and identity-provider query.
+    async fn begin(app: &Router) -> (String, AuthorizationQuery) {
+        let auth = send(app, "/oauth/authorize", None, None).await;
         assert_eq!(auth.status(), StatusCode::SEE_OTHER);
         assert_eq!(auth.headers()[header::CACHE_CONTROL], "no-store");
         let cookie = auth.headers()[header::SET_COOKIE]
@@ -542,42 +547,33 @@ mod oauth_http_tests {
             .unwrap()
             .to_string();
         let location = url::Url::parse(auth.headers()[header::LOCATION].to_str().unwrap()).unwrap();
-        let query: std::collections::HashMap<_, _> = location.query_pairs().into_owned().collect();
-        let callback = format!(
-            "/custom/callback?code=fixture-code&state={}",
-            query["state"]
-        );
-        assert_eq!(
-            send(&app, &callback, None, None).await.status(),
-            StatusCode::BAD_REQUEST
-        );
-        assert_eq!(
-            send(
-                &app,
+        (cookie, location.query_pairs().into_owned().collect())
+    }
+
+    /// Reject missing browser binding, incorrect state, provider errors, and invalid tokens.
+    async fn assert_invalid_callbacks(app: &Router, callback: &str, cookie: &str) {
+        for (uri, binding) in [
+            (callback, None),
+            (
                 "/custom/callback?code=fixture-code&state=wrong",
-                Some(&cookie),
-                None
-            )
-            .await
-            .status(),
-            StatusCode::BAD_REQUEST
-        );
+                Some(cookie),
+            ),
+            ("/custom/callback?error=access_denied", Some(cookie)),
+        ] {
+            assert_eq!(
+                send(app, uri, binding, None).await.status(),
+                StatusCode::BAD_REQUEST
+            );
+        }
         assert_eq!(
-            send(
-                &app,
-                "/custom/callback?error=access_denied",
-                Some(&cookie),
-                None
-            )
-            .await
-            .status(),
-            StatusCode::BAD_REQUEST
-        );
-        assert_eq!(
-            send(&app, "/", None, Some("invalid-token")).await.status(),
+            send(app, "/", None, Some("invalid-token")).await.status(),
             StatusCode::UNAUTHORIZED
         );
-        let response = send(&app, &callback, Some(&cookie), None).await;
+    }
+
+    /// Require a successful non-cacheable callback to authorize the MCP tools list.
+    async fn assert_authorized_callback(app: &Router, callback: &str, cookie: &str) {
+        let response = send(app, callback, Some(cookie), None).await;
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
         assert_eq!(response.headers()[header::REFERRER_POLICY], "no-referrer");
@@ -589,7 +585,7 @@ mod oauth_http_tests {
         );
         let credentials: serde_json::Value =
             serde_json::from_slice(&to_bytes(response.into_body(), 8192).await.unwrap()).unwrap();
-        let authorized = send(&app, "/", None, credentials["access_token"].as_str()).await;
+        let authorized = send(app, "/", None, credentials["access_token"].as_str()).await;
         assert_eq!(authorized.status(), StatusCode::OK);
         let result: serde_json::Value =
             serde_json::from_slice(&to_bytes(authorized.into_body(), 65536).await.unwrap())
@@ -599,12 +595,12 @@ mod oauth_http_tests {
                 .as_array()
                 .is_some_and(|tools| !tools.is_empty())
         );
-        assert_eq!(
-            send(&app, &callback, Some(&cookie), None).await.status(),
-            StatusCode::BAD_REQUEST
-        );
+    }
+
+    /// Prove the provider received the original redirect URI and correct PKCE verifier.
+    async fn assert_pkce(provider: &MockServer, query: &AuthorizationQuery) {
         let requests = provider.received_requests().await.unwrap();
-        let form: std::collections::HashMap<_, _> = url::form_urlencoded::parse(&requests[0].body)
+        let form: AuthorizationQuery = url::form_urlencoded::parse(&requests[0].body)
             .into_owned()
             .collect();
         assert_eq!(form["grant_type"], "authorization_code");
@@ -614,5 +610,23 @@ mod oauth_http_tests {
         let challenge = base64::engine::general_purpose::URL_SAFE_NO_PAD
             .encode(Sha256::digest(form["code_verifier"].as_bytes()));
         assert_eq!(challenge, query["code_challenge"]);
+    }
+
+    /// Complete token exchange while requiring cookie, CSRF, PKCE, and one-time session binding.
+    #[tokio::test]
+    async fn oauth_callback_authenticates_and_rejects_unbound_or_replayed_callbacks() {
+        let (app, provider) = fixture().await;
+        let (cookie, query) = begin(&app).await;
+        let callback = format!(
+            "/custom/callback?code=fixture-code&state={}",
+            query["state"]
+        );
+        assert_invalid_callbacks(&app, &callback, &cookie).await;
+        assert_authorized_callback(&app, &callback, &cookie).await;
+        assert_eq!(
+            send(&app, &callback, Some(&cookie), None).await.status(),
+            StatusCode::BAD_REQUEST
+        );
+        assert_pkce(&provider, &query).await;
     }
 }
