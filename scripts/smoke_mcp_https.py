@@ -6,11 +6,12 @@ import json
 from pathlib import Path
 import socketserver
 import ssl
-import subprocess
+# Required for shell-free Docker/OpenSSL test commands.
+import subprocess  # nosec B404
 import tempfile
 import threading
 
-from smoke_mcp_container import docker_command, request, wait_ready
+from smoke_mcp_container import docker_command, image_reference, request, wait_ready
 
 
 FILE_HASH = "a" * 64
@@ -19,6 +20,7 @@ TOOL_REQUEST = {"jsonrpc": "2.0", "id": 2, "method": "tools/call",
 
 
 def read_headers(connection):
+    """Read one bounded HTTP header block from a fixture connection."""
     data = b""
     while b"\r\n\r\n" not in data:
         chunk = connection.recv(4096)
@@ -29,7 +31,9 @@ def read_headers(connection):
 
 
 class ProxyHandler(socketserver.BaseRequestHandler):
+    """Serve a synthetic VirusTotal HTTPS response through a restricted tunnel."""
     def handle(self):
+        """Accept only a VirusTotal CONNECT tunnel and negotiate fixture TLS."""
         self.request.settimeout(5)
         try:
             headers = read_headers(self.request)
@@ -43,6 +47,7 @@ class ProxyHandler(socketserver.BaseRequestHandler):
             self.server.failures.append(str(error))
 
     def serve_report(self, connection):
+        """Validate the fabricated API credential and return one synthetic file report."""
         headers = read_headers(connection)
         expected = f"GET /api/v3/files/{FILE_HASH} HTTP/1.1".encode()
         if headers.split(b"\r\n", 1)[0] != expected:
@@ -58,10 +63,12 @@ class ProxyHandler(socketserver.BaseRequestHandler):
 
 
 class ProxyServer(socketserver.ThreadingTCPServer):
+    """Handle concurrent fixture TLS connections on disposable daemon threads."""
     daemon_threads = True
 
 
 def create_certificates(root):
+    """Generate a temporary CA and certificates for valid and wrong hostnames."""
     commands = [["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
                  "-subj", "/CN=Temporary MCP fixture CA", "-addext", "basicConstraints=critical,CA:TRUE",
                  "-keyout", str(root / "ca.key"), "-out", str(root / "ca.crt")]]
@@ -77,11 +84,13 @@ def create_certificates(root):
              "-extfile", str(extension), "-out", str(root / f"{name}.crt")],
         ]
     for command in commands:
-        subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        # Fixed executable and argument list; no shell interprets image names or fixture data.
+        subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  # nosec B603, B607 # nosemgrep
     (root / "ca.crt").chmod(0o644)
 
 
 def run_server_case(image, platform, root, proxy, mode):
+    """Run the MCP client through the isolated TLS proxy and inspect its response."""
     environment = {"VIRUSTOTAL_API_KEY": "fixture-api-key", "HTTP_ADDR": "0.0.0.0:8080",
                    "HTTPS_PROXY": f"http://host.docker.internal:{proxy.server_address[1]}",
                    "NO_PROXY": "localhost,127.0.0.1"}
@@ -90,19 +99,24 @@ def run_server_case(image, platform, root, proxy, mode):
     command += ["--add-host", "host.docker.internal:host-gateway"]
     if mode != "untrusted":
         command += ["-v", f"{root}/ca.crt:/fixture/ca.crt:ro", "-e", "SSL_CERT_FILE=/fixture/ca.crt"]
-    container = subprocess.check_output(command + ["-d", "-p", "127.0.0.1::8080", "--", image], text=True).strip()
+    # Fixed executable and argument list; no shell interprets image names or fixture data.
+    container = subprocess.check_output(command + ["-d", "-p", "127.0.0.1::8080", "--", image], text=True).strip()  # nosec B603, B607 # nosemgrep
     try:
-        address = subprocess.check_output(["docker", "port", container, "8080/tcp"], text=True).strip()
+        # Fixed executable and argument list; no shell interprets image names or fixture data.
+        address = subprocess.check_output(["docker", "port", container, "8080/tcp"], text=True).strip()  # nosec B603, B607 # nosemgrep
         url = "http://" + address
         wait_ready(url, container)
         status, body, _ = request(url + "/", TOOL_REQUEST, timeout=15)
-        logs = subprocess.check_output(["docker", "logs", container], text=True, stderr=subprocess.STDOUT)
+        # Fixed executable and argument list; no shell interprets image names or fixture data.
+        logs = subprocess.check_output(["docker", "logs", container], text=True, stderr=subprocess.STDOUT)  # nosec B603, B607 # nosemgrep
         validate_response(mode, status, json.loads(body), logs, proxy)
     finally:
-        subprocess.run(["docker", "rm", "-f", container], check=True, stdout=subprocess.DEVNULL)
+        # Fixed executable and argument list; no shell interprets image names or fixture data.
+        subprocess.run(["docker", "rm", "-f", container], check=True, stdout=subprocess.DEVNULL)  # nosec B603, B607 # nosemgrep
 
 
 def validate_response(mode, status, result, logs, proxy):
+    """Require a valid report or the expected certificate validation failure."""
     if not proxy.connections:
         raise RuntimeError("real SDK request did not use the isolated proxy")
     if mode == "valid":
@@ -120,8 +134,11 @@ def validate_response(mode, status, result, logs, proxy):
 
 
 def check_case(image, platform, root, mode):
+    """Serve one TLS fixture case and always stop its proxy thread."""
     certificate = "wrong" if mode == "hostname" else "valid"
-    proxy = ProxyServer(("0.0.0.0", 0), ProxyHandler)
+    # Docker must reach this host fixture; ephemeral port, no real credentials or upstream forwarding.
+    # Isolated test proxy intentionally reachable by the container.
+    proxy = ProxyServer(("0.0.0.0", 0), ProxyHandler)  # nosec B104
     proxy.connections, proxy.requests, proxy.failures = 0, [], []
     proxy.context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     proxy.context.minimum_version = ssl.TLSVersion.TLSv1_2
@@ -137,8 +154,9 @@ def check_case(image, platform, root, mode):
 
 
 def main():
+    """Parse the image and platform arguments and run all verification checks."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("image")
+    parser.add_argument("image", type=image_reference)
     parser.add_argument("--platform", choices=("linux/amd64", "linux/arm64"))
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix="mcp-https-") as directory:

@@ -5,19 +5,25 @@ import argparse
 import json
 from pathlib import PurePosixPath
 import struct
-import subprocess
+# Required for shell-free Docker/OpenSSL test commands.
+import subprocess  # nosec B404
 import tarfile
 import tempfile
+
+from smoke_mcp_container import image_reference
 
 
 BINARIES = {"usr/local/bin/app", "usr/bin/tini"}
 
 
 def check_ca_trust(bundle):
-    encoded = subprocess.check_output(
+    """Reject roots deliberately removed from the shipped trust bundle."""
+    # Fixed executable and argument list; no shell interprets image names or fixture data.
+    encoded = subprocess.check_output(  # nosec B603, B607 # nosemgrep
         ["openssl", "crl2pkcs7", "-nocrl", "-certfile", "/dev/stdin"], input=bundle
     )
-    subjects = subprocess.check_output(
+    # Fixed executable and argument list; no shell interprets image names or fixture data.
+    subjects = subprocess.check_output(  # nosec B603, B607 # nosemgrep
         ["openssl", "pkcs7", "-print_certs", "-noout"], input=encoded
     ).decode().lower()
     for distrusted in ("emsign ecc root ca - g3", "aaa certificate services"):
@@ -26,6 +32,7 @@ def check_ca_trust(bundle):
 
 
 def check_dynamic_section(name, data, header):
+    """Reject ELF dynamic entries that require shared libraries."""
     for entry in range(header[2], header[2] + header[5], 16):
         tag, _ = struct.unpack_from("<qQ", data, entry)
         if tag == 0:
@@ -35,6 +42,7 @@ def check_dynamic_section(name, data, header):
 
 
 def check_elf(name, data, architecture):
+    """Validate static ELF architecture, loader independence, and PIE hardening."""
     if data[:6] != b"\x7fELF\x02\x01":
         raise ValueError(f"{name}: expected a little-endian ELF64 executable")
     if name == "usr/local/bin/app" and struct.unpack_from("<H", data, 16)[0] != 3:
@@ -55,6 +63,7 @@ def check_elf(name, data, architecture):
 
 
 def check_configuration(info):
+    """Require the expected nonroot entrypoint and CA bundle configuration."""
     config = info["Config"]
     if config["User"] != "65532:65532":
         raise ValueError("runtime must use the nonroot 65532:65532 account")
@@ -65,11 +74,13 @@ def check_configuration(info):
 
 
 def read_file(filesystem, files, name):
+    """Read a regular file from the exported container archive without extracting it."""
     with filesystem.extractfile(files[name]) as source:
         return source.read()
 
 
 def check_runtime_files(filesystem, files, architecture):
+    """Check every runtime file for unexpected executables or unsafe permissions."""
     seen = set()
     for name, member in files.items():
         if member.mode & 0o6000:
@@ -91,6 +102,7 @@ def check_runtime_files(filesystem, files, architecture):
 
 
 def check_ca_package(status):
+    """Require current CA supplier package metadata for vulnerability scans."""
     if "Package: ca-certificates\n" not in status or "Status: install ok installed\n" not in status:
         raise ValueError("missing installed CA supplier package record")
     version = next(
@@ -101,6 +113,7 @@ def check_ca_package(status):
 
 
 def check_support_files(filesystem, files, architecture):
+    """Validate certificates, SBOM components, and native musl build provenance."""
     bundle = read_file(filesystem, files, "etc/ssl/certs/ca-certificates.crt")
     if b"-----BEGIN CERTIFICATE-----" not in bundle:
         raise ValueError("missing CA certificates")
@@ -119,8 +132,10 @@ def check_support_files(filesystem, files, architecture):
 
 
 def check_filesystem(container, architecture):
+    """Export the disposable container and inspect its filesystem in memory."""
     with tempfile.TemporaryFile() as archive:
-        subprocess.run(["docker", "export", container], stdout=archive, check=True)
+        # Fixed executable and argument list; no shell interprets image names or fixture data.
+        subprocess.run(["docker", "export", container], stdout=archive, check=True)  # nosec B603, B607 # nosemgrep
         archive.seek(0)
         with tarfile.open(fileobj=archive) as filesystem:
             files = {str(PurePosixPath(m.name)): m for m in filesystem if m.isfile()}
@@ -129,22 +144,27 @@ def check_filesystem(container, architecture):
 
 
 def main():
+    """Parse the image and platform arguments and run all verification checks."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("image")
+    parser.add_argument("image", type=image_reference)
     parser.add_argument("--platform", choices=("linux/amd64", "linux/arm64"))
     args = parser.parse_args()
     create = ["docker", "create"]
     if args.platform:
         create += ["--platform", args.platform]
-    container = subprocess.check_output(create + ["--", args.image], text=True).strip()
+    # Fixed executable and argument list; no shell interprets image names or fixture data.
+    container = subprocess.check_output(create + ["--", args.image], text=True).strip()  # nosec B603, B607 # nosemgrep
     try:
-        info = json.loads(subprocess.check_output(["docker", "inspect", container]))[0]
-        image = json.loads(subprocess.check_output(["docker", "image", "inspect", info["Image"]]))[0]
+        # Fixed executable and argument list; no shell interprets image names or fixture data.
+        info = json.loads(subprocess.check_output(["docker", "inspect", container]))[0]  # nosec B603, B607 # nosemgrep
+        # Fixed executable and argument list; no shell interprets image names or fixture data.
+        image = json.loads(subprocess.check_output(["docker", "image", "inspect", info["Image"]]))[0]  # nosec B603, B607 # nosemgrep
         check_configuration(info)
         check_filesystem(container, image["Architecture"])
         print(f"Static runtime verified: {args.image} ({image['Architecture']})")
     finally:
-        subprocess.run(["docker", "rm", container], stdout=subprocess.DEVNULL, check=True)
+        # Fixed executable and argument list; no shell interprets image names or fixture data.
+        subprocess.run(["docker", "rm", container], stdout=subprocess.DEVNULL, check=True)  # nosec B603, B607 # nosemgrep
 
 
 if __name__ == "__main__":
