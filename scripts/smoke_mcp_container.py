@@ -129,9 +129,16 @@ def check_stdio(image, platform):
         responses = [json.loads(line) for line in result.stdout.splitlines() if line]
     except json.JSONDecodeError as error:
         raise RuntimeError("stdio stdout contains diagnostic text outside JSON-RPC framing") from error
-    if (result.returncode or len(responses) != 1 or responses[0].get("id") != REQUEST["id"]
-            or not responses[0].get("result", {}).get("tools")):
-        raise RuntimeError(f"stdio MCP tools request failed: {result.stdout}\n{result.stderr}")
+    if result.returncode or len(responses) != 2:
+        raise RuntimeError("stdio must emit only its existing capabilities record and requested response")
+    startup, response = responses
+    if (startup.get("jsonrpc") != "2.0"
+            or startup.get("result", {}).get("serverInfo", {}).get("name") != "virustotal-sdk"
+            or not startup.get("result", {}).get("capabilities", {}).get("tools")):
+        raise RuntimeError("stdio capabilities record is invalid")
+    if (response.get("jsonrpc") != "2.0" or response.get("id") != REQUEST["id"]
+            or not response.get("result", {}).get("tools")):
+        raise RuntimeError("stdio did not return a valid correlated tools-list response")
 
 
 def main():
