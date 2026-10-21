@@ -155,6 +155,11 @@ impl std::fmt::Debug for JwtManager {
 }
 
 impl JwtManager {
+    /// Return the lifetime used to sign newly issued and refreshed tokens.
+    pub(crate) fn expiration_seconds(&self) -> u64 {
+        self.config.expiration_seconds
+    }
+
     /// Create a new JWT manager
     pub fn new(config: JwtConfig) -> Self {
         let encoding_key = EncodingKey::from_secret(config.secret.as_bytes());

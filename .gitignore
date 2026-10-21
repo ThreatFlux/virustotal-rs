@@ -3,8 +3,13 @@
 # Keep handwritten docs in version control while still ignoring generated site output.
 docs/*
 !docs/*.md
+!docs/security/
+!docs/security/*.md
 .codacy/
 samples/
 samples_2/
 vt_analysis*/
 *.txt
+!docs/security/*.txt
+
+__pycache__/

@@ -5,7 +5,7 @@ use super::http::run_http_server_with_oauth;
 use super::{http::run_http_server, stdio::run_stdio_server};
 use crate::mcp::McpResult;
 #[cfg(feature = "mcp-jwt")]
-use crate::mcp::auth::{JwtConfig, JwtManager};
+use crate::mcp::auth::JwtConfig;
 #[cfg(feature = "mcp-oauth")]
 use crate::mcp::oauth::OAuthConfig;
 use std::net::SocketAddr;
@@ -30,6 +30,7 @@ pub struct ServerConfig {
 }
 
 impl Default for ServerConfig {
+    /// Initialize the established local defaults without enabling optional authentication.
     fn default() -> Self {
         Self {
             api_key: String::new(),
@@ -194,7 +195,7 @@ impl ServerConfig {
         addr: SocketAddr,
     ) -> Option<McpResult<()>> {
         if let Some(jwt_config) = &self.jwt_config {
-            self.log_jwt_info(jwt_config);
+            self.log_jwt_info();
             return Some(
                 run_http_server_with_config(client.clone(), addr, Some(jwt_config.clone())).await,
             );
@@ -217,22 +218,14 @@ impl ServerConfig {
     fn log_oauth_info(&self) {
         tracing::info!("OAuth 2.1 Authentication enabled");
         tracing::info!("Authorization endpoint: /oauth/authorize");
-        tracing::info!("Token endpoint: /oauth/token");
-        tracing::info!("Callback endpoint: /oauth/callback");
-        tracing::info!("Metadata endpoint: /oauth/metadata");
+        tracing::info!("Callback endpoint: configured redirect URI path");
     }
 
-    /// Log JWT configuration information
+    /// Log authentication availability without minting or exposing credentials.
     #[cfg(feature = "mcp-jwt")]
-    fn log_jwt_info(&self, jwt_config: &JwtConfig) {
-        let jwt_manager = JwtManager::new(jwt_config.clone());
-        if let Ok(admin_token) = jwt_manager.generate_admin_token("admin") {
-            tracing::info!("JWT Authentication enabled");
-            tracing::info!("Sample admin credentials: admin/admin123");
-            tracing::info!("Sample user credentials: user/user123");
-            tracing::info!("Sample admin token: {}", admin_token);
-            tracing::info!("Use POST /auth/token to authenticate");
-        }
+    fn log_jwt_info(&self) {
+        tracing::info!("JWT Authentication enabled");
+        tracing::info!("Use POST /auth/token with explicitly configured credentials");
     }
 
     /// Initialize tracing/logging
@@ -245,16 +238,17 @@ impl ServerConfig {
             tracing::Level::INFO
         };
 
-        tracing_subscriber::registry()
+        let _ = tracing_subscriber::registry()
             .with(
                 tracing_subscriber::fmt::layer()
+                    .with_writer(std::io::stderr)
                     .with_target(false)
                     .with_thread_ids(true)
                     .with_level(true)
                     .with_ansi(true),
             )
             .with(EnvFilter::from_default_env().add_directive(level.into()))
-            .init();
+            .try_init();
     }
 }
 
@@ -277,6 +271,15 @@ pub async fn run_server_simple(api_key: String, stdio: bool) -> McpResult<()> {
 
 /// Helper function to run server with environment variables
 pub async fn run_server_from_env() -> McpResult<()> {
+    server_config_from_env()?.run().await
+}
+
+/// Build the server configuration from explicit environment settings.
+pub fn server_config_from_env() -> McpResult<ServerConfig> {
+    validate_requested_auth_features(
+        std::env::var_os("ENABLE_JWT").is_some(),
+        std::env::var_os("ENABLE_OAUTH").is_some(),
+    )?;
     let api_key = std::env::var("VIRUSTOTAL_API_KEY")
         .map_err(|_| anyhow::anyhow!("VIRUSTOTAL_API_KEY environment variable is required"))?;
 
@@ -289,24 +292,42 @@ pub async fn run_server_from_env() -> McpResult<()> {
 
     #[cfg(feature = "mcp-oauth")]
     {
-        config = apply_oauth_from_env(config);
+        config = apply_oauth_from_env(config)?;
     }
 
     #[cfg(feature = "mcp-jwt")]
     {
-        config = apply_jwt_from_env(config);
+        config = apply_jwt_from_env(config)?;
     }
 
-    config.run().await
+    Ok(config)
 }
 
+/// Reject requested authentication modes missing from the compiled binary.
+fn validate_requested_auth_features(jwt: bool, oauth: bool) -> McpResult<()> {
+    if jwt && !cfg!(feature = "mcp-jwt") {
+        anyhow::bail!("ENABLE_JWT requires a binary built with the mcp-jwt feature");
+    }
+    if oauth && !cfg!(feature = "mcp-oauth") {
+        anyhow::bail!("ENABLE_OAUTH requires a binary built with the mcp-oauth feature");
+    }
+    Ok(())
+}
+
+/// Read the tier setting through the shared compatibility parser.
 fn api_tier_from_env() -> crate::ApiTier {
-    match std::env::var("VIRUSTOTAL_API_TIER").as_deref() {
-        Ok("Premium") => crate::ApiTier::Premium,
+    api_tier_from_value(std::env::var("VIRUSTOTAL_API_TIER").ok().as_deref())
+}
+
+/// Accept the binary's historical premium spellings and default to the public tier.
+fn api_tier_from_value(value: Option<&str>) -> crate::ApiTier {
+    match value {
+        Some("Premium" | "premium") => crate::ApiTier::Premium,
         _ => crate::ApiTier::Public,
     }
 }
 
+/// Parse an explicit HTTP bind address and propagate invalid configuration.
 fn apply_http_addr_from_env(mut config: ServerConfig) -> McpResult<ServerConfig> {
     if let Ok(addr_str) = std::env::var("HTTP_ADDR") {
         let addr: SocketAddr = addr_str
@@ -318,21 +339,24 @@ fn apply_http_addr_from_env(mut config: ServerConfig) -> McpResult<ServerConfig>
 }
 
 #[cfg(feature = "mcp-oauth")]
-fn apply_oauth_from_env(mut config: ServerConfig) -> ServerConfig {
-    if std::env::var("ENABLE_OAUTH").is_ok() {
+/// Enable OAuth with the configured provider, redirect URI, client, and scopes.
+fn apply_oauth_from_env(mut config: ServerConfig) -> McpResult<ServerConfig> {
+    if std::env::var_os("ENABLE_OAUTH").is_some() {
         let client_id = std::env::var("OAUTH_CLIENT_ID")
             .unwrap_or_else(|_| "virustotal-mcp-client".to_string());
-        let auth_server_url = std::env::var("OAUTH_AUTH_SERVER_URL")
-            .unwrap_or_else(|_| "http://localhost:8080".to_string());
-
-        let mut oauth_config = OAuthConfig::new(client_id, auth_server_url);
+        let auth_server_url = required_oauth_setting(
+            std::env::var("OAUTH_AUTH_SERVER_URL").ok(),
+            "OAUTH_AUTH_SERVER_URL",
+        )?;
+        let redirect_uri = required_oauth_setting(
+            std::env::var("OAUTH_REDIRECT_URI").ok(),
+            "OAUTH_REDIRECT_URI",
+        )?;
+        let mut oauth_config =
+            OAuthConfig::new(client_id, auth_server_url).with_redirect_uri(redirect_uri);
 
         if let Ok(client_secret) = std::env::var("OAUTH_CLIENT_SECRET") {
             oauth_config = oauth_config.with_client_secret(client_secret);
-        }
-
-        if let Ok(redirect_uri) = std::env::var("OAUTH_REDIRECT_URI") {
-            oauth_config = oauth_config.with_redirect_uri(redirect_uri);
         }
 
         if let Some(scopes) = OAuthConfig::scopes_from_env() {
@@ -341,15 +365,29 @@ fn apply_oauth_from_env(mut config: ServerConfig) -> ServerConfig {
 
         config = config.with_oauth(oauth_config);
     }
-    config
+    Ok(config)
+}
+
+#[cfg(feature = "mcp-oauth")]
+/// Environment-backed OAuth startup requires explicit, nonempty endpoints rather than local defaults.
+fn required_oauth_setting(value: Option<String>, name: &str) -> McpResult<String> {
+    value
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| {
+            anyhow::anyhow!("{name} is required and must not be empty when ENABLE_OAUTH is set")
+        })
 }
 
 #[cfg(feature = "mcp-jwt")]
-fn apply_jwt_from_env(mut config: ServerConfig) -> ServerConfig {
-    if std::env::var("ENABLE_JWT").is_ok() {
-        let mut jwt_config = std::env::var("JWT_SECRET")
-            .map(JwtConfig::new)
-            .unwrap_or_else(|_| JwtConfig::default());
+/// Require a nonempty signing secret before enabling JWT authentication.
+fn apply_jwt_from_env(mut config: ServerConfig) -> McpResult<ServerConfig> {
+    if std::env::var_os("ENABLE_JWT").is_some() {
+        let secret = std::env::var("JWT_SECRET")
+            .map_err(|_| anyhow::anyhow!("JWT_SECRET is required when ENABLE_JWT is set"))?;
+        if secret.trim().is_empty() {
+            anyhow::bail!("JWT_SECRET must not be empty when ENABLE_JWT is set");
+        }
+        let mut jwt_config = JwtConfig::new(secret);
 
         if let Ok(exp_str) = std::env::var("JWT_EXPIRY_SECONDS")
             && let Ok(exp) = exp_str.parse::<u64>()
@@ -359,7 +397,7 @@ fn apply_jwt_from_env(mut config: ServerConfig) -> ServerConfig {
 
         config = config.with_jwt(jwt_config);
     }
-    config
+    Ok(config)
 }
 
 #[cfg(test)]
@@ -368,6 +406,70 @@ mod tests {
     use std::net::{IpAddr, Ipv4Addr};
 
     #[test]
+    /// Reject authentication requests unavailable in each compiled feature combination.
+    fn requested_auth_modes_require_compiled_features() {
+        assert!(validate_requested_auth_features(false, false).is_ok());
+        assert_eq!(
+            validate_requested_auth_features(true, false).is_ok(),
+            cfg!(feature = "mcp-jwt")
+        );
+        assert_eq!(
+            validate_requested_auth_features(false, true).is_ok(),
+            cfg!(feature = "mcp-oauth")
+        );
+        assert_eq!(
+            validate_requested_auth_features(true, true).is_ok(),
+            cfg!(feature = "mcp-jwt") && cfg!(feature = "mcp-oauth")
+        );
+    }
+
+    #[test]
+    /// Keep existing tier spellings compatible with the environment-backed startup path.
+    fn api_tier_preserves_binary_environment_compatibility() {
+        assert_eq!(
+            api_tier_from_value(Some("Premium")),
+            crate::ApiTier::Premium
+        );
+        assert_eq!(
+            api_tier_from_value(Some("premium")),
+            crate::ApiTier::Premium
+        );
+        for value in [None, Some("Public"), Some("public"), Some("unknown")] {
+            assert_eq!(api_tier_from_value(value), crate::ApiTier::Public);
+        }
+    }
+
+    /// Missing and blank OAuth environment settings fail without mutating process-global state.
+    #[cfg(feature = "mcp-oauth")]
+    #[test]
+    fn oauth_environment_requires_explicit_provider_and_callback_settings() {
+        for name in ["OAUTH_AUTH_SERVER_URL", "OAUTH_REDIRECT_URI"] {
+            for value in [None, Some(String::new()), Some("  ".to_string())] {
+                let error = required_oauth_setting(value, name).unwrap_err().to_string();
+                assert!(error.contains(name));
+                assert!(error.contains("ENABLE_OAUTH"));
+            }
+        }
+        assert_eq!(
+            required_oauth_setting(
+                Some("https://auth.example.com".into()),
+                "OAUTH_AUTH_SERVER_URL"
+            )
+            .unwrap(),
+            "https://auth.example.com"
+        );
+        assert_eq!(
+            required_oauth_setting(
+                Some("http://127.0.0.1:8080/callback".into()),
+                "OAUTH_REDIRECT_URI"
+            )
+            .unwrap(),
+            "http://127.0.0.1:8080/callback"
+        );
+    }
+
+    #[test]
+    /// Verify the server builder preserves explicitly supplied settings.
     fn test_server_config_builder() {
         let config = ServerConfig::new()
             .api_key("test_key")
@@ -385,6 +487,7 @@ mod tests {
     }
 
     #[test]
+    /// Verify default server configuration retains the documented local behavior.
     fn test_default_config() {
         let config = ServerConfig::default();
         assert!(config.api_key.is_empty());
