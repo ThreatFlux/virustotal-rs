@@ -34,7 +34,7 @@
 //!   cargo run --bin mcp_server --features mcp-oauth
 
 #[cfg(not(feature = "mcp"))]
-/// Start the configured MCP transport and propagate startup failures.
+/// Explain the missing MCP build feature and exit unsuccessfully.
 fn main() {
     eprintln!("Error: MCP server requires the 'mcp' feature to be enabled.");
     eprintln!("Build with: cargo build --bin mcp_server --features mcp");
@@ -140,9 +140,10 @@ async fn run_server_by_mode(
         "stdio" => {
             run_stdio_mode(client).await?;
         }
-        _ => {
+        "http" => {
             run_http_mode().await?;
         }
+        _ => return Err(format!("Unsupported SERVER_MODE: {server_mode}").into()),
     }
     Ok(())
 }
@@ -223,7 +224,7 @@ mod tests {
     }
 
     #[test]
-    /// Verify the supported transport names and fallback mode.
+    /// Verify the supported case-insensitive transport spellings.
     fn test_server_mode_parsing() {
         // Test different server mode variations
         assert_eq!("http".to_lowercase(), "http");
@@ -249,5 +250,26 @@ mod tests {
             let is_premium = matches!(input, "Premium" | "premium");
             assert_eq!(is_premium, expected_premium, "Failed for input: {}", input);
         }
+    }
+    /// A misspelled transport must fail before opening an HTTP listener.
+    #[cfg(feature = "mcp")]
+    #[tokio::test]
+    async fn unknown_server_mode_fails_closed() {
+        let client = virustotal_rs::ClientBuilder::new()
+            .api_key("fixture-api-key")
+            .build()
+            .unwrap();
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(1),
+            super::run_server_by_mode(client, "sdtio"),
+        )
+        .await
+        .expect("invalid mode unexpectedly started a server");
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Unsupported SERVER_MODE")
+        );
     }
 }

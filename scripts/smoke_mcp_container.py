@@ -101,7 +101,10 @@ def check_jwt(url, password):
     status, body, _ = request(url + "/auth/token", {"username": "fixture-user", "password": password})
     if status != 200:
         raise RuntimeError(f"configured JWT credentials failed: {status}")
-    token = json.loads(body)["access_token"]
+    credentials = json.loads(body)
+    if credentials.get("expires_in") != 90:
+        raise RuntimeError("JWT issuance did not advertise its configured token lifetime")
+    token = credentials["access_token"]
     status, body, _ = request(url + "/", REQUEST, token)
     if status != 200 or not json.loads(body).get("result", {}).get("tools"):
         raise RuntimeError("valid JWT did not authorize the MCP tools list")
@@ -139,7 +142,10 @@ class OAuthProvider(http.server.BaseHTTPRequestHandler):
         self.server.token = secrets.token_urlsafe(32)
         self.server.tokens.append(self.server.token)
         # Bearer is the OAuth token type; the fabricated access token is generated randomly.
-        body = json.dumps({"access_token": self.server.token, "token_type": "Bearer", "expires_in": 3600}).encode()  # nosec B105
+        response = {"access_token": self.server.token, "token_type": "Bearer"}  # nosec B105
+        if self.server.expires_in is not None:
+            response["expires_in"] = self.server.expires_in
+        body = json.dumps(response).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
@@ -157,6 +163,7 @@ def oauth_provider():
     provider = http.server.ThreadingHTTPServer(("0.0.0.0", 0), OAuthProvider)  # nosec B104
     provider.token, provider.challenge, provider.exchanges, provider.tokens = None, None, 0, []
     provider.issuer = f"http://host.docker.internal:{provider.server_port}"
+    provider.expires_in = 3600
     thread = threading.Thread(target=provider.serve_forever, daemon=True)
     thread.start()
     try:
@@ -194,7 +201,10 @@ def check_oauth_exchange(url, provider, callback, cookie):
     status, body, headers = request(callback, cookie=cookie)
     if status != 200 or headers.get("Cache-Control") != "no-store" or provider.exchanges != exchanges + 1:
         raise RuntimeError("OAuth token exchange did not complete exactly once without caching")
-    token = json.loads(body)["access_token"]
+    credentials = json.loads(body)
+    if credentials.get("expires_in") != 3600:
+        raise RuntimeError("OAuth callback did not advertise the bounded accepted token lifetime")
+    token = credentials["access_token"]
     status, body, _ = request(url + "/", REQUEST, token)
     if token != provider.token or status != 200 or not json.loads(body).get("result", {}).get("tools"):
         raise RuntimeError("OAuth bearer token did not authorize the real MCP tools list")
@@ -208,6 +218,7 @@ def check_oauth_exchange(url, provider, callback, cookie):
 def check_oauth_clients(url, provider):
     """Ensure independent browser logins retain independent, simultaneously valid bearer tokens."""
     first = check_oauth(url, provider)
+    provider.expires_in = None
     second = check_oauth(url, provider)
     if first == second:
         raise RuntimeError("identity fixture did not issue independent client tokens")
@@ -237,7 +248,7 @@ def check_server(image, platform, mode, provider=None):
     environment = {"VIRUSTOTAL_API_KEY": "fixture-api-key", "HTTP_ADDR": "0.0.0.0:8080"}
     if mode == "jwt":
         environment.update(ENABLE_JWT="1", JWT_SECRET=secrets.token_urlsafe(48),
-                           MCP_AUTH_USERNAME="fixture-user", MCP_AUTH_PASSWORD=password)
+                           MCP_AUTH_USERNAME="fixture-user", MCP_AUTH_PASSWORD=password, JWT_EXPIRY_SECONDS="90")
     else:
         environment.update(ENABLE_OAUTH="1", OAUTH_CLIENT_ID="fixture-client",
                            OAUTH_AUTH_SERVER_URL=provider.issuer,
@@ -281,6 +292,15 @@ def check_missing_secret(image, platform):
         raise RuntimeError(f"JWT startup did not fail closed without signing configuration: {result.stderr}")
 
 
+def check_invalid_mode(image, platform):
+    """Reject misspelled transport names instead of unexpectedly starting an HTTP listener."""
+    command = docker_command(image, platform, {"VIRUSTOTAL_API_KEY": "fixture-api-key", "SERVER_MODE": "sdtio"})
+    # Fixed Docker executable and shell-free arguments; the image is a validated operand.
+    result = subprocess.run(command + ["--", image], capture_output=True, text=True, timeout=20)  # nosec B603 # nosemgrep
+    if not result.returncode or "Unsupported SERVER_MODE" not in result.stderr:
+        raise RuntimeError("invalid transport mode did not fail closed")
+
+
 def check_stdio(image, platform):
     """Validate startup and correlated tools-list JSON-RPC records on stdout."""
     command = docker_command(image, platform, {"VIRUSTOTAL_API_KEY": "fixture-api-key", "SERVER_MODE": "stdio"})
@@ -309,6 +329,7 @@ def main():
     parser.add_argument("image", type=image_reference)
     parser.add_argument("--platform", choices=("linux/amd64", "linux/arm64"))
     args = parser.parse_args()
+    check_invalid_mode(args.image, args.platform)
     check_missing_secret(args.image, args.platform)
     check_server(args.image, args.platform, "jwt")
     with oauth_provider() as provider:

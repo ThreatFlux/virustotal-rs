@@ -305,7 +305,7 @@ async fn refresh_token(
     ) {
         Ok(token) => {
             tracing::info!("Refreshed token for user: {}", jwt_claims.0.sub);
-            Ok(token_response(token))
+            Ok(token_response(token, jwt_manager.expiration_seconds()))
         }
         Err(e) => {
             tracing::error!("Failed to refresh token: {}", e);
@@ -331,11 +331,11 @@ struct TokenResponse {
 
 #[cfg(all(feature = "axum", feature = "mcp-jwt"))]
 /// Wrap a newly issued JWT in the existing response schema.
-fn token_response(token: String) -> axum::Json<TokenResponse> {
+fn token_response(token: String, expires_in: u64) -> axum::Json<TokenResponse> {
     axum::Json(TokenResponse {
         access_token: token,
         token_type: "Bearer".to_string(),
-        expires_in: 86400,
+        expires_in,
     })
 }
 
@@ -353,7 +353,7 @@ where
     match generate(jwt_manager, username) {
         Ok(token) => {
             tracing::info!("Generated {} token for user: {}", role, username);
-            Ok(token_response(token))
+            Ok(token_response(token, jwt_manager.expiration_seconds()))
         }
         Err(e) => {
             tracing::error!("Failed to generate token: {}", e);
@@ -424,7 +424,10 @@ async fn oauth_callback(
         .map_err(|_| {
             OAuthError::AuthorizationFailed("Authorization callback failed".to_string())
         })?;
-    let mut response = axum::Json(credentials).into_response();
+    let accepted = oauth_state
+        .get_credentials_for_token(&credentials.access_token)
+        .ok_or_else(invalid)?;
+    let mut response = axum::Json(accepted).into_response();
     set_oauth_response_headers(&mut response, &oauth_state.clear_session_cookie())?;
     Ok(response)
 }
@@ -492,6 +495,52 @@ mod password_auth_tests {
             Some("incorrect-user"),
             Some("fixture-password"),
         ));
+    }
+    /// Issuance and refresh advertise the same custom lifetime that appears in signed JWT claims.
+    #[tokio::test]
+    async fn configured_jwt_lifetime_is_reported_on_issuance_and_refresh() {
+        use axum::{
+            body::{Body, to_bytes},
+            http::{Request, StatusCode},
+        };
+        use tower::ServiceExt;
+        let manager = super::JwtManager::new(
+            super::JwtConfig::new("fixture-signing-secret").with_expiration(90),
+        );
+        let issued = super::issue_token(&manager, "fixture-user", "readonly", |manager, user| {
+            manager.generate_readonly_token(user)
+        })
+        .unwrap()
+        .0;
+        assert_eq!(issued.expires_in, 90);
+        let claims = manager.validate_token(&issued.access_token).unwrap();
+        assert_eq!(claims.exp - claims.iat, issued.expires_in as usize);
+        let server = crate::mcp::server::VtMcpServer::new(
+            crate::ClientBuilder::new()
+                .api_key("fixture-api-key")
+                .build()
+                .unwrap(),
+        );
+        let app = super::jwt_router(server, manager.clone());
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/auth/refresh")
+                    .header("authorization", format!("Bearer {}", issued.access_token))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let refreshed: serde_json::Value =
+            serde_json::from_slice(&to_bytes(response.into_body(), 8192).await.unwrap()).unwrap();
+        assert_eq!(refreshed["expires_in"], 90);
+        let claims = manager
+            .validate_token(refreshed["access_token"].as_str().unwrap())
+            .unwrap();
+        assert_eq!(claims.exp - claims.iat, 90);
     }
 }
 

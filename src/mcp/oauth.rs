@@ -427,13 +427,15 @@ impl OAuthState {
 
     /// Preserve each client's bearer credentials and keep the legacy latest-token accessor compatible.
     fn store_credentials(&self, credentials: OAuthCredentials) -> AnyhowResult<()> {
+        let mut accepted = credentials.clone();
+        accepted.expires_in.get_or_insert(3600);
         {
             let mut clients = self.client_credentials.write().unwrap();
             clients.retain(|_, credentials| !credentials.is_expired());
             if clients.len() >= 1024 && !clients.contains_key(&credentials.access_token) {
                 return Err(anyhow!("Too many active OAuth clients"));
             }
-            clients.insert(credentials.access_token.clone(), credentials.clone());
+            clients.insert(accepted.access_token.clone(), accepted);
         }
         *self.latest_credentials.write().unwrap() = Some(credentials);
         Ok(())
@@ -766,5 +768,55 @@ mod tests {
         assert_eq!(key("2001:db8:1:2::1"), key("2001:db8:1:2::ffff"));
         assert_ne!(key("2001:db8:1:2::1"), key("2001:db8:1:3::1"));
         assert_eq!(key("::ffff:192.0.2.1"), key("192.0.2.1"));
+    }
+    /// HTTP credentials without provider expiry receive a bounded lifetime while legacy metadata is preserved.
+    #[test]
+    fn missing_provider_expiry_is_bounded_in_the_http_client_registry() {
+        let state = OAuthState::new(OAuthConfig::default()).unwrap();
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let credentials = OAuthCredentials {
+            access_token: "fixture-no-expiry".into(),
+            token_type: "Bearer".into(),
+            expires_in: None,
+            refresh_token: None,
+            scope: None,
+            issued_at: now,
+        };
+        state.store_credentials(credentials.clone()).unwrap();
+        assert_eq!(state.get_credentials().unwrap().expires_in, None);
+        assert_eq!(
+            state
+                .get_credentials_for_token("fixture-no-expiry")
+                .unwrap()
+                .expires_in,
+            Some(3600)
+        );
+        state
+            .client_credentials
+            .write()
+            .unwrap()
+            .get_mut("fixture-no-expiry")
+            .unwrap()
+            .issued_at = now - 3601;
+        assert!(
+            state
+                .get_credentials_for_token("fixture-no-expiry")
+                .unwrap()
+                .is_expired()
+        );
+        state
+            .store_credentials(OAuthCredentials {
+                access_token: "fixture-replacement".into(),
+                ..credentials
+            })
+            .unwrap();
+        assert!(
+            state
+                .get_credentials_for_token("fixture-no-expiry")
+                .is_none()
+        );
     }
 }
