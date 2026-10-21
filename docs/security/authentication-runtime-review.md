@@ -1,0 +1,17 @@
+# MCP container authentication compatibility
+
+The maintained container compiles all existing MCP, JWT, OAuth and CLI features. During restoration of a runnable container, inspection found that `mcp_server` called the plain HTTP transport even when JWT/OAuth environment settings were supplied. HTTP startup now uses the existing environment configuration path while retaining the established default address and stdio behavior.
+
+The old JWT token endpoint accepted built-in `admin/admin123` and `user/user123` logins. Those fallbacks are removed. Password token issuance now requires explicitly configured `MCP_AUTH_USERNAME` and `MCP_AUTH_PASSWORD`; missing/empty settings fail authentication. Comparisons use the `subtle` constant-time API. `MCP_AUTH_ROLE` accepts `readonly` (default) or `admin`; other values fail closed. Applications can continue presenting correctly signed external JWTs without enabling a password token issuer.
+
+When `ENABLE_JWT` is set, startup requires a nonempty `JWT_SECRET`. This provides explicit deployment signing-key configuration. The library's `JwtConfig::default` generates a fresh random key; it was not a known fixed default secret and is not described as one. Store real credentials in local environment/secrets facilities, never in Git. Passwords used by regression fixtures are fabricated test values.
+
+Compatibility: deployments that relied on the demo logins must configure credentials and a signing secret. Deployments that previously set authentication variables without enforcement will now enforce the requested mode. `ENABLE_OAUTH` retains the library's OAuth configuration and takes precedence when both modes are requested, as in the existing library server builder. No authentication mode is silently dropped at build time.
+
+Focused validation covers missing-secret startup rejection, rejection of absent/incorrect credentials and demo fallbacks, successful configured token issuance, unauthenticated MCP rejection, accepted valid JWT requests, and OAuth authorization redirect behavior. The mock checks do not call VirusTotal or an identity provider with real credentials.
+
+A requested JWT or OAuth mode also fails startup when the corresponding Cargo feature was not compiled. The focused feature-matrix test passes explicit booleans into the same startup validator, avoiding global environment mutation in parallel Rust tests. OAuth fixture coverage verifies unauthenticated rejection and the configured authorization redirect; it does not simulate a complete identity-provider token exchange.
+
+HTTP configuration preserves the binary’s existing `Premium` and lowercase `premium` tier spellings. A pure parser regression test covers both and the public-tier default, so routing through the shared environment helper does not silently downgrade an existing deployment.
+
+The real MCP `get_file_report` tool also fetches a synthetic file report over HTTPS through a local CONNECT fixture using the SDK’s existing proxy support. The proxy permits only the expected hostname, serves fabricated data itself, and never forwards traffic to VirusTotal. The fixture verifies the fabricated API-key header, successful parsed report, unknown-issuer rejection and hostname rejection with certificate-specific logs. Default production URLs and certificate validation remain unchanged.

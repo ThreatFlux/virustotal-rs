@@ -245,7 +245,7 @@ impl ServerConfig {
             tracing::Level::INFO
         };
 
-        tracing_subscriber::registry()
+        let _ = tracing_subscriber::registry()
             .with(
                 tracing_subscriber::fmt::layer()
                     .with_target(false)
@@ -254,7 +254,7 @@ impl ServerConfig {
                     .with_ansi(true),
             )
             .with(EnvFilter::from_default_env().add_directive(level.into()))
-            .init();
+            .try_init();
     }
 }
 
@@ -277,6 +277,15 @@ pub async fn run_server_simple(api_key: String, stdio: bool) -> McpResult<()> {
 
 /// Helper function to run server with environment variables
 pub async fn run_server_from_env() -> McpResult<()> {
+    server_config_from_env()?.run().await
+}
+
+/// Build the server configuration from explicit environment settings.
+pub fn server_config_from_env() -> McpResult<ServerConfig> {
+    validate_requested_auth_features(
+        std::env::var_os("ENABLE_JWT").is_some(),
+        std::env::var_os("ENABLE_OAUTH").is_some(),
+    )?;
     let api_key = std::env::var("VIRUSTOTAL_API_KEY")
         .map_err(|_| anyhow::anyhow!("VIRUSTOTAL_API_KEY environment variable is required"))?;
 
@@ -294,15 +303,29 @@ pub async fn run_server_from_env() -> McpResult<()> {
 
     #[cfg(feature = "mcp-jwt")]
     {
-        config = apply_jwt_from_env(config);
+        config = apply_jwt_from_env(config)?;
     }
 
-    config.run().await
+    Ok(config)
+}
+
+fn validate_requested_auth_features(jwt: bool, oauth: bool) -> McpResult<()> {
+    if jwt && !cfg!(feature = "mcp-jwt") {
+        anyhow::bail!("ENABLE_JWT requires a binary built with the mcp-jwt feature");
+    }
+    if oauth && !cfg!(feature = "mcp-oauth") {
+        anyhow::bail!("ENABLE_OAUTH requires a binary built with the mcp-oauth feature");
+    }
+    Ok(())
 }
 
 fn api_tier_from_env() -> crate::ApiTier {
-    match std::env::var("VIRUSTOTAL_API_TIER").as_deref() {
-        Ok("Premium") => crate::ApiTier::Premium,
+    api_tier_from_value(std::env::var("VIRUSTOTAL_API_TIER").ok().as_deref())
+}
+
+fn api_tier_from_value(value: Option<&str>) -> crate::ApiTier {
+    match value {
+        Some("Premium" | "premium") => crate::ApiTier::Premium,
         _ => crate::ApiTier::Public,
     }
 }
@@ -319,7 +342,7 @@ fn apply_http_addr_from_env(mut config: ServerConfig) -> McpResult<ServerConfig>
 
 #[cfg(feature = "mcp-oauth")]
 fn apply_oauth_from_env(mut config: ServerConfig) -> ServerConfig {
-    if std::env::var("ENABLE_OAUTH").is_ok() {
+    if std::env::var_os("ENABLE_OAUTH").is_some() {
         let client_id = std::env::var("OAUTH_CLIENT_ID")
             .unwrap_or_else(|_| "virustotal-mcp-client".to_string());
         let auth_server_url = std::env::var("OAUTH_AUTH_SERVER_URL")
@@ -345,11 +368,14 @@ fn apply_oauth_from_env(mut config: ServerConfig) -> ServerConfig {
 }
 
 #[cfg(feature = "mcp-jwt")]
-fn apply_jwt_from_env(mut config: ServerConfig) -> ServerConfig {
-    if std::env::var("ENABLE_JWT").is_ok() {
-        let mut jwt_config = std::env::var("JWT_SECRET")
-            .map(JwtConfig::new)
-            .unwrap_or_else(|_| JwtConfig::default());
+fn apply_jwt_from_env(mut config: ServerConfig) -> McpResult<ServerConfig> {
+    if std::env::var_os("ENABLE_JWT").is_some() {
+        let secret = std::env::var("JWT_SECRET")
+            .map_err(|_| anyhow::anyhow!("JWT_SECRET is required when ENABLE_JWT is set"))?;
+        if secret.trim().is_empty() {
+            anyhow::bail!("JWT_SECRET must not be empty when ENABLE_JWT is set");
+        }
+        let mut jwt_config = JwtConfig::new(secret);
 
         if let Ok(exp_str) = std::env::var("JWT_EXPIRY_SECONDS")
             && let Ok(exp) = exp_str.parse::<u64>()
@@ -359,13 +385,45 @@ fn apply_jwt_from_env(mut config: ServerConfig) -> ServerConfig {
 
         config = config.with_jwt(jwt_config);
     }
-    config
+    Ok(config)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::net::{IpAddr, Ipv4Addr};
+
+    #[test]
+    fn requested_auth_modes_require_compiled_features() {
+        assert!(validate_requested_auth_features(false, false).is_ok());
+        assert_eq!(
+            validate_requested_auth_features(true, false).is_ok(),
+            cfg!(feature = "mcp-jwt")
+        );
+        assert_eq!(
+            validate_requested_auth_features(false, true).is_ok(),
+            cfg!(feature = "mcp-oauth")
+        );
+        assert_eq!(
+            validate_requested_auth_features(true, true).is_ok(),
+            cfg!(feature = "mcp-jwt") && cfg!(feature = "mcp-oauth")
+        );
+    }
+
+    #[test]
+    fn api_tier_preserves_binary_environment_compatibility() {
+        assert_eq!(
+            api_tier_from_value(Some("Premium")),
+            crate::ApiTier::Premium
+        );
+        assert_eq!(
+            api_tier_from_value(Some("premium")),
+            crate::ApiTier::Premium
+        );
+        for value in [None, Some("Public"), Some("public"), Some("unknown")] {
+            assert_eq!(api_tier_from_value(value), crate::ApiTier::Public);
+        }
+    }
 
     #[test]
     fn test_server_config_builder() {

@@ -26,8 +26,8 @@ required-features = ["cli"]
 [dependencies]
 reqwest = { version = "0.13.5", features = ["json", "form", "rustls", "multipart"], default-features = false }
 serde = { version = "1.0.229", features = ["derive"] }
-serde_json = "1.0.151"
-tokio = { version = "1.53.2", features = ["rt-multi-thread", "macros", "time", "fs", "io-std"] }
+serde_json = "1.0.154"
+tokio = { version = "1.54.0", features = ["rt-multi-thread", "macros", "time", "fs", "io-std"] }
 tokio-stream = "0.1.19"
 thiserror = "2.0.21"
 async-trait = "0.1.92"
@@ -36,12 +36,12 @@ chrono = "0.4.45"
 governor = "0.10.4"
 nonzero_ext = "0.3.0"
 base64 = "0.23.1"
-sha2 = "0.11.0"
+sha2 = "0.11.1"
 urlencoding = "2.1.3"
 
 # MCP feature dependencies (optional)
 axum = { version = "0.8.9", optional = true }
-tokio-util = { version = "0.7.19", features = ["io"], optional = true }
+tokio-util = { version = "0.7.20", features = ["io"], optional = true }
 anyhow = { version = "1.0.104", optional = true }
 regex = { version = "1.13.1", optional = true }
 lazy_static = { version = "1.5.1", optional = true }
@@ -50,9 +50,10 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter"], optional =
 
 # JWT authentication dependencies (optional)
 # The MCP JWT flow only uses HMAC signing, so avoid pulling the RustCrypto RSA stack.
+subtle = { version = "2.6.1", optional = true }
 jsonwebtoken = { version = "11.1.0", optional = true, default-features = false, features = ["aws_lc_rs"] }
 serde_with = { version = "3.24.0", optional = true }
-uuid = { version = "1.27.0", features = ["v4", "serde"], optional = true }
+uuid = { version = "1.28.0", features = ["v4", "serde"], optional = true }
 tower = { version = "0.5.3", features = ["util"], optional = true }
 tower-http = { version = "0.7.1", features = ["cors", "trace"], optional = true }
 axum-extra = { version = "0.12.6", features = ["typed-header"], optional = true }
@@ -66,7 +67,7 @@ clap = { version = "4.6.7", features = ["derive", "env"], optional = true }
 colored = { version = "3.1.1", optional = true }
 indicatif = { version = "0.18.6", optional = true }
 dirs = { version = "7.0.0", optional = true }
-toml = { version = "1.1.6", optional = true }
+toml = { version = "1.1.8", optional = true }
 futures = { version = "0.3.34", optional = true }
 
 [features]
@@ -76,7 +77,7 @@ cli = ["clap", "colored", "indicatif", "dirs", "toml", "elasticsearch", "futures
 # provided by `cli`; enabling this legacy feature alone still builds the library.
 elasticsearch = []
 mcp = ["axum", "tokio-util", "anyhow", "regex", "lazy_static", "tracing", "tracing-subscriber"]
-mcp-jwt = ["mcp", "jsonwebtoken", "serde_with", "uuid", "tower", "tower-http", "axum-extra"]
+mcp-jwt = ["mcp", "dep:subtle", "jsonwebtoken", "serde_with", "uuid", "tower", "tower-http", "axum-extra"]
 mcp-oauth = ["mcp", "oauth2", "rand", "uuid", "tower", "tower-http", "axum-extra"]
 
 [dev-dependencies]
@@ -86,7 +87,7 @@ wiremock = "0.6.5"
 clap = { version = "4.6.7", features = ["derive"] }
 tempfile = "3.27.0"
 futures = "0.3.34"
-uuid = { version = "1.27.0", features = ["v4"] }
+uuid = { version = "1.28.0", features = ["v4"] }
 
 [[example]]
 name = "elasticsearch_indexer"

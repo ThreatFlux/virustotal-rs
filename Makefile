@@ -30,8 +30,8 @@ install-tools:
 	@cargo llvm-cov --version 2>/dev/null | grep -Eq "(^| )0\.9\.1($$| )" || cargo install cargo-llvm-cov --version 0.9.1 --locked
 	@cargo hack --version 2>/dev/null | grep -Eq "(^| )0\.6\.45($$| )" || cargo install cargo-hack --version 0.6.45 --locked
 	@cargo deadlinks --version 2>/dev/null | grep -Eq "(^| )0\.8\.1($$| )" || cargo install cargo-deadlinks --version 0.8.1 --locked
-	@cargo geiger --version 2>/dev/null | grep -Eq "(^| )0\.13\.0($$| )" || cargo install cargo-geiger --version 0.13.0 --locked
-	@cargo supply-chain --version 2>/dev/null | grep -Eq "(^| )0\.3\.7($$| )" || cargo install cargo-supply-chain --version 0.3.7 --locked
+	@cargo geiger --version 2>/dev/null | grep -Eq "(^| )0\.14\.0($$| )" || cargo install cargo-geiger --version 0.14.0 --locked
+	@cargo supply-chain --version 2>/dev/null | grep -Eq "(^| )0\.3\.8($$| )" || cargo install cargo-supply-chain --version 0.3.8 --locked
 	@cargo semver-checks --version 2>/dev/null | grep -Eq "(^| )0\.51\.0($$| )" || cargo install cargo-semver-checks --version 0.51.0 --locked
 	@echo "✅ Tools installed"
 

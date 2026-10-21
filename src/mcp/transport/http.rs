@@ -210,18 +210,47 @@ async fn generate_token(
     axum::extract::State((_, jwt_manager)): axum::extract::State<(VtMcpServer, JwtManager)>,
     axum::Json(request): axum::Json<TokenRequest>,
 ) -> Result<axum::Json<TokenResponse>, axum::http::StatusCode> {
-    if request.username == "admin" && request.password == "admin123" {
-        issue_token(&jwt_manager, &request.username, "admin", |m, u| {
-            m.generate_admin_token(u)
-        })
-    } else if request.username == "user" && request.password == "user123" {
-        issue_token(&jwt_manager, &request.username, "readonly", |m, u| {
-            m.generate_readonly_token(u)
-        })
-    } else {
-        tracing::warn!("Invalid credentials for user: {}", request.username);
-        Err(axum::http::StatusCode::UNAUTHORIZED)
+    let expected_user = std::env::var("MCP_AUTH_USERNAME").ok();
+    let expected_password = std::env::var("MCP_AUTH_PASSWORD").ok();
+    if !password_credentials_match(
+        &request,
+        expected_user.as_deref(),
+        expected_password.as_deref(),
+    ) {
+        return Err(axum::http::StatusCode::UNAUTHORIZED);
     }
+    match std::env::var("MCP_AUTH_ROLE")
+        .as_deref()
+        .unwrap_or("readonly")
+    {
+        "admin" => issue_token(&jwt_manager, &request.username, "admin", |m, u| {
+            m.generate_admin_token(u)
+        }),
+        "readonly" => issue_token(&jwt_manager, &request.username, "readonly", |m, u| {
+            m.generate_readonly_token(u)
+        }),
+        _ => Err(axum::http::StatusCode::INTERNAL_SERVER_ERROR),
+    }
+}
+
+#[cfg(all(feature = "axum", feature = "mcp-jwt"))]
+fn password_credentials_match(
+    request: &TokenRequest,
+    username: Option<&str>,
+    password: Option<&str>,
+) -> bool {
+    use subtle::ConstantTimeEq;
+
+    let (Some(username), Some(password)) = (username, password) else {
+        return false;
+    };
+    if username.is_empty() || password.is_empty() {
+        return false;
+    }
+    bool::from(
+        request.username.as_bytes().ct_eq(username.as_bytes())
+            & request.password.as_bytes().ct_eq(password.as_bytes()),
+    )
 }
 
 #[cfg(all(feature = "axum", feature = "mcp-jwt"))]
@@ -305,5 +334,48 @@ async fn oauth_authorize(
             tracing::error!("Failed to start OAuth authorization: {}", e);
             Err(OAuthError::AuthorizationFailed(e.to_string()))
         }
+    }
+}
+
+#[cfg(all(test, feature = "axum", feature = "mcp-jwt"))]
+mod password_auth_tests {
+    use super::{TokenRequest, password_credentials_match};
+
+    #[test]
+    fn password_login_has_no_demo_or_empty_credential_fallback() {
+        let request = TokenRequest {
+            username: "admin".to_string(),
+            password: "admin123".to_string(),
+        };
+        assert!(!password_credentials_match(&request, None, None));
+        assert!(!password_credentials_match(&request, Some(""), Some("")));
+        assert!(!password_credentials_match(
+            &request,
+            Some("fixture-user"),
+            Some("fixture-password"),
+        ));
+    }
+
+    #[test]
+    fn password_login_accepts_only_the_configured_credentials() {
+        let request = TokenRequest {
+            username: "fixture-user".to_string(),
+            password: "fixture-password".to_string(),
+        };
+        assert!(password_credentials_match(
+            &request,
+            Some("fixture-user"),
+            Some("fixture-password"),
+        ));
+        assert!(!password_credentials_match(
+            &request,
+            Some("fixture-user"),
+            Some("incorrect-password"),
+        ));
+        assert!(!password_credentials_match(
+            &request,
+            Some("incorrect-user"),
+            Some("fixture-password"),
+        ));
     }
 }

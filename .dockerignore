@@ -1,0 +1,7 @@
+.git
+.github
+target
+sbom
+lcov.info
+*.profraw
+*.profdata

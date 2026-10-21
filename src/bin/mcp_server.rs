@@ -133,7 +133,7 @@ async fn run_server_by_mode(
             run_stdio_mode(client).await?;
         }
         _ => {
-            run_http_mode(client).await?;
+            run_http_mode().await?;
         }
     }
     Ok(())
@@ -151,11 +151,9 @@ async fn run_stdio_mode(
 }
 
 #[cfg(feature = "mcp")]
-async fn run_http_mode(
-    client: virustotal_rs::Client,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn run_http_mode() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     use std::{env, net::SocketAddr};
-    use virustotal_rs::mcp::run_http_server;
+    use virustotal_rs::mcp::transport::config::server_config_from_env;
 
     let addr: SocketAddr = env::var("HTTP_ADDR")
         .unwrap_or_else(|_| "127.0.0.1:8080".to_string())
@@ -163,7 +161,11 @@ async fn run_http_mode(
         .map_err(|e| format!("Invalid HTTP_ADDR: {}", e))?;
 
     log_http_server_info(&addr);
-    run_http_server(client, addr).await.map_err(|e| e.into())
+    server_config_from_env()?
+        .http_addr(addr)
+        .run()
+        .await
+        .map_err(|e| e.into())
 }
 
 #[cfg(feature = "mcp")]
