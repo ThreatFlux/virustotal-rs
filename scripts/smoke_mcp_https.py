@@ -11,7 +11,7 @@ import subprocess  # nosec B404
 import tempfile
 import threading
 
-from smoke_mcp_container import docker_command, image_reference, remove_container, request, wait_ready
+from smoke_mcp_container import docker_command, image_reference, managed_container, request, wait_ready
 
 
 FILE_HASH = "a" * 64
@@ -100,8 +100,7 @@ def run_server_case(image, platform, root, proxy, mode):
     if mode != "untrusted":
         command += ["-v", f"{root}/ca.crt:/fixture/ca.crt:ro", "-e", "SSL_CERT_FILE=/fixture/ca.crt"]
     # Fixed executable and argument list; no shell interprets image names or fixture data.
-    container = subprocess.check_output(command + ["-d", "-p", "127.0.0.1::8080", "--", image], text=True, timeout=60).strip()  # nosec B603, B607 # nosemgrep
-    try:
+    with managed_container(command + ["-d", "-p", "127.0.0.1::8080", "--", image]) as container:
         # Fixed executable and argument list; no shell interprets image names or fixture data.
         address = subprocess.check_output(["docker", "port", container, "8080/tcp"], text=True, timeout=20).strip()  # nosec B603, B607 # nosemgrep
         url = "http://" + address
@@ -110,9 +109,6 @@ def run_server_case(image, platform, root, proxy, mode):
         # Fixed executable and argument list; no shell interprets image names or fixture data.
         logs = subprocess.check_output(["docker", "logs", container], text=True, stderr=subprocess.STDOUT, timeout=20)  # nosec B603, B607 # nosemgrep
         validate_response(mode, status, json.loads(body), logs, proxy)
-    finally:
-        # Fixed executable and argument list; no shell interprets image names or fixture data.
-        remove_container(container, force=True)
 
 
 def validate_response(mode, status, result, logs, proxy):

@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import patch
 
 from container_publish_tags import latest_source, publication_tags, validate_release
-from smoke_mcp_container import image_reference, remove_container, request
+from smoke_mcp_container import image_reference, managed_container, remove_container, request
 
 
 class CleanupTests(unittest.TestCase):
@@ -38,6 +38,32 @@ class CleanupTests(unittest.TestCase):
         with patch("smoke_mcp_container.subprocess.run", side_effect=failure):
             with self.assertRaises(subprocess.CalledProcessError):
                 remove_container("fixture-container")
+
+    def test_partial_startup_failure_cleans_up_the_preassigned_name(self):
+        """Remove a possibly created container even when Docker never returns its ID."""
+        for failure in (subprocess.CalledProcessError(1, ["docker", "run"]),
+                        subprocess.TimeoutExpired(["docker", "run"], 60)):
+            with self.subTest(failure=type(failure).__name__):
+                with patch("smoke_mcp_container.subprocess.check_output", side_effect=failure) as start:
+                    with patch("smoke_mcp_container.remove_container") as remove:
+                        with self.assertRaises(type(failure)) as caught:
+                            with managed_container(["docker", "run", "-d", "--", "fixture/image"]):
+                                self.fail("failed startup must not enter validation")
+                self.assertIs(caught.exception, failure)
+                command = start.call_args.args[0]
+                name = command[command.index("--name") + 1]
+                self.assertTrue(name.startswith("mcp-check-"))
+                self.assertLess(command.index("--name"), command.index("--"))
+                remove.assert_called_once_with(name, force=True)
+                self.assertEqual(start.call_args.kwargs["timeout"], 60)
+
+    def test_managed_container_cleans_up_after_successful_validation(self):
+        """Use the same preassigned name for validation and subsequent removal."""
+        with patch("smoke_mcp_container.subprocess.check_output", return_value="fixture-id"):
+            with patch("smoke_mcp_container.remove_container") as remove:
+                with managed_container(["docker", "create", "--", "fixture/image"]) as container:
+                    remove.assert_not_called()
+                remove.assert_called_once_with(container, force=True)
 
 
 class PublicationTests(unittest.TestCase):

@@ -10,7 +10,7 @@ import subprocess  # nosec B404
 import tarfile
 import tempfile
 
-from smoke_mcp_container import image_reference, remove_container
+from smoke_mcp_container import image_reference, managed_container
 
 
 BINARIES = {"usr/local/bin/app", "usr/bin/tini"}
@@ -153,8 +153,7 @@ def main():
     if args.platform:
         create += ["--platform", args.platform]
     # Fixed executable and argument list; no shell interprets image names or fixture data.
-    container = subprocess.check_output(create + ["--", args.image], text=True, timeout=60).strip()  # nosec B603, B607 # nosemgrep
-    try:
+    with managed_container(create + ["--", args.image]) as container:
         # Fixed executable and argument list; no shell interprets image names or fixture data.
         info = json.loads(subprocess.check_output(["docker", "inspect", container], timeout=20))[0]  # nosec B603, B607 # nosemgrep
         # Fixed executable and argument list; no shell interprets image names or fixture data.
@@ -162,9 +161,6 @@ def main():
         check_configuration(info)
         check_filesystem(container, image["Architecture"])
         print(f"Static runtime verified: {args.image} ({image['Architecture']})")
-    finally:
-        # Fixed executable and argument list; no shell interprets image names or fixture data.
-        remove_container(container)
 
 
 if __name__ == "__main__":

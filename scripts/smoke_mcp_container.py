@@ -35,6 +35,21 @@ def remove_container(container, force=False):
         print(f"Container cleanup also failed: {cleanup_error}", file=sys.stderr)
 
 
+@contextlib.contextmanager
+def managed_container(command):
+    """Name the container before creation so partial Docker startup failures are cleaned up."""
+    container = "mcp-check-" + secrets.token_hex(12)
+    command = command.copy()
+    operand = command.index("--")
+    command[operand:operand] = ["--name", container]
+    try:
+        # Fixed Docker executable, shell-free arguments, and a generated container name.
+        subprocess.check_output(command, text=True, timeout=60)  # nosec B603 # nosemgrep
+        yield container
+    finally:
+        remove_container(container, force=True)
+
+
 def image_reference(value):
     """Accept an image reference as one Docker operand and reject option-like input."""
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/@:-]*", value):
@@ -258,8 +273,7 @@ def check_server(image, platform, mode, provider=None):
     if provider is not None:
         command += ["--add-host", "host.docker.internal:host-gateway"]
     # Fixed executable and argument list; no shell interprets image names or fixture data.
-    container = subprocess.check_output(command + ["-d", "-p", "127.0.0.1::8080", "--", image], text=True, timeout=60).strip()  # nosec B603, B607 # nosemgrep
-    try:
+    with managed_container(command + ["-d", "-p", "127.0.0.1::8080", "--", image]) as container:
         # Fixed executable and argument list; no shell interprets image names or fixture data.
         address = subprocess.check_output(["docker", "port", container, "8080/tcp"], text=True, timeout=20).strip()  # nosec B603, B607 # nosemgrep
         url = "http://" + address
@@ -278,9 +292,6 @@ def check_server(image, platform, mode, provider=None):
             raise RuntimeError("MCP startup logs still advertise demo credentials")
         # Fixed executable and argument list; no shell interprets image names or fixture data.
         subprocess.run(["docker", "stop", "--time", "5", container], check=True, stdout=subprocess.DEVNULL, timeout=20)  # nosec B603, B607 # nosemgrep
-    finally:
-        # Fixed executable and argument list; no shell interprets image names or fixture data.
-        remove_container(container, force=True)
 
 
 def check_missing_secret(image, platform):
