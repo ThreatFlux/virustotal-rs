@@ -17,7 +17,7 @@
 # Refresh trust data and its package provenance together. Distroless currently
 # has fixed CA data but stale package metadata; never globally dismiss the
 # advisory while older published images still trust the distrusted roots.
-FROM --platform=$BUILDPLATFORM debian:trixie-slim@sha256:62bd423aeee912639ca8ee681c2b762cb3e25137e0a92b20be455898a9f034ad AS trust-store
+FROM --platform=$BUILDPLATFORM debian:trixie-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2 AS trust-store
 
 # hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && \
@@ -26,7 +26,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     rm -rf /var/lib/apt/lists/*
 
 # rust 1.99.1 on Alpine 3.24 (musl); multi-arch index digest
-FROM rust:1.99.1-alpine3.24@sha256:557a94c82b485a14b569120e00867267108c734efe33f10cc31ca0cd5dd1eca9 AS rust-base
+FROM rust:1.99.1-alpine3.24@sha256:44819b27be4c97b0e4d7203bd2e02c4820f97700211b6a37fb4c246a2de59383 AS rust-base
 
 ARG VERSION=0.0.0
 ARG BUILD_DATE=unknown
@@ -123,7 +123,7 @@ RUN mkdir -p /home/builder/out/bin /home/builder/out/doc \
     } > /home/builder/out/doc/native-build.txt
 
 # Static distroless: certificates/account data, no dynamic libc; multi-arch digest
-FROM gcr.io/distroless/static-debian13:nonroot@sha256:516757106de35205efb70b91ba03f6f1298424a0678c603255cf2852a7000087 AS runtime
+FROM gcr.io/distroless/static-debian13:nonroot@sha256:25ac8f0c3b2334a9eb05452266bd4697864a8c8ef0ef71e5e6480d7f92868329 AS runtime
 
 ARG VERSION=0.0.0
 ARG BUILD_DATE=unknown
