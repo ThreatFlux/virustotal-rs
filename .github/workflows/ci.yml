@@ -177,7 +177,7 @@ jobs:
       - name: Install cargo-hack
         uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
         with:
-          tool: cargo-hack@0.6.45
+          tool: cargo-hack@0.6.46
 
       - name: Install dependencies
         run: |
@@ -283,6 +283,7 @@ jobs:
       - name: Upload coverage
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
+          version: v11.3.2
           files: lcov.info
           fail_ci_if_error: false
           use_oidc: true

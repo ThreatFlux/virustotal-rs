@@ -24,11 +24,11 @@ ci: fmt-check clippy build test test-no-features test-mcp-features build-example
 # Install required tools
 install-tools:
 	@echo "📦 Installing required tools..."
-	@cargo audit --version 2>/dev/null | grep -Eq "(^| )0\.22\.2($$| )" || cargo install cargo-audit --version 0.22.2 --locked
+	@cargo audit --version 2>/dev/null | grep -Eq "(^| )0\.23\.0($$| )" || cargo install cargo-audit --version 0.23.0 --locked
 	@cargo outdated --version 2>/dev/null | grep -Eq "(^| )0\.19\.0($$| )" || cargo install cargo-outdated --version 0.19.0 --locked
 	@cargo deny --version 2>/dev/null | grep -Eq "(^| )0\.20\.2($$| )" || cargo install cargo-deny --version 0.20.2 --locked
 	@cargo llvm-cov --version 2>/dev/null | grep -Eq "(^| )0\.9\.1($$| )" || cargo install cargo-llvm-cov --version 0.9.1 --locked
-	@cargo hack --version 2>/dev/null | grep -Eq "(^| )0\.6\.45($$| )" || cargo install cargo-hack --version 0.6.45 --locked
+	@cargo hack --version 2>/dev/null | grep -Eq "(^| )0\.6\.46($$| )" || cargo install cargo-hack --version 0.6.46 --locked
 	@cargo deadlinks --version 2>/dev/null | grep -Eq "(^| )0\.8\.1($$| )" || cargo install cargo-deadlinks --version 0.8.1 --locked
 	@cargo geiger --version 2>/dev/null | grep -Eq "(^| )0\.14\.0($$| )" || cargo install cargo-geiger --version 0.14.0 --locked
 	@cargo supply-chain --version 2>/dev/null | grep -Eq "(^| )0\.3\.8($$| )" || cargo install cargo-supply-chain --version 0.3.8 --locked
