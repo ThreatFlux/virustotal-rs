@@ -22,7 +22,7 @@ env:
   CARGO_INCREMENTAL: 0
   CARGO_NET_RETRY: 10
   RUSTUP_MAX_RETRIES: 10
-  RUST_STABLE_VERSION: 1.99.1
+  RUST_STABLE_VERSION: 1.100.0
   RUST_MSRV: 1.97.1
 
 jobs:
@@ -87,6 +87,8 @@ jobs:
             runner: windows-latest
             rust: stable
 
+    env:
+      RUSTUP_TOOLCHAIN: ${{ matrix.rust == 'stable' && '1.100.0' || matrix.rust }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -96,7 +98,20 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
         with:
-          toolchain: ${{ matrix.rust }}
+          toolchain: ${{ env.RUSTUP_TOOLCHAIN }}
+
+      - name: Verify selected compiler
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustc --version --verbose
+          cargo --version
+          actual=$(rustc --version | cut -d ' ' -f 2)
+          case "$RUSTUP_TOOLCHAIN" in
+            beta) [[ "$actual" == *-beta* ]] ;;
+            nightly) [[ "$actual" == *-nightly* ]] ;;
+            *) test "$actual" = "$RUSTUP_TOOLCHAIN" ;;
+          esac
 
       - name: Install dependencies (Ubuntu)
         if: matrix.os == 'linux'
@@ -131,6 +146,8 @@ jobs:
   msrv:
     name: MSRV Check
     runs-on: ubuntu-latest
+    env:
+      RUSTUP_TOOLCHAIN: 1.97.1
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -140,7 +157,20 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
         with:
-          toolchain: ${{ env.RUST_MSRV }}
+          toolchain: ${{ env.RUSTUP_TOOLCHAIN }}
+
+      - name: Verify selected MSRV compiler
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustc --version --verbose
+          cargo --version
+          actual=$(rustc --version | cut -d ' ' -f 2)
+          case "$RUSTUP_TOOLCHAIN" in
+            beta) [[ "$actual" == *-beta* ]] ;;
+            nightly) [[ "$actual" == *-nightly* ]] ;;
+            *) test "$actual" = "$RUSTUP_TOOLCHAIN" ;;
+          esac
 
       - name: Install dependencies
         run: |
