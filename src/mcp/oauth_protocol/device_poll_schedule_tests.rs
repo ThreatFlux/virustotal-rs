@@ -60,3 +60,29 @@ fn actual_polling_waits_advance_the_clock_by_one_or_six_seconds() {
         );
     }
 }
+
+#[test]
+fn overflowing_slow_down_returns_error_without_sleeping() {
+    let details =
+        serde_json::from_value::<super::StandardDeviceAuthorizationResponse>(serde_json::json!({
+            "device_code": "fixture-code",
+            "user_code": "fixture-user-code",
+            "verification_uri": "https://example.invalid/device",
+            "expires_in": 20,
+            "interval": u64::MAX,
+        }))
+        .unwrap();
+    let http = polling_http("slow_down");
+    let result = new_client()
+        .exchange_device_access_token(&details)
+        .set_time_fn(|| OffsetDateTime::UNIX_EPOCH)
+        .request(
+            &http,
+            |_| panic!("overflow must return before sleeping"),
+            None,
+        );
+    assert!(
+        matches!(result, Err(super::RequestTokenError::Other(message))
+        if message == "device polling interval is not representable")
+    );
+}

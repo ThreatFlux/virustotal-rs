@@ -10,7 +10,8 @@
     "time 0.3.55 checked arithmetic and numeric timestamp serde",
     "reqwest 0.13 and current RNG/dependencies",
     "only the SDK async transport enabled",
-    "library examples retained as documentation; native unit and SDK HTTP tests retained"
+    "library examples retained as documentation; native unit and SDK HTTP tests retained",
+    "checked slow_down interval arithmetic, unused panic-helper removal, explicit poll-entry timeout semantics and hosted overflow regression"
   ],
   "source_files": [
     {
@@ -35,12 +36,12 @@
     },
     {
       "path": "device_poll_schedule_tests.rs",
-      "owned_sha256_lf": "938e8a21a39d522407761a78966d70a24ea9fa3d167a781947efc9e0eaaf2cc7"
+      "owned_sha256_lf": "831410744719cc813dd15d1e4617709577f2742cc439bb3e8318857e8adee6f1"
     },
     {
       "path": "devicecode.rs",
       "upstream_sha256": "259d4190d435e3999a07b1a3440a10d4105dbf9837ecc86d70e910f95a5ec09b",
-      "owned_sha256_lf": "d421a89e59a4c9643740f86a99aefd83d01b0be890885c25338a4245978c63f6"
+      "owned_sha256_lf": "45ff01b1cf2a60595e03c74bb235701785dd0e81077110c468467ea84b5a80ab"
     },
     {
       "path": "endpoint.rs",
@@ -55,7 +56,7 @@
     {
       "path": "helpers.rs",
       "upstream_sha256": "f566dd190559e17d4aaba65cf581ce0820fcba538c79d6d962258ed0643c68a7",
-      "owned_sha256_lf": "8f7235b355afa72e413e906f91e12735b56b833c37d82a005341f8fecabf145c"
+      "owned_sha256_lf": "8f95d5d282b4cefe92be999c9f05f2c49f6692033d1b3dfd85f3dbd5b0cff1c2"
     },
     {
       "path": "introspection.rs",
