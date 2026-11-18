@@ -720,7 +720,7 @@ mod tests {
 
     use std::time::Duration;
 
-    fn new_device_auth_details(expires_in: u32) -> StandardDeviceAuthorizationResponse {
+    pub(super) fn new_device_auth_details(expires_in: u32) -> StandardDeviceAuthorizationResponse {
         let body = format!(
             "{{\
         \"device_code\": \"12345\", \
@@ -1205,3 +1205,7 @@ mod tests {
         assert_eq!(response.interval, default_devicecode_interval());
     }
 }
+
+#[cfg(test)]
+#[path = "device_poll_schedule_tests.rs"]
+mod schedule_tests;
