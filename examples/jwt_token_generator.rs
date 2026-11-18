@@ -189,9 +189,12 @@ fn print_plain(token: &str) {
 
 #[cfg(feature = "mcp-jwt")]
 fn format_timestamp(timestamp: usize) -> String {
-    use chrono::DateTime;
-    match DateTime::from_timestamp(timestamp as i64, 0) {
-        Some(dt) => dt.format("%Y-%m-%d %H:%M:%S UTC").to_string(),
+    use jiff::Timestamp;
+    match i64::try_from(timestamp)
+        .ok()
+        .and_then(|value| Timestamp::from_second(value).ok())
+    {
+        Some(dt) => dt.strftime("%Y-%m-%d %H:%M:%S UTC").to_string(),
         None => "Invalid timestamp".to_string(),
     }
 }

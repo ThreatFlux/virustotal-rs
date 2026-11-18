@@ -3,7 +3,7 @@
 //! This module provides functions for formatting various types of data
 //! into human-readable formats.
 
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 
 /// Format file size in human-readable format
 ///
@@ -64,8 +64,8 @@ pub fn format_file_size(bytes: u64) -> String {
 /// assert!(formatted.contains("2021"));
 /// ```
 pub fn format_timestamp(timestamp: i64) -> String {
-    if let Some(dt) = DateTime::from_timestamp(timestamp, 0) {
-        dt.format("%Y-%m-%d %H:%M:%S UTC").to_string()
+    if let Ok(dt) = Timestamp::from_second(timestamp) {
+        dt.strftime("%Y-%m-%d %H:%M:%S UTC").to_string()
     } else {
         format!("Invalid timestamp: {}", timestamp)
     }
@@ -87,25 +87,24 @@ pub fn format_timestamp(timestamp: i64) -> String {
 ///
 /// ```rust
 /// use virustotal_rs::display::format_timestamp_relative;
-/// use chrono::Utc;
+/// use jiff::Timestamp;
 ///
-/// let one_hour_ago = Utc::now().timestamp() - 3600;
+/// let one_hour_ago = Timestamp::now().as_second() - 3600;
 /// let formatted = format_timestamp_relative(one_hour_ago);
 /// assert!(formatted.contains("hour"));
 /// ```
 pub fn format_timestamp_relative(timestamp: i64) -> String {
-    if let Some(dt) = DateTime::from_timestamp(timestamp, 0) {
-        let now = Utc::now();
-        let duration = now.signed_duration_since(dt);
+    if Timestamp::from_second(timestamp).is_ok() {
+        let seconds = Timestamp::now().as_second() - timestamp;
 
-        if duration.num_days() > 0 {
-            format!("{} days ago", duration.num_days())
-        } else if duration.num_hours() > 0 {
-            format!("{} hours ago", duration.num_hours())
-        } else if duration.num_minutes() > 0 {
-            format!("{} minutes ago", duration.num_minutes())
-        } else if duration.num_seconds() > 0 {
-            format!("{} seconds ago", duration.num_seconds())
+        if seconds / 86400 > 0 {
+            format!("{} days ago", seconds / 86400)
+        } else if seconds / 3600 > 0 {
+            format!("{} hours ago", seconds / 3600)
+        } else if seconds / 60 > 0 {
+            format!("{} minutes ago", seconds / 60)
+        } else if seconds > 0 {
+            format!("{} seconds ago", seconds)
         } else {
             "just now".to_string()
         }

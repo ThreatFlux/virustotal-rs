@@ -4,6 +4,7 @@
 //! automatic token refresh, and authorization server metadata discovery
 //! following the MCP 2025-03-26 Authorization Specification.
 
+use super::oauth_protocol as oauth2;
 use anyhow::{Result as AnyhowResult, anyhow};
 use axum::{
     extract::FromRequestParts,

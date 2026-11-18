@@ -37,7 +37,7 @@ impl ErrorContext {
             operation: Some(operation.into()),
             resource: None,
             metadata: HashMap::new(),
-            timestamp: Some(chrono::Utc::now().to_rfc3339()),
+            timestamp: Some(jiff::Timestamp::now().to_string()),
             request_id: None,
         }
     }

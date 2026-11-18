@@ -23,4 +23,4 @@ pub use context::*;
 pub use types::*;
 pub use utils::*;
 
-// Note: chrono dependency is included in the context module
+// Timestamp context uses the maintained Jiff clock.

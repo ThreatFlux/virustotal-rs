@@ -1,4 +1,4 @@
-use chrono::{DateTime, Datelike, Duration, NaiveDateTime, Timelike, Utc};
+use jiff::{SignedDuration, Timestamp, civil::DateTime, tz::TimeZone};
 
 /// Helper to generate time strings for feed requests
 ///
@@ -26,14 +26,18 @@ pub fn format_time(year: u32, month: u32, day: u32, hour: u32, minute: Option<u3
 /// # Arguments
 /// * `is_hourly` - true for hourly feeds (2h lag), false for per-minute (60m lag)
 pub fn get_latest_available_time(is_hourly: bool) -> String {
-    let now = Utc::now();
+    let now = Timestamp::now();
     let lag = if is_hourly {
-        Duration::hours(2)
+        SignedDuration::from_hours(2)
     } else {
-        Duration::hours(1)
+        SignedDuration::from_hours(1)
     };
 
-    let available_time = now - lag;
+    let available_time = now
+        .checked_sub(lag)
+        .expect("current clock minus the feed lag is representable")
+        .to_zoned_datetime(TimeZone::UTC)
+        .datetime();
 
     if is_hourly {
         format!(
@@ -67,7 +71,7 @@ fn prepare_time_strings(start_time: &str, end_time: &str, is_hourly: bool) -> (S
 }
 
 /// Format datetime to feed time string
-fn format_feed_time_string(current: DateTime<Utc>, is_hourly: bool) -> String {
+fn format_feed_time_string(current: DateTime, is_hourly: bool) -> String {
     if is_hourly {
         format!(
             "{:04}{:02}{:02}{:02}",
@@ -103,23 +107,26 @@ pub fn get_time_range(start_time: &str, end_time: &str, is_hourly: bool) -> Vec<
     let (start_str, end_str) = prepare_time_strings(start_time, end_time, is_hourly);
     let full_format = "%Y%m%d%H%M%S";
 
-    let start = NaiveDateTime::parse_from_str(&start_str, full_format);
-    let end = NaiveDateTime::parse_from_str(&end_str, full_format);
+    let start = DateTime::strptime(full_format, &start_str);
+    let end = DateTime::strptime(full_format, &end_str);
 
     if let (Ok(start_dt), Ok(end_dt)) = (start, end) {
         let increment = if is_hourly {
-            Duration::hours(1)
+            SignedDuration::from_hours(1)
         } else {
-            Duration::minutes(1)
+            SignedDuration::from_mins(1)
         };
 
-        let mut current = DateTime::<Utc>::from_naive_utc_and_offset(start_dt, Utc);
-        let end = DateTime::<Utc>::from_naive_utc_and_offset(end_dt, Utc);
+        let mut current = start_dt;
+        let end = end_dt;
 
         while current <= end {
             let time_str = format_feed_time_string(current, is_hourly);
             times.push(time_str);
-            current += increment;
+            let Ok(next) = current.checked_add(increment) else {
+                break;
+            };
+            current = next;
         }
     }
 
@@ -166,5 +173,19 @@ mod tests {
 
         let hourly_time = get_latest_available_time(true);
         assert_eq!(hourly_time.len(), 10); // `YYYYMMDDhh`
+    }
+
+    #[test]
+    fn feed_ranges_keep_leap_days_and_stop_at_the_last_representable_minute() {
+        assert_eq!(
+            get_time_range("2024022823", "2024022901", true),
+            ["2024022823", "2024022900", "2024022901"]
+        );
+        assert_eq!(
+            get_time_range("999912312359", "999912312359", false),
+            ["999912312359"]
+        );
+        assert!(get_time_range("2026022900", "2026030100", true).is_empty());
+        assert!(get_time_range("2026111900", "2026111800", true).is_empty());
     }
 }

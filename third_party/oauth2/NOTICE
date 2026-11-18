@@ -1,0 +1,20 @@
+This internal protocol module derives from the public oauth2 5.0.0 crate by
+Alex Crichton, Florin Lipan, David A. Ramos and the upstream contributors.
+Original MIT and Apache-2.0 licenses and the exact published source archive
+are preserved here. Original notices inside the archive remain unchanged.
+
+The SDK retains OAuth authorization-code/PKCE, refresh, scope checks, client
+authentication and the async reqwest transport. Numeric OAuth introspection
+instants use time 0.3.55 with checked device-timeout arithmetic. Module paths,
+current dependency APIs and compiler lint fixes are recorded in SOURCE.json.
+Upstream library documentation is archived, while its original native unit
+tests and the SDK's real HTTP callback/refresh tests remain executable in CI.
+Transport options never exposed by this SDK (curl/ureq/blocking and plain
+PKCE) remain disabled. No existing public SDK feature is removed.
+
+This is private implementation code inside virustotal-rs, with public
+crates.io dependencies only. It does not depend on a private Countermeasure
+registry or package and introduces no new advisory exception. Replace this
+module with the first qualified stable upstream release that removes Chrono
+and supports the current HTTP stack, retaining the runtime regressions and
+historical source custody.

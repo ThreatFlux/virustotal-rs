@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Replace owned Chrono clocks/calendar formatting with maintained Jiff, keeping
+  UTC date displays and numeric API fields. RFC3339 clock strings use UTC `Z`.
+- Preserve MCP OAuth support with a source-inventoried internal adaptation of
+  public oauth2 5.0.0 using maintained time and the current reqwest transport;
+  retain upstream licenses, original archive and native protocol regressions.
+- Upgrade jsonwebtoken to 12.0.0, reject empty signing secrets during token
+  operations, and remove unused serde_with and its optional Chrono lock edge.
+
 ## [0.5.1] - 2026-10-06
 
 This is the first crates.io release since 0.4.7: v0.5.0 was published on GitHub only, so 0.5.1 also carries every 0.5.0 change listed below.

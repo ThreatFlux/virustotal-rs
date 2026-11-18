@@ -1,6 +1,6 @@
-use chrono::Utc;
 use clap::Parser;
 use futures::stream::{self, StreamExt};
+use jiff::Timestamp;
 use serde_json::{Map, Value, json};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -428,7 +428,7 @@ fn create_main_report_document(
     );
     main_report.insert(
         "index_time".to_string(),
-        Value::String(Utc::now().to_rfc3339()),
+        Value::String(Timestamp::now().to_string()),
     );
 
     // Process basic file attributes using helper
@@ -915,7 +915,7 @@ fn create_base_document(report_uuid: &str, file_hash: &str) -> Map<String, Value
     );
     doc.insert(
         "index_time".to_string(),
-        Value::String(Utc::now().to_rfc3339()),
+        Value::String(Timestamp::now().to_string()),
     );
     doc
 }
