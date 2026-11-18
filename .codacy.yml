@@ -1,0 +1,17 @@
+---
+engines:
+  lizard:
+    # Only inherited upstream size/complexity metrics are out of scope here.
+    # CodeQL, Clippy, audits, source custody and native protocol tests stay enabled.
+    # SDK-owned code and the new maintained_time_tests.rs remain measured.
+    exclude_paths:
+      - "src/mcp/oauth_protocol/client.rs"
+      - "src/mcp/oauth_protocol/curl_client.rs"
+      - "src/mcp/oauth_protocol/devicecode.rs"
+      - "src/mcp/oauth_protocol/endpoint.rs"
+      - "src/mcp/oauth_protocol/helpers.rs"
+      - "src/mcp/oauth_protocol/introspection.rs"
+      - "src/mcp/oauth_protocol/tests.rs"
+      - "src/mcp/oauth_protocol/token/mod.rs"
+      - "src/mcp/oauth_protocol/token/tests.rs"
+      - "src/mcp/oauth_protocol/types.rs"
