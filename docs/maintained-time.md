@@ -13,6 +13,11 @@ reqwest/RNG dependencies. There is no private registry dependency or new
 advisory exception. The original public archive, authors/licenses, per-file
 hashes and removal plan are retained in `third_party/oauth2`.
 
+The OAuth token client explicitly trusts the bundled WebPKI certificates plus
+any configured `SSL_CERT_FILE` certificates, preserving the earlier trust set
+on hosts without an OS CA store. Certificate-chain and hostname verification
+remain enabled, and redirects remain disabled for token requests.
+
 The upstream standalone library's documentation remains in that archive;
 native protocol tests and the SDK HTTP tests run on GitHub. New hosted
 regressions cover negative/null/out-of-range instants, UTC displays, maximum

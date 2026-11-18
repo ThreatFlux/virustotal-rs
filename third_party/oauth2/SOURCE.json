@@ -34,9 +34,13 @@
       "owned_sha256_lf": "61580e12a820963a18f64f31b3b8ed98201c1eee576874e0b98314086140c888"
     },
     {
+      "path": "device_poll_schedule_tests.rs",
+      "owned_sha256_lf": "938e8a21a39d522407761a78966d70a24ea9fa3d167a781947efc9e0eaaf2cc7"
+    },
+    {
       "path": "devicecode.rs",
       "upstream_sha256": "259d4190d435e3999a07b1a3440a10d4105dbf9837ecc86d70e910f95a5ec09b",
-      "owned_sha256_lf": "f314187bdc9402163a7649edebed156b441bf9691a5d0db54042126402cd8f46"
+      "owned_sha256_lf": "d421a89e59a4c9643740f86a99aefd83d01b0be890885c25338a4245978c63f6"
     },
     {
       "path": "endpoint.rs",
