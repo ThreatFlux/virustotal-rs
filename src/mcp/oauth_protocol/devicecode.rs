@@ -276,6 +276,11 @@ where
 
     /// Synchronously polls the authorization server for a response, waiting
     /// using a user defined sleep function.
+    ///
+    /// The timeout is measured from poll entry (including the default `expires_in`
+    /// duration), and is checked before each request; it does not cancel an
+    /// in-flight HTTP call. Callers should begin polling promptly and configure
+    /// a separate HTTP request timeout.
     pub fn request<C, S>(
         self,
         http_client: &C,
@@ -316,6 +321,10 @@ where
     }
 
     /// Asynchronously sends the request to the authorization server and awaits a response.
+    ///
+    /// The timeout starts at poll entry, including when it defaults to the
+    /// authorization response's `expires_in`. It is checked between requests,
+    /// so a separate HTTP timeout must bound an in-flight call.
     pub fn request_async<'c, C, S, SF>(
         self,
         http_client: &'c C,
@@ -425,9 +434,16 @@ where
                     }
                     // On SlowDown, a retry needs to happen with a larger poll interval.
                     DeviceCodeErrorResponseType::SlowDown => {
-                        DeviceAccessTokenPollResult::ContinueWithNewPollInterval(
-                            current_interval + Duration::from_secs(5),
-                        )
+                        match current_interval.checked_add(Duration::from_secs(5)) {
+                            Some(interval) => {
+                                DeviceAccessTokenPollResult::ContinueWithNewPollInterval(interval)
+                            }
+                            None => {
+                                DeviceAccessTokenPollResult::Done(Err(RequestTokenError::Other(
+                                    "device polling interval is not representable".to_owned(),
+                                )))
+                            }
+                        }
                     }
 
                     // On any other error, just return the error.

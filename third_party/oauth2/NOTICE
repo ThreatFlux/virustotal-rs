@@ -18,3 +18,7 @@ registry or package and introduces no new advisory exception. Replace this
 module with the first qualified stable upstream release that removes Chrono
 and supports the current HTTP stack, retaining the runtime regressions and
 historical source custody.
+
+Owned hardening also removes an unused panic-prone enum-name serializer, checks
+slow_down interval overflow, and documents poll-entry/inter-request timeout
+semantics. Hosted regressions cover both normal waits and interval overflow.
