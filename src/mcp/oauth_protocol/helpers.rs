@@ -24,7 +24,7 @@ use std::marker::PhantomData;
 /// Note: this example does not compile automatically due to
 /// [Rust issue #29286](https://github.com/rust-lang/rust/issues/29286).
 ///
-/// ```ignore
+/// ```text
 /// # /*
 /// use serde::Deserialize;
 ///
@@ -74,7 +74,7 @@ where
 /// Note: this example does not compile automatically due to
 /// [Rust issue #29286](https://github.com/rust-lang/rust/issues/29286).
 ///
-/// ```ignore
+/// ```text
 /// # /*
 /// use serde::Deserialize;
 ///
