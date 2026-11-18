@@ -4,6 +4,7 @@
 //! automatic token refresh, and authorization server metadata discovery
 //! following the MCP 2025-03-26 Authorization Specification.
 
+use super::oauth_protocol as oauth2;
 use anyhow::{Result as AnyhowResult, anyhow};
 use axum::{
     extract::FromRequestParts,
@@ -432,9 +433,14 @@ impl OAuthState {
         Ok(Self::build_credentials(token_response))
     }
 
-    /// Preserve certificate verification while accepting an explicitly configured local CA bundle.
+    /// Preserve bundled WebPKI trust and explicitly configured CAs without relying on OS roots.
     fn token_http_client() -> AnyhowResult<oauth2::reqwest::Client> {
+        let bundled_roots = webpki_root_certs::TLS_SERVER_ROOT_CERTS
+            .iter()
+            .map(|certificate| oauth2::reqwest::Certificate::from_der(certificate.as_ref()))
+            .collect::<Result<Vec<_>, _>>()?;
         let mut builder = oauth2::reqwest::Client::builder()
+            .tls_certs_only(bundled_roots)
             .redirect(oauth2::reqwest::redirect::Policy::none())
             .timeout(Duration::from_secs(20));
         if let Some(path) = std::env::var_os("SSL_CERT_FILE") {
@@ -443,9 +449,7 @@ impl OAuthState {
             if certificates.is_empty() {
                 return Err(anyhow!("SSL_CERT_FILE contains no certificates"));
             }
-            for certificate in certificates {
-                builder = builder.add_root_certificate(certificate);
-            }
+            builder = builder.tls_certs_merge(certificates);
         }
         Ok(builder.build()?)
     }

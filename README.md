@@ -115,6 +115,8 @@ The contract check keeps this table aligned with `Cargo.toml`.
 | `mcp` | No | Enables the MCP server runtime and transports |
 | `mcp-jwt` | No | Adds JWT authentication and enables `mcp` |
 | `mcp-oauth` | No | Adds OAuth 2.1 authentication and enables `mcp` |
+| `oauth2` | No | Empty compatibility alias, still implied by `mcp-oauth` |
+| `serde_with` | No | Empty compatibility alias, still implied by `mcp-jwt` |
 <!-- feature-flags:end -->
 
 ## Operational expectations

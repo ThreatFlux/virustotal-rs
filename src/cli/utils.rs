@@ -264,7 +264,7 @@ pub fn format_timestamp(timestamp: Option<u64>) -> String {
             let time = UNIX_EPOCH + Duration::from_secs(ts);
             match time.duration_since(UNIX_EPOCH) {
                 Ok(_) => {
-                    // Simple formatting - in a real implementation you might want chrono
+                    // Simple formatting - in a real implementation you might want calendar formatting
                     format!("{}", ts) // Just show the timestamp for now
                 }
                 Err(_) => "Invalid timestamp".to_string(),

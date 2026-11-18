@@ -11,6 +11,10 @@ pub mod client_ext;
 pub mod indicators;
 #[cfg(feature = "mcp-oauth")]
 pub mod oauth;
+// Retain upstream protocol types and tests internally; only the existing SDK API is public.
+#[cfg(feature = "mcp-oauth")]
+#[allow(dead_code, unused_imports)]
+mod oauth_protocol;
 #[cfg(feature = "mcp")]
 pub mod search;
 #[cfg(feature = "mcp")]

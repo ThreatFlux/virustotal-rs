@@ -101,7 +101,7 @@ pub struct Claims {
 impl Claims {
     /// Create new claims for a user
     pub fn new(user_id: impl Into<String>, role: impl Into<String>, config: &JwtConfig) -> Self {
-        let now = chrono::Utc::now().timestamp() as usize;
+        let now = jiff::Timestamp::now().as_second() as usize;
         let exp = now + config.expiration_seconds as usize;
 
         Self {
@@ -129,7 +129,7 @@ impl Claims {
 
     /// Check if the token is expired
     pub fn is_expired(&self) -> bool {
-        let now = chrono::Utc::now().timestamp() as usize;
+        let now = jiff::Timestamp::now().as_second() as usize;
         self.exp < now
     }
 }
@@ -138,8 +138,8 @@ impl Claims {
 #[derive(Clone)]
 pub struct JwtManager {
     config: JwtConfig,
-    encoding_key: EncodingKey,
-    decoding_key: DecodingKey,
+    encoding_key: Option<EncodingKey>,
+    decoding_key: Option<DecodingKey>,
     validation: Validation,
 }
 
@@ -162,8 +162,10 @@ impl JwtManager {
 
     /// Create a new JWT manager
     pub fn new(config: JwtConfig) -> Self {
-        let encoding_key = EncodingKey::from_secret(config.secret.as_bytes());
-        let decoding_key = DecodingKey::from_secret(config.secret.as_bytes());
+        // Preserve the infallible constructor; reject invalid configuration on
+        // token operations rather than panicking or inventing a signing key.
+        let encoding_key = EncodingKey::from_secret(config.secret.as_bytes()).ok();
+        let decoding_key = DecodingKey::from_secret(config.secret.as_bytes()).ok();
 
         let mut validation = Validation::new(Algorithm::HS256);
         validation.set_issuer(&[&config.issuer]);
@@ -186,8 +188,11 @@ impl JwtManager {
         let claims = Claims::new(user_id, role, &self.config);
         let header = Header::new(Algorithm::HS256);
 
-        encode(&header, &claims, &self.encoding_key)
-            .map_err(|e| anyhow!("Failed to encode JWT: {}", e))
+        let key = self
+            .encoding_key
+            .as_ref()
+            .ok_or_else(|| anyhow!("JWT signing secret must not be empty"))?;
+        encode(&header, &claims, key).map_err(|e| anyhow!("Failed to encode JWT: {}", e))
     }
 
     /// Generate a token with custom permissions
@@ -201,13 +206,20 @@ impl JwtManager {
         claims.permissions = permissions;
         let header = Header::new(Algorithm::HS256);
 
-        encode(&header, &claims, &self.encoding_key)
-            .map_err(|e| anyhow!("Failed to encode JWT: {}", e))
+        let key = self
+            .encoding_key
+            .as_ref()
+            .ok_or_else(|| anyhow!("JWT signing secret must not be empty"))?;
+        encode(&header, &claims, key).map_err(|e| anyhow!("Failed to encode JWT: {}", e))
     }
 
     /// Validate and decode a JWT token
     pub fn validate_token(&self, token: &str) -> AnyhowResult<Claims> {
-        let token_data = decode::<Claims>(token, &self.decoding_key, &self.validation)
+        let key = self
+            .decoding_key
+            .as_ref()
+            .ok_or_else(|| anyhow!("JWT verification secret must not be empty"))?;
+        let token_data = decode::<Claims>(token, key, &self.validation)
             .map_err(|e| anyhow!("Failed to decode JWT: {}", e))?;
 
         let claims = token_data.claims;
@@ -437,6 +449,18 @@ mod tests {
         assert_eq!(claims.sub, "user123");
         assert_eq!(claims.role, "admin");
         assert!(claims.has_permission("mcp:access"));
+    }
+
+    #[test]
+    fn empty_jwt_secret_refuses_operations_without_panicking_or_fallback_keys() {
+        let manager = JwtManager::new(JwtConfig::new(""));
+        assert!(manager.generate_token("user", "reader").is_err());
+        assert!(
+            manager
+                .generate_token_with_permissions("user", "reader", vec![])
+                .is_err()
+        );
+        assert!(manager.validate_token("synthetic.invalid.token").is_err());
     }
 
     #[test]

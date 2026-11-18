@@ -1,0 +1,114 @@
+{
+  "upstream_package": "oauth2",
+  "upstream_version": "5.0.0",
+  "upstream_source": "https://static.crates.io/crates/oauth2/oauth2-5.0.0.crate",
+  "upstream_archive_sha256": "51e219e79014df21a225b1860a479e2dcd7cbd9130f4defd4bd0e191ea31d67d",
+  "shipped_module": "src/mcp/oauth_protocol",
+  "reason": "Remove unmaintained Chrono while preserving all implemented MCP OAuth flows",
+  "adaptations": [
+    "private module paths",
+    "time 0.3.55 checked arithmetic and numeric timestamp serde",
+    "reqwest 0.13 and current RNG/dependencies",
+    "only the SDK async transport enabled",
+    "library examples retained as documentation; native unit and SDK HTTP tests retained",
+    "checked slow_down interval arithmetic, unused panic-helper removal, explicit poll-entry timeout semantics and hosted overflow regression"
+  ],
+  "source_files": [
+    {
+      "path": "basic.rs",
+      "upstream_sha256": "962b19e5dcfd7ae762e4be1afe97d9599c14716a8c77c4110627204dffd866e5",
+      "owned_sha256_lf": "1d811813c7f73e0afc6b0620a59ebbb963bcea9da7fe8d3d82a2e18769025f9c"
+    },
+    {
+      "path": "client.rs",
+      "upstream_sha256": "e80047ff1a4a9a76ea72ea1efdf96eddb608c1477c3314c9a12d06ef8246f5f2",
+      "owned_sha256_lf": "ac52b444ab769dbaa2651b2c7eed348d0e6dcf938a861e3f9fa99909a37afcab"
+    },
+    {
+      "path": "code.rs",
+      "upstream_sha256": "e22e57e04ffbad48c6205d77ebdacc69a1e81235f2fbbff38c35747fe5c0cbc2",
+      "owned_sha256_lf": "4eda22d9be71c12a9645a796b647ea7cac6fc50aedf6e8f92a01e70ef26352a9"
+    },
+    {
+      "path": "curl_client.rs",
+      "upstream_sha256": "ff86e959e3f68e3bb295075244c888d80543471c9aa198e0edcb709bb707f4d2",
+      "owned_sha256_lf": "61580e12a820963a18f64f31b3b8ed98201c1eee576874e0b98314086140c888"
+    },
+    {
+      "path": "device_poll_schedule_tests.rs",
+      "owned_sha256_lf": "831410744719cc813dd15d1e4617709577f2742cc439bb3e8318857e8adee6f1"
+    },
+    {
+      "path": "devicecode.rs",
+      "upstream_sha256": "259d4190d435e3999a07b1a3440a10d4105dbf9837ecc86d70e910f95a5ec09b",
+      "owned_sha256_lf": "45ff01b1cf2a60595e03c74bb235701785dd0e81077110c468467ea84b5a80ab"
+    },
+    {
+      "path": "endpoint.rs",
+      "upstream_sha256": "4ff23ce2997b3165b633a86eb2e0d78860a596dfd3a30abd1a8c5c60136bbd24",
+      "owned_sha256_lf": "2eff48d52e2037dafe7d49d515a475810f4c38537241c36d0f1ba4083af7bb0a"
+    },
+    {
+      "path": "error.rs",
+      "upstream_sha256": "17101aaf0e968f96004595c3e0dde5a78eb5b1581b7009745dd7b7b637a46545",
+      "owned_sha256_lf": "49af55c99260e8d1e81c12da4186041fe0035baaa1347c6c86074dc60a198095"
+    },
+    {
+      "path": "helpers.rs",
+      "upstream_sha256": "f566dd190559e17d4aaba65cf581ce0820fcba538c79d6d962258ed0643c68a7",
+      "owned_sha256_lf": "8f95d5d282b4cefe92be999c9f05f2c49f6692033d1b3dfd85f3dbd5b0cff1c2"
+    },
+    {
+      "path": "introspection.rs",
+      "upstream_sha256": "0a517a1e18f78fbb8336bd7fc1e2025d1e11101d862f82191939036aab73b41b",
+      "owned_sha256_lf": "142db27e7a04103e5bf767d5cc22d79ef23fc4dc6ea9bd679bf05eb587059438"
+    },
+    {
+      "path": "maintained_time_tests.rs",
+      "owned_sha256_lf": "d0dd5c33cec6695a831ad03860f7da88e5663887928cac1b6abc34e06d310259"
+    },
+    {
+      "path": "mod.rs",
+      "upstream_sha256": "584e3a02899a65cf7c0b0e9eb03422700a2b43a3bd6987ab2db3906152ebcf62",
+      "owned_sha256_lf": "4d3b93a2e8bfd44a49f8ec94a31d43c2b9ffc32689bdc239897587a0a451229f"
+    },
+    {
+      "path": "reqwest_client.rs",
+      "upstream_sha256": "a5c96e2a7608f3cab349876f50fe78aaaf03fc048ce7f8bed3d562101b839bec",
+      "owned_sha256_lf": "2a322bc728778973f9e5a04b7d6364592440b9f0c9b2411c984ba1296abc5ccf"
+    },
+    {
+      "path": "revocation.rs",
+      "upstream_sha256": "793f79ccce6fcb2f78feffe3e4bd20d74acfafcb699f137d1867688c9e6c619c",
+      "owned_sha256_lf": "bb87b0a9b527023979e41b851fee564c4836b083cad42c62ccf4e2534cf7a7fe"
+    },
+    {
+      "path": "tests.rs",
+      "upstream_sha256": "37af053ccb0fd6e939ecf1d96d72a6bbba4db020e71392e884c1b46ceb6c8410",
+      "owned_sha256_lf": "d76cbfa3bc25479ce52a4fd1e913b180ae6e23b60f2720cb63b4fa90c2df4825"
+    },
+    {
+      "path": "token/mod.rs",
+      "upstream_sha256": "152205e3e1e46634e996a212b622a82adbc004826117adc0af9e63ca66de860a",
+      "owned_sha256_lf": "ef93e4c8fce6661216705c4960151758146b070dd015566faeefadeb3b16a853"
+    },
+    {
+      "path": "token/tests.rs",
+      "upstream_sha256": "027ed2000cdf85ac85234dfbaa6b021474368db35acc36e74ddf950e2f492e7c",
+      "owned_sha256_lf": "001a0acb8731d99208ac08b1c2b7130e4041819fa2c7d27e6217720fa2cd0126"
+    },
+    {
+      "path": "types.rs",
+      "upstream_sha256": "69383d90256e2d78344854612bf80011d80a7a062b0df6c00327bd89d8b4f40a",
+      "owned_sha256_lf": "c1d760b52b1244065cdc2c9f3a89fe6cea9717bfcb7efa2dd03cac5f266706f8"
+    },
+    {
+      "path": "ureq_client.rs",
+      "upstream_sha256": "b6552e7940e049d1d4ca0e88db124c893ab4c0e76bfbccc593743cd91af98685",
+      "owned_sha256_lf": "8447c216d3724f289ca1817a628e046152f9fcbf7704510d3b96853f8d3bdfbb"
+    }
+  ],
+  "new_advisory_exceptions": [],
+  "local_tests_executed": false,
+  "removal_plan": "Replace with a qualified stable upstream OAuth2 release using maintained time and reqwest 0.13; keep callback, TLS, PKCE, refresh, scope and timestamp regressions"
+}

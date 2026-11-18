@@ -11,10 +11,9 @@ fn display_domain_details(domain_info: &virustotal_rs::Domain) {
 
     println!("\n📊 Domain Details:");
     if let Some(creation_date) = domain_info.object.attributes.creation_date {
-        #[allow(deprecated)]
-        let date = chrono::NaiveDateTime::from_timestamp_opt(creation_date, 0)
-            .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
-            .unwrap_or_else(|| creation_date.to_string());
+        let date = jiff::Timestamp::from_second(creation_date)
+            .map(|dt| dt.strftime("%Y-%m-%d %H:%M:%S").to_string())
+            .unwrap_or_else(|_| creation_date.to_string());
         println!("  Creation date: {}", date);
     }
 

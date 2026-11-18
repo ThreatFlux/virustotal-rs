@@ -100,10 +100,9 @@ fn display_basic_info(attrs: &FileBehaviorAttributes) {
 
 /// Format timestamp
 fn format_timestamp(timestamp: i64) -> String {
-    #[allow(deprecated)]
-    chrono::NaiveDateTime::from_timestamp_opt(timestamp, 0)
-        .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
-        .unwrap_or_else(|| timestamp.to_string())
+    jiff::Timestamp::from_second(timestamp)
+        .map(|dt| dt.strftime("%Y-%m-%d %H:%M:%S").to_string())
+        .unwrap_or_else(|_| timestamp.to_string())
 }
 
 /// Display file activities

@@ -470,7 +470,7 @@ async fn submit_file_for_scan(
                 file_path: file_path.to_path_buf(),
                 file_size,
                 analysis_id: Some(upload_response.data.id),
-                scan_date: Some(chrono::Utc::now().to_rfc3339()),
+                scan_date: Some(jiff::Timestamp::now().to_string()),
                 error: None,
                 analysis_result: None,
             })

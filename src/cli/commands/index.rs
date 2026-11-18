@@ -3,7 +3,7 @@ use crate::cli::utils::{
 };
 use crate::{ApiTier, Client};
 use anyhow::{Context, Result};
-use chrono::Utc;
+use jiff::Timestamp;
 use clap::Args;
 use futures::stream::{self, StreamExt};
 use serde_json::{Map, Value, json};
@@ -548,7 +548,7 @@ fn create_base_document_fields(report_uuid: &str, file_hash: &str) -> Map<String
     );
     doc.insert(
         "index_time".to_string(),
-        Value::String(Utc::now().to_rfc3339()),
+        Value::String(Timestamp::now().to_string()),
     );
     doc
 }
