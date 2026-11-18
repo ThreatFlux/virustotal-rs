@@ -341,13 +341,8 @@ jobs:
 
   upload-assets:
     name: Upload Release Assets
-    needs: [prepare, build, sbom, publish]
-    if: >-
-      !cancelled() &&
-      (github.event_name != 'workflow_dispatch' || !inputs.dry_run) &&
-      needs.prepare.result == 'success' && needs.build.result == 'success' &&
-      needs.sbom.result == 'success' &&
-      (needs.publish.result == 'success' || needs.publish.result == 'skipped')
+    needs: [prepare, build, sbom]
+    if: github.event_name != 'workflow_dispatch' || !inputs.dry_run
     runs-on: ubuntu-latest
     permissions:
       contents: write # Creates the GitHub Release and uploads its assets.
@@ -424,7 +419,20 @@ jobs:
           done
           (( count > 0 )) || { echo "No qualified release assets" >&2; exit 1; }
 
-      - name: Publish the completed GitHub Release
+  finalize:
+    name: Publish the completed GitHub Release
+    needs: [prepare, build, sbom, upload-assets, publish]
+    if: >-
+      !cancelled() &&
+      (github.event_name != 'workflow_dispatch' || !inputs.dry_run) &&
+      needs.prepare.result == 'success' && needs.build.result == 'success' &&
+      needs.sbom.result == 'success' && needs.upload-assets.result == 'success' &&
+      (needs.publish.result == 'success' || needs.publish.result == 'skipped')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Recheck source and publish the qualified draft
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ needs.prepare.outputs.version }}
