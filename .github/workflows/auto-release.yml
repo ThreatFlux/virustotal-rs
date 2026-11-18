@@ -44,12 +44,15 @@ jobs:
       actions: write
       contents: write
       pull-requests: write
-    uses: ThreatFlux/github_actions/.github/workflows/reusable-auto-release.yml@f4d48290988681cfbf3e03f47e312a79b322ccc8 # v0.7.12
+    uses: ThreatFlux/github_actions/.github/workflows/reusable-auto-release.yml@240529daaf569ee1f5b5e22f683b113ec4e1d62d # v0.7.13
     with:
       bump: ${{ github.event.inputs.version_bump || 'auto' }}
       # Only a manual dispatch can request a dry run; workflow_run always releases.
       dry-run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
-      required-workflows: CI,Security
+      create-pr: true
+      draft-release: true
+      release-branch: automation/release
+      required-workflows: ci.yml,security.yml
       # The threatflux-automation App cuts the release, so its tag push starts
       # release.yml and docker.yml (on: push: tags) themselves. Without the App,
       # GITHUB_TOKEN creates a tag whose push starts nothing: dispatch release.yml,

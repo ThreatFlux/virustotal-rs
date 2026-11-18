@@ -400,7 +400,7 @@ jobs:
               PRERELEASE_FLAG=(--prerelease)
             fi
             gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --title "$TITLE" \
-              --notes-file notes/release_notes.md "${PRERELEASE_FLAG[@]}"
+              --notes-file notes/release_notes.md "${PRERELEASE_FLAG[@]}" --draft
           fi
 
       - name: Upload to release
@@ -410,11 +410,37 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s globstar nullglob
+          count=0
           for file in artifacts/**/*; do
             if [[ -f "$file" ]]; then
               gh release upload "v${VERSION}" "$file" --repo "$GITHUB_REPOSITORY" --clobber
+              count=$((count + 1))
             fi
           done
+          (( count > 0 )) || { echo "No qualified release assets" >&2; exit 1; }
+
+  finalize:
+    name: Publish the completed GitHub Release
+    needs: [prepare, build, sbom, upload-assets, publish]
+    if: >-
+      !cancelled() &&
+      (github.event_name != 'workflow_dispatch' || !inputs.dry_run) &&
+      needs.prepare.result == 'success' && needs.build.result == 'success' &&
+      needs.sbom.result == 'success' && needs.upload-assets.result == 'success' &&
+      (needs.publish.result == 'success' || needs.publish.result == 'skipped')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Recheck source and publish the qualified draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          source="$(gh api "repos/${GITHUB_REPOSITORY}/commits/refs/tags/v${VERSION}" --jq .sha)"
+          [[ "$source" == "$GITHUB_SHA" ]] || { echo "Release tag source changed" >&2; exit 1; }
+          gh release edit "v${VERSION}" --repo "$GITHUB_REPOSITORY" --draft=false
 
   publish:
     name: Publish to crates.io
