@@ -82,8 +82,8 @@ elasticsearch = []
 oauth2 = []
 serde_with = []
 mcp = ["axum", "tokio-util", "anyhow", "regex", "lazy_static", "tracing", "tracing-subscriber"]
-mcp-jwt = ["mcp", "dep:subtle", "jsonwebtoken", "uuid", "tower", "tower-http", "axum-extra"]
-mcp-oauth = ["mcp", "dep:http", "dep:serde_path_to_error", "dep:serde_urlencoded", "dep:time", "rand", "uuid", "tower", "tower-http", "axum-extra"]
+mcp-jwt = ["mcp", "dep:subtle", "jsonwebtoken", "serde_with", "uuid", "tower", "tower-http", "axum-extra"]
+mcp-oauth = ["mcp", "oauth2", "dep:http", "dep:serde_path_to_error", "dep:serde_urlencoded", "dep:time", "rand", "uuid", "tower", "tower-http", "axum-extra"]
 
 [dev-dependencies]
 tokio-test = "0.4.6"
