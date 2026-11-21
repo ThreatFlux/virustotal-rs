@@ -1,44 +1,22 @@
 version: 2
+multi-ecosystem-groups:
+  nightly-dependencies:
+    schedule:
+      interval: cron
+      cronjob: "0 6 * * *"
+      timezone: UTC
+    commit-message:
+      prefix: "chore(deps)"
+    open-pull-requests-limit: 5
+
 updates:
   - package-ecosystem: cargo
     directory: /
-    schedule:
-      interval: weekly
-      day: monday
-      time: "06:00"
-      timezone: UTC
-    open-pull-requests-limit: 10
+    patterns: ["*"]
+    multi-ecosystem-group: nightly-dependencies
     labels:
       - dependencies
       - rust
-    commit-message:
-      prefix: "chore(deps)"
-    groups:
-      development-dependencies:
-        patterns:
-          - "tokio-test"
-          - "mockito"
-          - "wiremock"
-          - "clap"
-        update-types:
-          - minor
-          - patch
-      security-dependencies:
-        patterns:
-          - "reqwest"
-          - "rustls*"
-          - "openssl*"
-          - "ring"
-        update-types:
-          - patch
-      async-dependencies:
-        patterns:
-          - "tokio*"
-          - "async-*"
-          - "futures*"
-        update-types:
-          - minor
-          - patch
     ignore:
       # Major versions change public types; they are upgraded by hand.
       - dependency-name: "*"
@@ -46,18 +24,8 @@ updates:
 
   - package-ecosystem: github-actions
     directory: /
-    schedule:
-      interval: weekly
-      day: monday
-      time: "06:00"
-      timezone: UTC
-    open-pull-requests-limit: 5
-    groups:
-      github-actions:
-        patterns:
-          - "*"
+    patterns: ["*"]
+    multi-ecosystem-group: nightly-dependencies
     labels:
       - dependencies
       - github-actions
-    commit-message:
-      prefix: "chore(ci)"
