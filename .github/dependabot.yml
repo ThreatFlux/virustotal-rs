@@ -7,13 +7,13 @@ multi-ecosystem-groups:
       timezone: UTC
     commit-message:
       prefix: "chore(deps)"
+    open-pull-requests-limit: 5
 
 updates:
   - package-ecosystem: cargo
     directory: /
     patterns: ["*"]
     multi-ecosystem-group: nightly-dependencies
-    open-pull-requests-limit: 10
     labels:
       - dependencies
       - rust
@@ -26,7 +26,6 @@ updates:
     directory: /
     patterns: ["*"]
     multi-ecosystem-group: nightly-dependencies
-    open-pull-requests-limit: 5
     labels:
       - dependencies
       - github-actions
